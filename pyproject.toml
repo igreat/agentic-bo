@@ -1,0 +1,21 @@
+[project]
+name = "bo-fun"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.14"
+dependencies = [
+    "disjoint-set>=0.8.0",
+    "gpytorch>=1.15.1",
+    "matplotlib>=3.10.8",
+    "numpy>=2.4.2",
+    "pandas>=3.0.0",
+    "pymoo>=0.6.1.6",
+    "scikit-learn>=1.8.0",
+    "scipy>=1.17.0",
+    "torch>=2.10.0",
+    "tqdm>=4.67.3",
+]
+
+[tool.uv.sources]
+hebo = { git = "https://github.com/huawei-noah/HEBO.git", subdirectory = "HEBO" }

@@ -1,0 +1,15 @@
+# Python-generated files
+__pycache__/
+**/__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+.vscode
+
+# Virtual environments
+.venv
+
+papers
+BO-Tutorial-for-Sci

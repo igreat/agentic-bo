@@ -1,0 +1,15 @@
+[experiment]
+title = "HER Optimization"
+num_iterations = 200
+num_seeds = 16
+num_initial_random_samples = 20
+y_label = "Regret ($\\mathrm{yield}^* - \\mathrm{yield}$)"
+result_path = "results/her/HER_bo_results.npz"
+plot_path = "results/her/HER_bo_results.pdf"
+objective = "min"
+y_scale = "linear"
+show_plot = false
+error_style = "stderr"
+
+[problem]
+oracle_impl = "random_forest"
