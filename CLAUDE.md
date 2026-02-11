@@ -87,6 +87,22 @@ Expected artifacts in `runs/<RUN_ID>/`: `state.json`, `oracle.pkl`, `oracle_meta
 
 `data/HER_virtual_data.csv` — HER virtual screen, target column is `Target`, objective is `max`.
 
+## Resuming a completed run
+
+`run-proxy` sets the run status to `completed` when it finishes. To continue optimizing from where it left off (appending more iterations without re-running earlier ones), flip the status back to `running` before calling `run-proxy` again:
+
+```python
+import json, pathlib
+p = pathlib.Path("runs/<RUN_ID>/state.json")
+state = json.loads(p.read_text())
+state["status"] = "running"
+p.write_text(json.dumps(state, indent=2))
+```
+
+Then call `run-proxy` with the additional iterations desired. The engine naturally loads all existing observations, so the optimizer continues from the current best — no work is repeated.
+
+This also applies to `suggest`: it only accepts status `oracle_ready` or `running`.
+
 ## Guardrails
 
 - **Always label proxy results as simulations.** The proxy oracle is a surrogate trained from data, not a real experiment.

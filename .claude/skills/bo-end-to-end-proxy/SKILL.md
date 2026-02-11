@@ -29,6 +29,20 @@ uv run python -m src.bo_workflow.cli report --run-id <RUN_ID>
 
 Extract `<RUN_ID>` from the `init` output's `run_id` field.
 
+## Resuming a completed run
+
+If the user wants more iterations on an existing completed run, do NOT re-init or re-build the oracle. Instead:
+
+1. Flip the status back to `running`:
+```python
+import json, pathlib
+p = pathlib.Path("runs/<RUN_ID>/state.json")
+state = json.loads(p.read_text())
+state["status"] = "running"
+p.write_text(json.dumps(state, indent=2))
+```
+2. Call `run-proxy` with the additional iterations. The engine appends to existing observations — no work is repeated.
+
 ## Guardrails
 
 - Clearly label results as proxy-oracle simulation.
