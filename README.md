@@ -9,7 +9,7 @@ This repository is intended to be an **agent-operable optimization engine**:
 - run iterative BO suggestions,
 - track state and results for human-in-the-loop workflows.
 
-One thing missing is a data conversion and preprocessing layer which would make this much more flexible to more problems types. Hence this is the next major thing We'll be working on 🤞
+One **big thing** missing is a **data conversion and preprocessing layer** which would make this much more flexible to more problems types. Hence this is the next major thing We'll be working on 🤞
 
 ## Scope (current vs target)
 
