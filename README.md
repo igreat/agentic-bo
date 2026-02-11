@@ -1,6 +1,20 @@
 # Bayesian Optimisation Workflow
 
-A practical HEBO-based Bayesian Optimisation workflow for scientific discovery in chemistry. Point it at a tabular dataset, and it trains a proxy oracle, runs BO against it, and reports results — all through a JSON CLI.
+A practical BO workflow for scientific discovery in chemistry.
+
+This repository is intended to be an **agent-operable optimization engine**:
+
+- define an optimization problem,
+- build or plug in an objective evaluator (real experiment or proxy oracle),
+- run iterative BO suggestions,
+- track state and results for human-in-the-loop workflows.
+
+One thing missing is a data conversion and preprocessing layer which would make this much more flexible to more problems types. Hence this is the next major thing We'll be working on 🤞
+
+## Scope (current vs target)
+
+- **Current MVP:** single-objective BO from tabular datasets with persisted run state and JSON CLI.
+- **Target direction:** richer problem adapters (constraints/compositions/encodings), so different chemistry problems can be transformed into a common BO interface.
 
 ## Setup
 
@@ -73,7 +87,7 @@ Each run writes to `runs/<RUN_ID>/`:
 
 - The engine is replay-first: it rebuilds optimizer state from logged observations. This makes runs easy to resume and audit.
 - Proxy mode is a simulation workflow. Always present results as simulated outcomes and include oracle CV RMSE.
-- `data/HER_virtual_data.csv` is included as an example dataset only. In real usage, users should provide problem-specific context (target meaning, constraints, and objective direction).
+- `data/HER_virtual_data.csv` is included as an example dataset only. In real usage, users should provide problem-specific context (target meaning, constraints, objective direction, and valid operating domain).
 
 ## Layout
 
