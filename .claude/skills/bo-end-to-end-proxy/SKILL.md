@@ -7,8 +7,6 @@ description: Run full proxy BO loop from dataset input to final report.
 
 Use this skill when the user asks for a full automated run using dataset-only evaluation.
 
-If the user provides a plain-language prompt, prefer `bo-auto-from-prompt` instead.
-
 ## Workflow
 
 Run these four commands in sequence:
@@ -23,7 +21,7 @@ uv run python -m src.bo_workflow.cli build-oracle --run-id <RUN_ID>
 
 # 3. Run proxy BO loop
 uv run python -m src.bo_workflow.cli run-proxy --run-id <RUN_ID> \
-  --iterations <T> --batch-size <N> --engine <hebo|bo_lcb|random>
+  --iterations <T> --batch-size <N>
 
 # 4. Generate report
 uv run python -m src.bo_workflow.cli report --run-id <RUN_ID>

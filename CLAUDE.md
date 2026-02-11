@@ -1,6 +1,6 @@
-# bo-fun
+# Bayesian Optimisation Workflow
 
-Practical HEBO-based Bayesian Optimisation workflow for scientific discovery in chemistry. The system trains a proxy oracle from tabular data and runs BO against it. All CLI output is JSON. All run state lives under `runs/<run_id>/`.
+Practical HEBO-based BO workflow for scientific discovery in chemistry. The system trains a proxy oracle from tabular data and runs BO against it. All CLI output is JSON. All run state lives under `runs/<run_id>/`.
 
 ## Setup
 
@@ -15,14 +15,28 @@ HEBO's published metadata pins ancient NumPy/pymoo versions. Install it with `--
 
 ```
 src/bo_workflow/
-  engine.py      # BOEngine class — all logic, deterministic, JSON-in/JSON-out
-  cli.py         # argparse CLI wrapping BOEngine methods
-  prompt_spec.py # heuristic parser: natural-language prompt -> run spec
-  plotting.py    # convergence plot generation
-  problems/      # domain-specific data and builders (e.g. her/)
+  engine.py    # BOEngine class — all logic, deterministic, JSON-in/JSON-out
+  cli.py       # argparse CLI wrapping BOEngine methods
+  plotting.py  # convergence plot generation
+data/
+  HER_virtual_data.csv  # example dataset (HER virtual screen)
 ```
 
 Skills in `.claude/skills/` map 1:1 to CLI subcommands. The engine is the source of truth; skills are the agent interface.
+
+## Script-first policy
+
+- Before writing ad-hoc one-off scripts, check `scripts/` and prefer existing scripts when they already cover the task.
+- For explicit optimizer benchmarking/comparison requests, use:
+
+```bash
+uv run python scripts/compare_optimizers.py \
+  --dataset data/HER_virtual_data.csv \
+  --target Target --objective max \
+  --iterations 20 --batch-size 1 --repeats 3 --verbose
+```
+
+- Only create a new script if no existing command/script fits the request. If creating one, keep it reusable and place it under `scripts/`.
 
 ## Run artifacts
 
@@ -30,7 +44,7 @@ Each run produces files under `runs/<run_id>/`:
 
 | File | Created by |
 |------|-----------|
-| `state.json` | `init` / `init-from-spec` / `init-from-prompt` |
+| `state.json` | `init` |
 | `intent.json` | `init` (when `--intent-json` is provided) |
 | `oracle.pkl` | `build-oracle` |
 | `oracle_meta.json` | `build-oracle` |
@@ -46,14 +60,10 @@ All commands: `uv run python -m src.bo_workflow.cli <command> [flags]`
 | Command | Key flags | Purpose |
 |---------|-----------|---------|
 | `init` | `--dataset --target --objective` (req), `--engine --seed --init-random --batch-size` (opt) | Init run from CSV |
-| `init-from-spec` | `--spec` (req) | Init from JSON spec |
-| `init-from-prompt` | `--dataset --prompt` (req), `--target --objective --engine` (opt, inferred) | Init from natural language |
-| `auto-proxy-from-prompt` | `--dataset --prompt --iterations` (req), `--engine` (opt) | One-shot: prompt to report |
 | `build-oracle` | `--run-id` (req), `--cv-folds --max-features` (opt) | Train proxy oracle |
-| `suggest` | `--run-id` (req), `--batch-size --engine` (opt) | Propose next candidates |
+| `suggest` | `--run-id` (req), `--batch-size` (opt) | Propose next candidates |
 | `observe` | `--run-id --data` (req) | Record real/simulated results |
-| `evaluate-last` | `--run-id` (req), `--max-new` (opt) | Auto-evaluate with oracle |
-| `run-proxy` | `--run-id --iterations` (req), `--batch-size --engine` (opt) | Full proxy BO loop |
+| `run-proxy` | `--run-id --iterations` (req), `--batch-size` (opt) | Full proxy BO loop |
 | `status` | `--run-id` (req) | Quick run summary |
 | `report` | `--run-id` (req) | Full report + convergence plot |
 
@@ -63,7 +73,7 @@ Engine options: `hebo` (default), `bo_lcb`, `random`. Note: `bo_lcb` currently s
 
 ```bash
 uv run python -m src.bo_workflow.cli init \
-  --dataset src/bo_workflow/problems/her/data/HER_virtual_data.csv \
+  --dataset data/HER_virtual_data.csv \
   --target Target --objective max --seed 42
 
 # grab the run_id from the JSON output, then:
@@ -75,13 +85,13 @@ Expected artifacts in `runs/<RUN_ID>/`: `state.json`, `oracle.pkl`, `oracle_meta
 
 ## Default dataset
 
-`src/bo_workflow/problems/her/data/HER_virtual_data.csv` — HER virtual screen, target column is `Target`, objective is `max`.
+`data/HER_virtual_data.csv` — HER virtual screen, target column is `Target`, objective is `max`.
 
 ## Guardrails
 
 - **Always label proxy results as simulations.** The proxy oracle is a surrogate trained from data, not a real experiment.
 - **Include oracle CV RMSE** when presenting optimization results so the user knows surrogate quality.
-- **Prefer explicit `--target` and `--objective`.** Only use auto-inference (`init-from-prompt`) when the user explicitly requests it.
+- **Prefer explicit `--target` and `--objective`.**
 - **Never auto-evaluate with proxy oracle in human-in-the-loop mode.** If the user is recording real observations, do not call `evaluate-last`.
 
 ## Observation format

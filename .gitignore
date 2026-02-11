@@ -11,10 +11,12 @@ wheels/
 # Virtual environments
 .venv
 runs/
+results/
 
 papers
 BO-Tutorial-for-Sci
 bo-proposal.docx
 
 .ruff_cache/
+.mypy_cache
 .claude/settings.local.json

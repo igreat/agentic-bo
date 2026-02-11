@@ -1,11 +1,6 @@
-# BO Workflow
+# Bayesian Optimisation Workflow
 
-This repository now has two layers:
-
-1. A generic BO engine that works directly from tabular datasets and builds a proxy oracle automatically.
-2. Problem-specific scripts (like HER) that can still be used as examples/benchmarks.
-
-The generic engine is designed to be Claude-skill ready: deterministic CLI commands, persisted run state, and JSON outputs.
+A practical HEBO-based Bayesian Optimisation workflow for scientific discovery in chemistry. Point it at a tabular dataset, and it trains a proxy oracle, runs BO against it, and reports results — all through a JSON CLI.
 
 ## Setup
 
@@ -15,159 +10,85 @@ uv pip install --no-deps "hebo @ git+https://github.com/huawei-noah/HEBO.git#sub
 ```
 
 > **Why `--no-deps`?** HEBO's published metadata pins ancient NumPy/pymoo
-> versions that conflict with modern stacks. All of HEBO's real runtime
-> dependencies (torch, gpytorch, numpy, pandas, scikit-learn) are already
-> declared in this project's `pyproject.toml`, so skipping HEBO's own
+> versions that conflict with modern stacks. This project's `pyproject.toml`
+> already declares the real runtime dependencies, so skipping HEBO's own
 > dependency resolution is safe.
 
-## Layout
+## Quick start
 
-```text
-configs/
-  her.toml
-experiments/
-  run_her.py
-src/bo_workflow/
-  cli.py
-  engine.py
-  config.py
-  experiment.py
-  plotting.py
-  runner.py
-  problems/
-    her/
+```bash
+uv run python -m src.bo_workflow.cli init \
+  --dataset data/HER_virtual_data.csv \
+  --target Target --objective max --seed 42
+
+# grab the run_id from the JSON output, then:
+uv run python -m src.bo_workflow.cli build-oracle --run-id <RUN_ID>
+uv run python -m src.bo_workflow.cli run-proxy --run-id <RUN_ID> --iterations 20
+uv run python -m src.bo_workflow.cli report --run-id <RUN_ID>
 ```
 
-## Core Engine (Dataset -> Oracle -> BO)
-
-The core engine is exposed via:
+## CLI commands
 
 ```bash
 uv run python -m src.bo_workflow.cli --help
 ```
 
-Main commands:
+| Command | Purpose |
+|---------|---------|
+| `init` | Create a run from a CSV dataset |
+| `build-oracle` | Train a proxy oracle from dataset rows |
+| `suggest` | Propose next candidate experiments |
+| `observe` | Record objective values (real or simulated) |
+| `run-proxy` | Run an end-to-end simulated BO loop |
+| `status` | Show best-so-far and run metadata |
+| `report` | Generate JSON report and convergence plot |
 
-- `init`: create a run from a dataset and infer design space
-- `init-from-spec`: create a run directly from a JSON spec
-- `init-from-prompt`: parse a plain-language prompt into a JSON spec and initialize
-- `build-oracle`: train and persist a proxy oracle from dataset rows
-- `suggest`: propose next candidate experiments (`--engine hebo|bo_lcb|random`)
-- `observe`: record objective values from real or simulated evaluations
-- `evaluate-last`: score pending suggestions with the proxy oracle
-- `run-proxy`: run an end-to-end simulated BO loop (`--engine` optional override)
-- `auto-proxy-from-prompt`: one-command prompt -> spec -> oracle -> BO -> report
-- `status`: show best-so-far and run metadata
-- `report`: emit JSON report and convergence plot
+Add `--verbose` to `init`, `build-oracle`, `suggest`, `observe`, `run-proxy`, and `report` to print progress logs (and a tqdm bar for `run-proxy`).
 
-Engine notes:
+Engine options: `hebo` (default), `bo_lcb`, `random`. Set once at init with `--engine`.
 
-- default run engine is set at init (`--engine`, default `hebo`)
-- per-call override is supported in `suggest` and `run-proxy`
-- `bo_lcb` currently supports `batch-size=1` only
+## Compare optimizers (demo)
 
-Example:
+For a single chart comparing `hebo`, `bo_lcb`, and `random`, run:
 
 ```bash
-uv run python -m src.bo_workflow.cli init \
-  --dataset src/bo_workflow/problems/her/data/HER_virtual_data.csv \
-  --target Target \
-  --objective max
-
-uv run python -m src.bo_workflow.cli build-oracle --run-id <RUN_ID>
-uv run python -m src.bo_workflow.cli run-proxy --run-id <RUN_ID> --iterations 80
-uv run python -m src.bo_workflow.cli report --run-id <RUN_ID>
+uv run python scripts/compare_optimizers.py \
+  --dataset data/HER_virtual_data.csv \
+  --target Target --objective max \
+  --iterations 20 --batch-size 1 --repeats 1
 ```
 
-JSON spec-driven start:
+Outputs:
 
-```bash
-uv run python -m src.bo_workflow.cli init-from-spec --spec configs/run_spec.example.json
+- plot: `results/compare/optimizers.pdf`
+- summary: `results/compare/optimizers_summary.json`
+
+## Run artifacts
+
+Each run writes to `runs/<RUN_ID>/`:
+
+`state.json`, `oracle.pkl`, `oracle_meta.json`, `suggestions.jsonl`, `observations.jsonl`, `convergence.pdf`, `report.json`
+
+## Layout
+
+```text
+src/bo_workflow/
+  engine.py    # BOEngine — all logic, JSON-in/JSON-out
+  cli.py       # argparse CLI wrapping engine methods
+  plotting.py  # convergence plot generation
+data/
+  HER_virtual_data.csv  # example dataset (HER virtual screen)
+.claude/
+  skills/      # Claude Code skills mapping to CLI commands
 ```
-
-One-command prompt-driven run:
-
-```bash
-uv run python -m src.bo_workflow.cli auto-proxy-from-prompt \
-  --dataset src/bo_workflow/problems/her/data/HER_virtual_data.csv \
-  --prompt "maximize HER yield with proxy BO" \
-  --iterations 20 \
-  --batch-size 2
-```
-
-Artifacts are written under `runs/<RUN_ID>/`:
-
-- `state.json`
-- `intent.json` (optional, if intent was provided)
-- `oracle.pkl`
-- `oracle_meta.json`
-- `suggestions.jsonl`
-- `observations.jsonl`
-- `convergence.pdf`
-- `report.json`
-
-## JSON-First Runtime Config
-
-The engine runtime is JSON-first. `state.json` is the source of truth for each run.
-
-- Use `configs/run_spec.example.json` as a template for run creation.
-- Agent/user intent can be attached and saved to `runs/<RUN_ID>/intent.json`.
-- Existing TOML configs remain supported for legacy scripted experiments.
 
 ## Claude Skills
 
-Project-local skills are under `.claude/skills/` and map to the engine CLI:
+Skills in `.claude/skills/` provide the agent interface:
 
-- `bo-init-run`
-- `bo-build-oracle`
-- `bo-next-batch`
-- `bo-record-observation`
-- `bo-report-run`
-- `bo-end-to-end-proxy`
-- `bo-auto-from-prompt`
-
-These provide the agent interface layer; the Python engine remains the deterministic execution layer.
-
-## Run HER
-
-```bash
-uv run experiments/run_her.py
-```
-
-Or with an explicit config path:
-
-```bash
-uv run experiments/run_her.py --config configs/her.toml
-```
-
-## Config Format (TOML)
-
-This section applies to legacy `experiments/run_*.py` scripts.
-
-Use an `[experiment]` table and an optional `[problem]` table.
-
-```toml
-[experiment]
-title = "HER Optimization"
-num_iterations = 200
-num_seeds = 16
-num_initial_random_samples = 20
-result_path = "results/her/HER_bo_results.npz"
-plot_path = "results/her/HER_bo_results.pdf"
-objective = "min"  # "min" or "max"
-y_scale = "linear" # "linear" or "log"
-show_plot = false
-error_style = "stderr" # "stderr" or "iqr"
-
-[problem]
-oracle_impl = "random_forest"
-```
-
-## Adding Another Experiment
-
-1. Add `src/bo_workflow/problems/<name>/builder.py`.
-2. Add `configs/<name>.toml`.
-3. Add `experiments/run_<name>.py` that:
-   - loads TOML via `load_experiment_file`
-   - builds the problem from `problem_kwargs`
-   - calls `run_experiment`
+- `bo-init-run` — initialize a run
+- `bo-build-oracle` — train proxy oracle
+- `bo-next-batch` — suggest candidates
+- `bo-record-observation` — record results
+- `bo-report-run` — status and reports
+- `bo-end-to-end-proxy` — full automated loop

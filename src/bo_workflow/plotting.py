@@ -79,7 +79,8 @@ def plot_optimization_convergence(
     if ax is None:
         fig, ax = plt.subplots(figsize=(12, 7))
     else:
-        fig = ax.figure
+        fig = ax.get_figure()
+        assert isinstance(fig, Figure)
 
     colors = plt.rcParams["axes.prop_cycle"].by_key().get("color", [])
     if not colors:

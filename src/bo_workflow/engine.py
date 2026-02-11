@@ -1,12 +1,11 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
-from datetime import UTC, datetime
 import json
 from pathlib import Path
 import pickle
 import secrets
-from typing import Any, Literal
+import sys
+from typing import Any
 
 from hebo.design_space.design_space import DesignSpace
 from hebo.optimizers.bo import BO
@@ -19,138 +18,22 @@ from sklearn.impute import SimpleImputer
 from sklearn.model_selection import KFold, cross_val_score
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OrdinalEncoder
+from tqdm import tqdm
 
 from .plotting import plot_optimization_convergence
-
-Objective = Literal["min", "max"]
-OptimizerName = Literal["hebo", "bo_lcb", "random"]
-
-_RUN_ADJECTIVES = (
-    "amber",
-    "brisk",
-    "crisp",
-    "daring",
-    "eager",
-    "fuzzy",
-    "gentle",
-    "jolly",
-    "lively",
-    "nimble",
-    "rapid",
-    "steady",
-    "sunny",
-    "vivid",
+from .utils import (
+    Objective,
+    OptimizerName,
+    RunPaths,
+    append_jsonl,
+    generate_run_id,
+    read_json,
+    read_jsonl,
+    row_to_python_dict,
+    to_python_scalar,
+    utc_now_iso,
+    write_json,
 )
-
-_RUN_NOUNS = (
-    "otter",
-    "falcon",
-    "heron",
-    "lynx",
-    "fox",
-    "orca",
-    "panda",
-    "sparrow",
-    "badger",
-    "koala",
-    "wolf",
-    "tiger",
-    "eagle",
-    "whale",
-)
-
-
-def _utc_now_iso() -> str:
-    return datetime.now(tz=UTC).isoformat()
-
-
-def _generate_run_id() -> str:
-    adjective = secrets.choice(_RUN_ADJECTIVES)
-    noun = secrets.choice(_RUN_NOUNS)
-    suffix = secrets.randbelow(10000)
-    return f"{adjective}-{noun}-{suffix:04d}"
-
-
-def _read_json(path: Path) -> dict[str, Any]:
-    with path.open("r", encoding="utf-8") as handle:
-        return json.load(handle)
-
-
-def _write_json(path: Path, payload: dict[str, Any]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("w", encoding="utf-8") as handle:
-        json.dump(payload, handle, indent=2, sort_keys=True)
-
-
-def _append_jsonl(path: Path, payload: dict[str, Any]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("a", encoding="utf-8") as handle:
-        handle.write(json.dumps(payload, sort_keys=True))
-        handle.write("\n")
-
-
-def _read_jsonl(path: Path) -> list[dict[str, Any]]:
-    if not path.exists():
-        return []
-    rows: list[dict[str, Any]] = []
-    with path.open("r", encoding="utf-8") as handle:
-        for line in handle:
-            line = line.strip()
-            if not line:
-                continue
-            rows.append(json.loads(line))
-    return rows
-
-
-def _to_python_scalar(value: Any) -> Any:
-    if isinstance(value, np.generic):
-        return value.item()
-    return value
-
-
-def _row_to_python_dict(row: pd.Series) -> dict[str, Any]:
-    return {str(k): _to_python_scalar(v) for k, v in row.to_dict().items()}
-
-
-@dataclass(frozen=True)
-class RunPaths:
-    run_dir: Path
-
-    @property
-    def state(self) -> Path:
-        return self.run_dir / "state.json"
-
-    @property
-    def intent(self) -> Path:
-        return self.run_dir / "intent.json"
-
-    @property
-    def input_spec(self) -> Path:
-        return self.run_dir / "input_spec.json"
-
-    @property
-    def suggestions(self) -> Path:
-        return self.run_dir / "suggestions.jsonl"
-
-    @property
-    def observations(self) -> Path:
-        return self.run_dir / "observations.jsonl"
-
-    @property
-    def oracle_model(self) -> Path:
-        return self.run_dir / "oracle.pkl"
-
-    @property
-    def oracle_meta(self) -> Path:
-        return self.run_dir / "oracle_meta.json"
-
-    @property
-    def report(self) -> Path:
-        return self.run_dir / "report.json"
-
-    @property
-    def convergence_plot(self) -> Path:
-        return self.run_dir / "convergence.pdf"
 
 
 def _infer_design_parameters(
@@ -226,10 +109,14 @@ class BOEngine:
         paths = self._paths(run_id)
         if not paths.state.exists():
             raise FileNotFoundError(f"Run '{run_id}' not found at {paths.run_dir}")
-        return _read_json(paths.state)
+        return read_json(paths.state)
 
     def _save_state(self, run_id: str, state: dict[str, Any]) -> None:
-        _write_json(self._paths(run_id).state, state)
+        write_json(self._paths(run_id).state, state)
+
+    def _log(self, verbose: bool, message: str) -> None:
+        if verbose:
+            print(message, file=sys.stderr)
 
     def init_run(
         self,
@@ -241,9 +128,10 @@ class BOEngine:
         run_id: str | None = None,
         num_initial_random_samples: int = 10,
         default_batch_size: int = 1,
-        seed: int = 0,
+        seed: int = 7,
         max_categories: int = 64,
         intent: dict[str, Any] | None = None,
+        verbose: bool = False,
     ) -> dict[str, Any]:
         if objective not in {"min", "max"}:
             raise ValueError("objective must be either 'min' or 'max'")
@@ -255,6 +143,7 @@ class BOEngine:
             raise FileNotFoundError(f"Dataset not found: {dataset_path}")
 
         data = pd.read_csv(dataset_path)
+        self._log(verbose, f"[init] dataset={dataset_path} rows={len(data)}")
         if target_column not in data.columns:
             raise ValueError(
                 f"Target column '{target_column}' is not in dataset columns: {list(data.columns)}"
@@ -268,7 +157,7 @@ class BOEngine:
 
         if run_id is None:
             for _ in range(20):
-                candidate = _generate_run_id()
+                candidate = generate_run_id()
                 if not self._paths(candidate).state.exists():
                     run_id = candidate
                     break
@@ -291,8 +180,8 @@ class BOEngine:
 
         state = {
             "run_id": run_id,
-            "created_at": _utc_now_iso(),
-            "updated_at": _utc_now_iso(),
+            "created_at": utc_now_iso(),
+            "updated_at": utc_now_iso(),
             "status": "initialized",
             "dataset_path": str(dataset_path),
             "target_column": target_column,
@@ -313,10 +202,14 @@ class BOEngine:
             },
         }
         self._save_state(run_id, state)
+        self._log(
+            verbose,
+            f"[init] run_id={run_id} engine={default_engine} features={len(state['active_features'])}",
+        )
         if intent is not None:
             intent_payload = {
                 "run_id": run_id,
-                "created_at": _utc_now_iso(),
+                "created_at": utc_now_iso(),
                 "intent": intent,
                 "resolved": {
                     "dataset_path": str(dataset_path),
@@ -328,33 +221,7 @@ class BOEngine:
                     "max_categories": int(max_categories),
                 },
             }
-            _write_json(self._paths(run_id).intent, intent_payload)
-        return state
-
-    def init_from_spec(
-        self,
-        spec: dict[str, Any],
-        *,
-        run_id: str | None = None,
-    ) -> dict[str, Any]:
-        required = {"dataset_path", "target_column", "objective"}
-        missing = sorted(required - set(spec.keys()))
-        if missing:
-            raise ValueError(f"Spec missing required keys: {', '.join(missing)}")
-
-        state = self.init_run(
-            dataset_path=spec["dataset_path"],
-            target_column=spec["target_column"],
-            objective=spec["objective"],
-            default_engine=spec.get("default_engine", "hebo"),
-            run_id=run_id or spec.get("run_id"),
-            num_initial_random_samples=int(spec.get("num_initial_random_samples", 10)),
-            default_batch_size=int(spec.get("default_batch_size", 1)),
-            seed=int(spec.get("seed", 0)),
-            max_categories=int(spec.get("max_categories", 64)),
-            intent=spec.get("intent"),
-        )
-        _write_json(self._paths(state["run_id"]).input_spec, spec)
+            write_json(self._paths(run_id).intent, intent_payload)
         return state
 
     def build_oracle(
@@ -364,9 +231,14 @@ class BOEngine:
         model_candidates: tuple[str, ...] = ("random_forest", "extra_trees"),
         cv_folds: int = 5,
         max_features: int | None = None,
+        verbose: bool = False,
     ) -> dict[str, Any]:
         state = self._load_state(run_id)
         dataset = pd.read_csv(state["dataset_path"])
+        self._log(
+            verbose,
+            f"[oracle] run_id={run_id} rows={len(dataset)} cv_folds={cv_folds}",
+        )
 
         target_column = state["target_column"]
         y_raw = pd.to_numeric(dataset[target_column], errors="coerce")
@@ -488,8 +360,9 @@ class BOEngine:
             rmse = float(-np.mean(cv_scores))
             scores[model_name] = rmse
             trained_pipelines[model_name] = pipeline
+            self._log(verbose, f"[oracle] {model_name}: cv_rmse={rmse:.4f}")
 
-        best_model_name = min(scores, key=scores.get)
+        best_model_name = min(scores, key=lambda k: scores[k])
         best_pipeline = trained_pipelines[best_model_name]
         best_pipeline.fit(x_full, y_internal)
 
@@ -499,7 +372,7 @@ class BOEngine:
             pickle.dump(best_pipeline, handle)
 
         oracle_meta = {
-            "built_at": _utc_now_iso(),
+            "built_at": utc_now_iso(),
             "model_candidates": list(model_pool.keys()),
             "cv_rmse": scores,
             "selected_model": best_model_name,
@@ -509,7 +382,7 @@ class BOEngine:
             "objective_internal": "min",
             "target_max_for_restore": target_max,
         }
-        _write_json(paths.oracle_meta, oracle_meta)
+        write_json(paths.oracle_meta, oracle_meta)
 
         state["objective_transform"] = {
             "internal_objective": "min",
@@ -518,8 +391,12 @@ class BOEngine:
 
         state["oracle"] = oracle_meta
         state["status"] = "oracle_ready"
-        state["updated_at"] = _utc_now_iso()
+        state["updated_at"] = utc_now_iso()
         self._save_state(run_id, state)
+        self._log(
+            verbose,
+            f"[oracle] selected={best_model_name} rmse={scores[best_model_name]:.4f}",
+        )
 
         return {
             "run_id": run_id,
@@ -546,6 +423,8 @@ class BOEngine:
                 rand_sample=int(state["num_initial_random_samples"]),
                 scramble_seed=int(state["seed"]),
             )
+            if observations:
+                optimizer.sobol.fast_forward(len(observations))
         elif engine_name == "bo_lcb":
             optimizer = BO(
                 design_space,
@@ -572,7 +451,7 @@ class BOEngine:
         run_id: str,
         *,
         batch_size: int | None = None,
-        engine_name: OptimizerName | None = None,
+        verbose: bool = False,
     ) -> dict[str, Any]:
         state = self._load_state(run_id)
         if state["status"] not in {"oracle_ready", "running"}:
@@ -580,13 +459,13 @@ class BOEngine:
                 f"Run '{run_id}' is not ready for suggestions. Current status: {state['status']}"
             )
 
-        engine = str(engine_name or state.get("default_engine", "hebo"))
+        engine = str(state.get("default_engine", "hebo"))
         if engine not in {"hebo", "bo_lcb", "random"}:
-            raise ValueError("engine_name must be one of: hebo, bo_lcb, random")
-        engine_typed: OptimizerName = engine  # validated above
+            raise ValueError("default_engine must be one of: hebo, bo_lcb, random")
+        engine_typed: OptimizerName = engine  # type: ignore[assignment]  # validated above
 
         size = int(batch_size or state["default_batch_size"])
-        observations = _read_jsonl(self._paths(run_id).observations)
+        observations = read_jsonl(self._paths(run_id).observations)
         if engine_typed == "random":
             np.random.seed(int(state["seed"]) + len(observations))
             proposals = DesignSpace().parse(state["design_parameters"]).sample(size)
@@ -598,22 +477,26 @@ class BOEngine:
 
         rows = []
         for _, row in proposals.iterrows():
-            x = _row_to_python_dict(row)
+            x = row_to_python_dict(row)
             x.update(state["fixed_features"])
 
             payload = {
-                "event_time": _utc_now_iso(),
+                "event_time": utc_now_iso(),
                 "suggestion_id": secrets.token_hex(16),
                 "iteration": len(observations),
                 "engine": engine_typed,
                 "x": x,
             }
-            _append_jsonl(self._paths(run_id).suggestions, payload)
+            append_jsonl(self._paths(run_id).suggestions, payload)
             rows.append(payload)
 
         state["status"] = "running"
-        state["updated_at"] = _utc_now_iso()
+        state["updated_at"] = utc_now_iso()
         self._save_state(run_id, state)
+        self._log(
+            verbose,
+            f"[suggest] run_id={run_id} engine={engine_typed} n={len(rows)}",
+        )
 
         return {
             "run_id": run_id,
@@ -646,13 +529,14 @@ class BOEngine:
         observations: list[dict[str, Any]],
         *,
         source: str = "user",
+        verbose: bool = False,
     ) -> dict[str, Any]:
         state = self._load_state(run_id)
         if not observations:
             raise ValueError("No observations provided.")
 
         target_col = state["target_column"]
-        existing = _read_jsonl(self._paths(run_id).observations)
+        existing = read_jsonl(self._paths(run_id).observations)
         next_iteration = len(existing)
         rows = []
 
@@ -687,42 +571,60 @@ class BOEngine:
                 y_internal = float(target_max_for_restore) - y_float
 
             payload = {
-                "event_time": _utc_now_iso(),
+                "event_time": utc_now_iso(),
                 "iteration": next_iteration + idx,
                 "source": source,
                 "engine": engine,
-                "x": {k: _to_python_scalar(v) for k, v in x.items()},
+                "suggestion_id": obs.get("suggestion_id"),
+                "x": {k: to_python_scalar(v) for k, v in x.items()},
                 "y": y_float,
                 "y_internal": y_internal,
             }
-            _append_jsonl(self._paths(run_id).observations, payload)
+            append_jsonl(self._paths(run_id).observations, payload)
             rows.append(payload)
 
-        state["updated_at"] = _utc_now_iso()
+        state["updated_at"] = utc_now_iso()
         self._save_state(run_id, state)
+        self._log(
+            verbose,
+            f"[observe] run_id={run_id} source={source} recorded={len(rows)}",
+        )
         return {"run_id": run_id, "recorded": len(rows), "observations": rows}
 
     def evaluate_last_suggestions(
-        self, run_id: str, *, max_new: int | None = None
+        self, run_id: str, *, max_new: int | None = None, verbose: bool = False
     ) -> dict[str, Any]:
         state = self._load_state(run_id)
         if state.get("oracle") is None:
             raise ValueError(
                 f"Oracle not built for run '{run_id}'. Run build-oracle first."
             )
-        suggestions = _read_jsonl(self._paths(run_id).suggestions)
-        observations = _read_jsonl(self._paths(run_id).observations)
+        suggestions = read_jsonl(self._paths(run_id).suggestions)
+        observations = read_jsonl(self._paths(run_id).observations)
 
-        already_seen = {json.dumps(row["x"], sort_keys=True) for row in observations}
-        pending = [
-            s
-            for s in suggestions
-            if json.dumps(s["x"], sort_keys=True) not in already_seen
-        ]
+        observed_suggestion_ids = {
+            str(row["suggestion_id"])
+            for row in observations
+            if row.get("suggestion_id") is not None
+        }
+        already_seen_x = {json.dumps(row["x"], sort_keys=True) for row in observations}
+        pending: list[dict[str, Any]] = []
+        for suggestion in suggestions:
+            suggestion_id = suggestion.get("suggestion_id")
+            if suggestion_id is not None:
+                if str(suggestion_id) in observed_suggestion_ids:
+                    continue
+                pending.append(suggestion)
+                continue
+
+            # Backward-compatible fallback for historical runs without IDs.
+            if json.dumps(suggestion["x"], sort_keys=True) not in already_seen_x:
+                pending.append(suggestion)
         if max_new is not None:
             pending = pending[:max_new]
 
         if not pending:
+            self._log(verbose, f"[eval] run_id={run_id} no pending suggestions")
             return {"run_id": run_id, "evaluated": 0, "observations": []}
 
         x_df = pd.DataFrame([row["x"] for row in pending])[state["active_features"]]
@@ -735,10 +637,14 @@ class BOEngine:
                     "x": row["x"],
                     "y": float(y_val),
                     "engine": row.get("engine", state.get("default_engine", "hebo")),
+                    "suggestion_id": row.get("suggestion_id"),
                 }
             )
 
-        observed = self.observe(run_id, payloads, source="proxy-oracle")
+        observed = self.observe(
+            run_id, payloads, source="proxy-oracle", verbose=verbose
+        )
+        self._log(verbose, f"[eval] run_id={run_id} evaluated={observed['recorded']}")
         return {
             "run_id": run_id,
             "evaluated": observed["recorded"],
@@ -751,20 +657,37 @@ class BOEngine:
         *,
         num_iterations: int,
         batch_size: int = 1,
-        engine_name: OptimizerName | None = None,
+        verbose: bool = False,
     ) -> dict[str, Any]:
-        for _ in range(num_iterations):
-            self.suggest(run_id, batch_size=batch_size, engine_name=engine_name)
-            self.evaluate_last_suggestions(run_id, max_new=batch_size)
+        self._log(
+            verbose,
+            f"[run-proxy] run_id={run_id} iterations={num_iterations} batch_size={batch_size}",
+        )
+        progress = tqdm(
+            range(num_iterations),
+            desc=f"run {run_id}",
+            unit="iter",
+            disable=not verbose,
+            file=sys.stderr,
+        )
+        for _ in progress:
+            self.suggest(run_id, batch_size=batch_size, verbose=verbose)
+            self.evaluate_last_suggestions(run_id, max_new=batch_size, verbose=verbose)
+            if verbose:
+                status = self.status(run_id)
+                best = status.get("best_value")
+                if best is not None:
+                    progress.set_postfix(best=f"{float(best):.4f}")
         state = self._load_state(run_id)
         state["status"] = "completed"
-        state["updated_at"] = _utc_now_iso()
+        state["updated_at"] = utc_now_iso()
         self._save_state(run_id, state)
-        return self.report(run_id)
+        self._log(verbose, f"[run-proxy] run_id={run_id} completed")
+        return self.report(run_id, verbose=verbose)
 
     def status(self, run_id: str) -> dict[str, Any]:
         state = self._load_state(run_id)
-        observations = _read_jsonl(self._paths(run_id).observations)
+        observations = read_jsonl(self._paths(run_id).observations)
 
         payload: dict[str, Any] = {
             "run_id": run_id,
@@ -797,16 +720,16 @@ class BOEngine:
             }
         return payload
 
-    def report(self, run_id: str) -> dict[str, Any]:
+    def report(self, run_id: str, *, verbose: bool = False) -> dict[str, Any]:
         state = self._load_state(run_id)
-        observations = _read_jsonl(self._paths(run_id).observations)
+        observations = read_jsonl(self._paths(run_id).observations)
         if not observations:
             report = {
                 "run_id": run_id,
                 "message": "No observations recorded yet.",
-                "generated_at": _utc_now_iso(),
+                "generated_at": utc_now_iso(),
             }
-            _write_json(self._paths(run_id).report, report)
+            write_json(self._paths(run_id).report, report)
             return report
 
         grouped: dict[str, list[float]] = {}
@@ -835,7 +758,7 @@ class BOEngine:
         status = self.status(run_id)
         report = {
             "run_id": run_id,
-            "generated_at": _utc_now_iso(),
+            "generated_at": utc_now_iso(),
             "num_observations": len(observations),
             "objective": state["objective"],
             "target_column": state["target_column"],
@@ -849,5 +772,9 @@ class BOEngine:
                 "observations": str(self._paths(run_id).observations),
             },
         }
-        _write_json(self._paths(run_id).report, report)
+        write_json(self._paths(run_id).report, report)
+        self._log(
+            verbose,
+            f"[report] run_id={run_id} observations={len(observations)} best={report.get('best_value')}",
+        )
         return report

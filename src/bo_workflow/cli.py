@@ -9,7 +9,6 @@ from typing import Any
 import pandas as pd
 
 from .engine import BOEngine
-from .prompt_spec import build_run_spec_from_prompt
 
 
 def _json_print(payload: Any) -> None:
@@ -74,7 +73,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--objective", type=str, choices=["min", "max"], required=True
     )
     init_cmd.add_argument("--run-id", type=str, default=None)
-    init_cmd.add_argument("--seed", type=int, default=0)
+    init_cmd.add_argument("--seed", type=int, default=7)
     init_cmd.add_argument(
         "--engine",
         type=str,
@@ -91,85 +90,18 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help="Optional JSON object or path to JSON object for original user intent",
     )
-
-    init_spec_cmd = sub.add_parser(
-        "init-from-spec",
-        help="Initialize run from a JSON spec object",
-    )
-    init_spec_cmd.add_argument(
-        "--spec",
-        type=str,
-        required=True,
-        help="Run spec as JSON string or path to JSON file",
-    )
-    init_spec_cmd.add_argument("--run-id", type=str, default=None)
-
-    init_prompt_cmd = sub.add_parser(
-        "init-from-prompt",
-        help="Initialize run by parsing a natural-language prompt",
-    )
-    init_prompt_cmd.add_argument("--dataset", type=Path, required=True)
-    init_prompt_cmd.add_argument("--prompt", type=str, required=True)
-    init_prompt_cmd.add_argument("--target", type=str, default=None)
-    init_prompt_cmd.add_argument(
-        "--objective", type=str, choices=["min", "max"], default=None
-    )
-    init_prompt_cmd.add_argument("--run-id", type=str, default=None)
-    init_prompt_cmd.add_argument("--seed", type=int, default=0)
-    init_prompt_cmd.add_argument(
-        "--engine",
-        type=str,
-        choices=["hebo", "bo_lcb", "random"],
-        default="hebo",
-        help="Default optimizer engine for this run",
-    )
-    init_prompt_cmd.add_argument("--init-random", type=int, default=10)
-    init_prompt_cmd.add_argument("--batch-size", type=int, default=1)
-    init_prompt_cmd.add_argument("--max-categories", type=int, default=64)
-    init_prompt_cmd.add_argument("--max-features", type=int, default=None)
-    init_prompt_cmd.add_argument("--spec-out", type=Path, default=None)
-
-    auto_prompt_cmd = sub.add_parser(
-        "auto-proxy-from-prompt",
-        help="Run full proxy BO loop from natural-language prompt",
-    )
-    auto_prompt_cmd.add_argument("--dataset", type=Path, required=True)
-    auto_prompt_cmd.add_argument("--prompt", type=str, required=True)
-    auto_prompt_cmd.add_argument("--target", type=str, default=None)
-    auto_prompt_cmd.add_argument(
-        "--objective", type=str, choices=["min", "max"], default=None
-    )
-    auto_prompt_cmd.add_argument("--run-id", type=str, default=None)
-    auto_prompt_cmd.add_argument("--seed", type=int, default=0)
-    auto_prompt_cmd.add_argument(
-        "--engine",
-        type=str,
-        choices=["hebo", "bo_lcb", "random"],
-        default="hebo",
-        help="Optimizer engine for this run",
-    )
-    auto_prompt_cmd.add_argument("--init-random", type=int, default=10)
-    auto_prompt_cmd.add_argument("--batch-size", type=int, default=1)
-    auto_prompt_cmd.add_argument("--max-categories", type=int, default=64)
-    auto_prompt_cmd.add_argument("--max-features", type=int, default=None)
-    auto_prompt_cmd.add_argument("--iterations", type=int, required=True)
-    auto_prompt_cmd.add_argument("--spec-out", type=Path, default=None)
+    init_cmd.add_argument("--verbose", action="store_true")
 
     oracle_cmd = sub.add_parser("build-oracle", help="Train and persist proxy oracle")
     oracle_cmd.add_argument("--run-id", type=str, required=True)
     oracle_cmd.add_argument("--cv-folds", type=int, default=5)
     oracle_cmd.add_argument("--max-features", type=int, default=None)
+    oracle_cmd.add_argument("--verbose", action="store_true")
 
     suggest_cmd = sub.add_parser("suggest", help="Suggest next experimental candidates")
     suggest_cmd.add_argument("--run-id", type=str, required=True)
     suggest_cmd.add_argument("--batch-size", type=int, default=None)
-    suggest_cmd.add_argument(
-        "--engine",
-        type=str,
-        choices=["hebo", "bo_lcb", "random"],
-        default=None,
-        help="Override optimizer engine for this suggest call",
-    )
+    suggest_cmd.add_argument("--verbose", action="store_true")
 
     observe_cmd = sub.add_parser("observe", help="Record observation(s)")
     observe_cmd.add_argument("--run-id", type=str, required=True)
@@ -179,31 +111,20 @@ def build_parser() -> argparse.ArgumentParser:
         required=True,
         help="Observations as JSON string/object/list, or path to CSV/JSON file",
     )
-
-    eval_cmd = sub.add_parser(
-        "evaluate-last",
-        help="Evaluate last pending suggestions against proxy oracle",
-    )
-    eval_cmd.add_argument("--run-id", type=str, required=True)
-    eval_cmd.add_argument("--max-new", type=int, default=None)
+    observe_cmd.add_argument("--verbose", action="store_true")
 
     run_cmd = sub.add_parser("run-proxy", help="Run iterative proxy optimization loop")
     run_cmd.add_argument("--run-id", type=str, required=True)
     run_cmd.add_argument("--iterations", type=int, required=True)
     run_cmd.add_argument("--batch-size", type=int, default=1)
-    run_cmd.add_argument(
-        "--engine",
-        type=str,
-        choices=["hebo", "bo_lcb", "random"],
-        default=None,
-        help="Override optimizer engine for this run loop",
-    )
+    run_cmd.add_argument("--verbose", action="store_true")
 
     status_cmd = sub.add_parser("status", help="Show run status")
     status_cmd.add_argument("--run-id", type=str, required=True)
 
     report_cmd = sub.add_parser("report", help="Generate report and plot")
     report_cmd.add_argument("--run-id", type=str, required=True)
+    report_cmd.add_argument("--verbose", action="store_true")
 
     return parser
 
@@ -228,65 +149,9 @@ def main(argv: list[str] | None = None) -> int:
             default_batch_size=args.batch_size,
             max_categories=args.max_categories,
             intent=intent_payload,
+            verbose=args.verbose,
         )
         _json_print(payload)
-        return 0
-
-    if args.command == "init-from-spec":
-        spec = _parse_json_object(args.spec)
-        payload = engine.init_from_spec(spec, run_id=args.run_id)
-        _json_print(payload)
-        return 0
-
-    if args.command == "init-from-prompt":
-        spec = build_run_spec_from_prompt(
-            dataset_path=args.dataset,
-            prompt=args.prompt,
-            target_column=args.target,
-            objective=args.objective,
-            default_engine=args.engine,
-            seed=args.seed,
-            num_initial_random_samples=args.init_random,
-            default_batch_size=args.batch_size,
-            max_categories=args.max_categories,
-            max_features=args.max_features,
-        )
-        if args.spec_out is not None:
-            args.spec_out.parent.mkdir(parents=True, exist_ok=True)
-            with args.spec_out.open("w", encoding="utf-8") as handle:
-                json.dump(spec, handle, indent=2, sort_keys=True)
-        payload = engine.init_from_spec(spec, run_id=args.run_id)
-        _json_print({"spec": spec, "state": payload})
-        return 0
-
-    if args.command == "auto-proxy-from-prompt":
-        spec = build_run_spec_from_prompt(
-            dataset_path=args.dataset,
-            prompt=args.prompt,
-            target_column=args.target,
-            objective=args.objective,
-            default_engine=args.engine,
-            seed=args.seed,
-            num_initial_random_samples=args.init_random,
-            default_batch_size=args.batch_size,
-            max_categories=args.max_categories,
-            max_features=args.max_features,
-        )
-        if args.spec_out is not None:
-            args.spec_out.parent.mkdir(parents=True, exist_ok=True)
-            with args.spec_out.open("w", encoding="utf-8") as handle:
-                json.dump(spec, handle, indent=2, sort_keys=True)
-        state = engine.init_from_spec(spec, run_id=args.run_id)
-        run_id = state["run_id"]
-        max_features = spec.get("max_features")
-        oracle = engine.build_oracle(run_id, max_features=max_features)
-        report = engine.run_proxy_optimization(
-            run_id,
-            num_iterations=args.iterations,
-            batch_size=args.batch_size,
-            engine_name=args.engine,
-        )
-        _json_print({"spec": spec, "state": state, "oracle": oracle, "report": report})
         return 0
 
     if args.command == "build-oracle":
@@ -294,6 +159,7 @@ def main(argv: list[str] | None = None) -> int:
             args.run_id,
             cv_folds=args.cv_folds,
             max_features=args.max_features,
+            verbose=args.verbose,
         )
         _json_print(payload)
         return 0
@@ -302,19 +168,14 @@ def main(argv: list[str] | None = None) -> int:
         payload = engine.suggest(
             args.run_id,
             batch_size=args.batch_size,
-            engine_name=args.engine,
+            verbose=args.verbose,
         )
         _json_print(payload)
         return 0
 
     if args.command == "observe":
         observations = _parse_observation_records(args.data)
-        payload = engine.observe(args.run_id, observations)
-        _json_print(payload)
-        return 0
-
-    if args.command == "evaluate-last":
-        payload = engine.evaluate_last_suggestions(args.run_id, max_new=args.max_new)
+        payload = engine.observe(args.run_id, observations, verbose=args.verbose)
         _json_print(payload)
         return 0
 
@@ -323,7 +184,7 @@ def main(argv: list[str] | None = None) -> int:
             args.run_id,
             num_iterations=args.iterations,
             batch_size=args.batch_size,
-            engine_name=args.engine,
+            verbose=args.verbose,
         )
         _json_print(payload)
         return 0
@@ -334,7 +195,7 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     if args.command == "report":
-        payload = engine.report(args.run_id)
+        payload = engine.report(args.run_id, verbose=args.verbose)
         _json_print(payload)
         return 0
 
