@@ -1,3 +1,10 @@
+"""Core BO engine.
+
+This module keeps optimization state on disk (`runs/<run_id>/`) and rebuilds
+optimizers from logged observations when needed. That replay-first design keeps
+the workflow resumable and robust for human-in-the-loop usage.
+"""
+
 import json
 from pathlib import Path
 import pickle
@@ -39,6 +46,13 @@ def _infer_design_parameters(
     *,
     max_categories: int = 64,
 ) -> tuple[list[dict[str, Any]], dict[str, Any], list[str]]:
+    """Infer HEBO design parameters from a feature frame.
+
+    Returns a tuple of:
+    - optimizable parameters
+    - fixed features (constant columns)
+    - dropped features (empty/unusable columns)
+    """
     params: list[dict[str, Any]] = []
     fixed_features: dict[str, Any] = {}
     dropped_features: list[str] = []
@@ -81,6 +95,7 @@ def _infer_design_parameters(
 def _normalize_objective_values(
     values: np.ndarray, objective: Objective
 ) -> tuple[np.ndarray, float]:
+    """Map objective values to internal minimization scale."""
     if objective == "min":
         return values.astype(float), float("nan")
     target_max = float(np.max(values))
@@ -90,12 +105,15 @@ def _normalize_objective_values(
 def _restore_objective_values(
     values: np.ndarray, objective: Objective, target_max: float
 ) -> np.ndarray:
+    """Restore internal minimization values back to user objective scale."""
     if objective == "min":
         return values
     return target_max - values
 
 
 class BOEngine:
+    """Dataset-driven Bayesian optimization engine with persisted run state."""
+
     def __init__(self, runs_root: str | Path = "runs") -> None:
         self.runs_root = Path(runs_root)
         self.runs_root.mkdir(parents=True, exist_ok=True)
@@ -131,6 +149,7 @@ class BOEngine:
         intent: dict[str, Any] | None = None,
         verbose: bool = False,
     ) -> dict[str, Any]:
+        """Initialize a run from a dataset and inferred design space."""
         if objective not in {"min", "max"}:
             raise ValueError("objective must be either 'min' or 'max'")
         if default_engine not in {"hebo", "bo_lcb", "random"}:
@@ -231,6 +250,7 @@ class BOEngine:
         max_features: int | None = None,
         verbose: bool = False,
     ) -> dict[str, Any]:
+        """Train/select a proxy oracle and persist model + metadata."""
         state = self._load_state(run_id)
         dataset = pd.read_csv(state["dataset_path"])
         self._log(
@@ -412,6 +432,11 @@ class BOEngine:
         observations: list[dict[str, Any]],
         engine_name: OptimizerName,
     ) -> HEBO | BO:
+        """Build optimizer from replayed observation history.
+
+        We reconstruct from history (instead of keeping in-memory optimizer
+        state) so commands remain resumable and deterministic from run files.
+        """
         np.random.seed(int(state["seed"]) + len(observations))
         design_space = DesignSpace().parse(state["design_parameters"])
         if engine_name == "hebo":
@@ -422,6 +447,7 @@ class BOEngine:
                 scramble_seed=int(state["seed"]),
             )
             if observations:
+                # Replay Sobol sequence position to match previous suggestions.
                 optimizer.sobol.fast_forward(len(observations))
         elif engine_name == "bo_lcb":
             optimizer = BO(
@@ -592,6 +618,7 @@ class BOEngine:
     def evaluate_last_suggestions(
         self, run_id: str, *, max_new: int | None = None, verbose: bool = False
     ) -> dict[str, Any]:
+        """Evaluate pending suggestions with proxy oracle (simulation mode)."""
         state = self._load_state(run_id)
         if state.get("oracle") is None:
             raise ValueError(
@@ -657,6 +684,7 @@ class BOEngine:
         batch_size: int = 1,
         verbose: bool = False,
     ) -> dict[str, Any]:
+        """Run a full simulated BO loop using proxy evaluation."""
         self._log(
             verbose,
             f"[run-proxy] run_id={run_id} iterations={num_iterations} batch_size={batch_size}",
@@ -719,6 +747,7 @@ class BOEngine:
         return payload
 
     def report(self, run_id: str, *, verbose: bool = False) -> dict[str, Any]:
+        """Generate report JSON and convergence plot for a run."""
         state = self._load_state(run_id)
         observations = read_jsonl(self._paths(run_id).observations)
         if not observations:

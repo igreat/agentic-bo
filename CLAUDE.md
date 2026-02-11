@@ -85,7 +85,9 @@ Expected artifacts in `runs/<RUN_ID>/`: `state.json`, `oracle.pkl`, `oracle_meta
 
 ## Default dataset
 
-`data/HER_virtual_data.csv` — HER virtual screen, target column is `Target`, objective is `max`.
+`data/HER_virtual_data.csv` is provided as an example dataset.
+
+Treat dataset semantics (what the target means, valid constraints, and success thresholds) as problem-specific context from the user or project docs.
 
 ## Resuming a completed run
 

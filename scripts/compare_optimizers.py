@@ -1,3 +1,9 @@
+"""Benchmark helper to compare hebo/bo_lcb/random on one dataset.
+
+This script is intentionally separate from the core engine so benchmark/demo
+logic does not complicate the production run workflow.
+"""
+
 import argparse
 from datetime import UTC, datetime
 import json

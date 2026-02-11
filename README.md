@@ -69,6 +69,12 @@ Each run writes to `runs/<RUN_ID>/`:
 
 `state.json`, `oracle.pkl`, `oracle_meta.json`, `suggestions.jsonl`, `observations.jsonl`, `convergence.pdf`, `report.json`
 
+## Design notes
+
+- The engine is replay-first: it rebuilds optimizer state from logged observations. This makes runs easy to resume and audit.
+- Proxy mode is a simulation workflow. Always present results as simulated outcomes and include oracle CV RMSE.
+- `data/HER_virtual_data.csv` is included as an example dataset only. In real usage, users should provide problem-specific context (target meaning, constraints, and objective direction).
+
 ## Layout
 
 ```text

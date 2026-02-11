@@ -1,3 +1,5 @@
+"""Shared utility helpers for run state, serialization, and naming."""
+
 from dataclasses import dataclass
 from datetime import UTC, datetime
 import json
@@ -51,6 +53,7 @@ def utc_now_iso() -> str:
 
 
 def generate_run_id() -> str:
+    """Generate a human-readable run id like `amber-otter-0421`."""
     adjective = secrets.choice(_RUN_ADJECTIVES)
     noun = secrets.choice(_RUN_NOUNS)
     suffix = secrets.randbelow(10000)
@@ -100,6 +103,8 @@ def row_to_python_dict(row: pd.Series) -> dict[str, Any]:
 
 @dataclass(frozen=True)
 class RunPaths:
+    """Canonical file locations under `runs/<run_id>/`."""
+
     run_dir: Path
 
     @property
