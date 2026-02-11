@@ -5,8 +5,8 @@ from hebo.optimizers.bo import BO
 from hebo.optimizers.hebo import HEBO
 from tqdm import tqdm
 
-from src.bo_workflow.problems.base import ProblemContext
-from src.bo_workflow.type_defs import ExperimentResult
+from .problems.base import ProblemContext
+from .type_defs import ExperimentResult
 
 
 def load_result(path: str) -> ExperimentResult:
@@ -41,11 +41,13 @@ def run_hebo(
     history = []
 
     for seed in random_seeds:
+        np.random.seed(seed)
         hebo = HEBO(
             problem.design_space,
             model_name="gp",
             rand_sample=num_initial_random_samples,
             model_config=hebo_config,
+            scramble_seed=seed,
         )
         trace = []
         for i in tqdm(range(num_iterations)):
@@ -75,6 +77,7 @@ def run_bo_lcb(
     history = []
 
     for seed in random_seeds:
+        np.random.seed(seed)
         bo = BO(
             problem.design_space,
             model_name="gp",

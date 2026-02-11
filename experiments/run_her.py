@@ -5,12 +5,13 @@ from pathlib import Path
 import sys
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-if str(REPO_ROOT) not in sys.path:
-    sys.path.insert(0, str(REPO_ROOT))
+SRC_ROOT = REPO_ROOT / "src"
+if str(SRC_ROOT) not in sys.path:
+    sys.path.insert(0, str(SRC_ROOT))
 
-from src.bo_workflow.config import load_experiment_file
-from src.bo_workflow.experiment import run_experiment
-from src.bo_workflow.problems.her import build_problem
+from bo_workflow.config import load_experiment_file
+from bo_workflow.experiment import run_experiment
+from bo_workflow.problems.her import build_problem
 
 
 def parse_args() -> argparse.Namespace:

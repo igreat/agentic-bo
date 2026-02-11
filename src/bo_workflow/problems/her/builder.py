@@ -4,7 +4,7 @@ import numpy as np
 import pandas as pd
 from hebo.design_space.design_space import DesignSpace
 
-from src.bo_workflow.problems.base import ProblemContext
+from ..base import ProblemContext
 
 
 def _get_design_space() -> DesignSpace:
@@ -43,7 +43,7 @@ def build_problem(
 
     from sklearn.ensemble import RandomForestRegressor
 
-    model = RandomForestRegressor(n_estimators=100)
+    model = RandomForestRegressor(n_estimators=100, random_state=42)
     model.fit(features, target)
 
     def oracle(x: pd.DataFrame) -> np.ndarray:

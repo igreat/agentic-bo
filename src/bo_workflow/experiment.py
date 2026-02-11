@@ -2,17 +2,17 @@ from pathlib import Path
 
 import numpy as np
 
-from src.bo_workflow.config import ExperimentConfig
-from src.bo_workflow.plotting import plot_optimization_convergence
-from src.bo_workflow.problems.base import ProblemContext
-from src.bo_workflow.runner import (
+from .config import ExperimentConfig
+from .plotting import plot_optimization_convergence
+from .problems.base import ProblemContext
+from .runner import (
     load_result,
     run_bo_lcb,
     run_hebo,
     run_random_search,
     save_result,
 )
-from src.bo_workflow.type_defs import ExperimentResult
+from .type_defs import ExperimentResult
 
 
 def _mean_final_best(history: np.ndarray) -> float:
@@ -25,7 +25,9 @@ def _mean_final_best(history: np.ndarray) -> float:
     return float(np.mean(finals)) if finals else float("nan")
 
 
-def run_experiment(config: ExperimentConfig, problem: ProblemContext) -> ExperimentResult:
+def run_experiment(
+    config: ExperimentConfig, problem: ProblemContext
+) -> ExperimentResult:
     if config.result_path is not None and Path(config.result_path).exists():
         results = load_result(config.result_path)
     else:
@@ -85,4 +87,3 @@ def run_experiment(config: ExperimentConfig, problem: ProblemContext) -> Experim
         print(f"- Convergence plot saved to {config.plot_path}")
 
     return results
-

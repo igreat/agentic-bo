@@ -10,6 +10,11 @@ wheels/
 
 # Virtual environments
 .venv
+runs/
 
 papers
 BO-Tutorial-for-Sci
+bo-proposal.docx
+
+.ruff_cache/
+.claude/settings.local.json

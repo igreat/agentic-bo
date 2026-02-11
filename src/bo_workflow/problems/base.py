@@ -3,7 +3,7 @@ from typing import Any, Mapping, Callable
 
 from hebo.design_space.design_space import DesignSpace
 
-from src.bo_workflow.type_defs import OracleFn
+from ..type_defs import OracleFn
 
 
 @dataclass(frozen=True, slots=True)
