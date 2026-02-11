@@ -112,3 +112,7 @@ Skills in `.claude/skills/` provide the agent interface:
 - `bo-record-observation` — record results
 - `bo-report-run` — status and reports
 - `bo-end-to-end-proxy` — full automated loop
+
+## Credits
+
+Much of the underlying HEBO and problem specific part of the code is taken from/inspired from [BO-Tutorial-for-Sci](https://github.com/zwyu-ai/BO-Tutorial-for-Sci).
