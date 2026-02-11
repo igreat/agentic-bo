@@ -82,6 +82,7 @@ def build_run_spec_from_prompt(
     prompt: str,
     target_column: str | None = None,
     objective: str | None = None,
+    default_engine: str = "hebo",
     seed: int = 0,
     num_initial_random_samples: int = 10,
     default_batch_size: int = 1,
@@ -100,10 +101,14 @@ def build_run_spec_from_prompt(
     inferred_target = _infer_target_column(prompt, columns, target_column)
     inferred_objective = objective or _infer_objective(prompt, inferred_target)
 
+    if default_engine not in {"hebo", "bo_lcb", "random"}:
+        raise ValueError("default_engine must be one of: hebo, bo_lcb, random")
+
     spec: dict[str, Any] = {
         "dataset_path": str(dataset_path),
         "target_column": inferred_target,
         "objective": inferred_objective,
+        "default_engine": default_engine,
         "seed": int(seed),
         "num_initial_random_samples": int(num_initial_random_samples),
         "default_batch_size": int(default_batch_size),

@@ -2,6 +2,7 @@
   "dataset_path": "src/bo_workflow/problems/her/data/HER_virtual_data.csv",
   "target_column": "Target",
   "objective": "max",
+  "default_engine": "hebo",
   "seed": 7,
   "num_initial_random_samples": 8,
   "default_batch_size": 2,

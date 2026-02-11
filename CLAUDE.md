@@ -45,17 +45,19 @@ All commands: `uv run python -m src.bo_workflow.cli <command> [flags]`
 
 | Command | Key flags | Purpose |
 |---------|-----------|---------|
-| `init` | `--dataset --target --objective` (req), `--seed --init-random --batch-size` (opt) | Init run from CSV |
+| `init` | `--dataset --target --objective` (req), `--engine --seed --init-random --batch-size` (opt) | Init run from CSV |
 | `init-from-spec` | `--spec` (req) | Init from JSON spec |
-| `init-from-prompt` | `--dataset --prompt` (req), `--target --objective` (opt, inferred) | Init from natural language |
-| `auto-proxy-from-prompt` | `--dataset --prompt --iterations` (req) | One-shot: prompt to report |
+| `init-from-prompt` | `--dataset --prompt` (req), `--target --objective --engine` (opt, inferred) | Init from natural language |
+| `auto-proxy-from-prompt` | `--dataset --prompt --iterations` (req), `--engine` (opt) | One-shot: prompt to report |
 | `build-oracle` | `--run-id` (req), `--cv-folds --max-features` (opt) | Train proxy oracle |
-| `suggest` | `--run-id` (req), `--batch-size` (opt) | Propose next candidates |
+| `suggest` | `--run-id` (req), `--batch-size --engine` (opt) | Propose next candidates |
 | `observe` | `--run-id --data` (req) | Record real/simulated results |
 | `evaluate-last` | `--run-id` (req), `--max-new` (opt) | Auto-evaluate with oracle |
-| `run-proxy` | `--run-id --iterations` (req), `--batch-size` (opt) | Full proxy BO loop |
+| `run-proxy` | `--run-id --iterations` (req), `--batch-size --engine` (opt) | Full proxy BO loop |
 | `status` | `--run-id` (req) | Quick run summary |
 | `report` | `--run-id` (req) | Full report + convergence plot |
+
+Engine options: `hebo` (default), `bo_lcb`, `random`. Note: `bo_lcb` currently supports batch-size 1 only.
 
 ## MVP demo (copy-paste)
 

@@ -52,13 +52,19 @@ Main commands:
 - `init-from-spec`: create a run directly from a JSON spec
 - `init-from-prompt`: parse a plain-language prompt into a JSON spec and initialize
 - `build-oracle`: train and persist a proxy oracle from dataset rows
-- `suggest`: propose next candidate experiments
+- `suggest`: propose next candidate experiments (`--engine hebo|bo_lcb|random`)
 - `observe`: record objective values from real or simulated evaluations
 - `evaluate-last`: score pending suggestions with the proxy oracle
-- `run-proxy`: run an end-to-end simulated BO loop
+- `run-proxy`: run an end-to-end simulated BO loop (`--engine` optional override)
 - `auto-proxy-from-prompt`: one-command prompt -> spec -> oracle -> BO -> report
 - `status`: show best-so-far and run metadata
 - `report`: emit JSON report and convergence plot
+
+Engine notes:
+
+- default run engine is set at init (`--engine`, default `hebo`)
+- per-call override is supported in `suggest` and `run-proxy`
+- `bo_lcb` currently supports `batch-size=1` only
 
 Example:
 

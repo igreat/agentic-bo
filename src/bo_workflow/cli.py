@@ -75,6 +75,13 @@ def build_parser() -> argparse.ArgumentParser:
     )
     init_cmd.add_argument("--run-id", type=str, default=None)
     init_cmd.add_argument("--seed", type=int, default=0)
+    init_cmd.add_argument(
+        "--engine",
+        type=str,
+        choices=["hebo", "bo_lcb", "random"],
+        default="hebo",
+        help="Default optimizer engine for this run",
+    )
     init_cmd.add_argument("--init-random", type=int, default=10)
     init_cmd.add_argument("--batch-size", type=int, default=1)
     init_cmd.add_argument("--max-categories", type=int, default=64)
@@ -109,6 +116,13 @@ def build_parser() -> argparse.ArgumentParser:
     )
     init_prompt_cmd.add_argument("--run-id", type=str, default=None)
     init_prompt_cmd.add_argument("--seed", type=int, default=0)
+    init_prompt_cmd.add_argument(
+        "--engine",
+        type=str,
+        choices=["hebo", "bo_lcb", "random"],
+        default="hebo",
+        help="Default optimizer engine for this run",
+    )
     init_prompt_cmd.add_argument("--init-random", type=int, default=10)
     init_prompt_cmd.add_argument("--batch-size", type=int, default=1)
     init_prompt_cmd.add_argument("--max-categories", type=int, default=64)
@@ -127,6 +141,13 @@ def build_parser() -> argparse.ArgumentParser:
     )
     auto_prompt_cmd.add_argument("--run-id", type=str, default=None)
     auto_prompt_cmd.add_argument("--seed", type=int, default=0)
+    auto_prompt_cmd.add_argument(
+        "--engine",
+        type=str,
+        choices=["hebo", "bo_lcb", "random"],
+        default="hebo",
+        help="Optimizer engine for this run",
+    )
     auto_prompt_cmd.add_argument("--init-random", type=int, default=10)
     auto_prompt_cmd.add_argument("--batch-size", type=int, default=1)
     auto_prompt_cmd.add_argument("--max-categories", type=int, default=64)
@@ -142,6 +163,13 @@ def build_parser() -> argparse.ArgumentParser:
     suggest_cmd = sub.add_parser("suggest", help="Suggest next experimental candidates")
     suggest_cmd.add_argument("--run-id", type=str, required=True)
     suggest_cmd.add_argument("--batch-size", type=int, default=None)
+    suggest_cmd.add_argument(
+        "--engine",
+        type=str,
+        choices=["hebo", "bo_lcb", "random"],
+        default=None,
+        help="Override optimizer engine for this suggest call",
+    )
 
     observe_cmd = sub.add_parser("observe", help="Record observation(s)")
     observe_cmd.add_argument("--run-id", type=str, required=True)
@@ -163,6 +191,13 @@ def build_parser() -> argparse.ArgumentParser:
     run_cmd.add_argument("--run-id", type=str, required=True)
     run_cmd.add_argument("--iterations", type=int, required=True)
     run_cmd.add_argument("--batch-size", type=int, default=1)
+    run_cmd.add_argument(
+        "--engine",
+        type=str,
+        choices=["hebo", "bo_lcb", "random"],
+        default=None,
+        help="Override optimizer engine for this run loop",
+    )
 
     status_cmd = sub.add_parser("status", help="Show run status")
     status_cmd.add_argument("--run-id", type=str, required=True)
@@ -186,6 +221,7 @@ def main(argv: list[str] | None = None) -> int:
             dataset_path=args.dataset,
             target_column=args.target,
             objective=args.objective,
+            default_engine=args.engine,
             run_id=args.run_id,
             seed=args.seed,
             num_initial_random_samples=args.init_random,
@@ -208,6 +244,7 @@ def main(argv: list[str] | None = None) -> int:
             prompt=args.prompt,
             target_column=args.target,
             objective=args.objective,
+            default_engine=args.engine,
             seed=args.seed,
             num_initial_random_samples=args.init_random,
             default_batch_size=args.batch_size,
@@ -228,6 +265,7 @@ def main(argv: list[str] | None = None) -> int:
             prompt=args.prompt,
             target_column=args.target,
             objective=args.objective,
+            default_engine=args.engine,
             seed=args.seed,
             num_initial_random_samples=args.init_random,
             default_batch_size=args.batch_size,
@@ -246,6 +284,7 @@ def main(argv: list[str] | None = None) -> int:
             run_id,
             num_iterations=args.iterations,
             batch_size=args.batch_size,
+            engine_name=args.engine,
         )
         _json_print({"spec": spec, "state": state, "oracle": oracle, "report": report})
         return 0
@@ -260,7 +299,11 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     if args.command == "suggest":
-        payload = engine.suggest(args.run_id, batch_size=args.batch_size)
+        payload = engine.suggest(
+            args.run_id,
+            batch_size=args.batch_size,
+            engine_name=args.engine,
+        )
         _json_print(payload)
         return 0
 
@@ -280,6 +323,7 @@ def main(argv: list[str] | None = None) -> int:
             args.run_id,
             num_iterations=args.iterations,
             batch_size=args.batch_size,
+            engine_name=args.engine,
         )
         _json_print(payload)
         return 0

@@ -11,7 +11,7 @@ Use this skill when the user asks to start an optimization campaign.
 
 ```bash
 uv run python -m src.bo_workflow.cli init \
-  --dataset <CSV_PATH> --target <TARGET_COL> --objective <min|max>
+  --dataset <CSV_PATH> --target <TARGET_COL> --objective <min|max> --engine <hebo|bo_lcb|random>
 ```
 
 Optional flags: `--seed <N>` (default 0), `--init-random <N>` (default 10), `--batch-size <N>` (default 1), `--run-id <ID>`, `--intent-json <JSON_OR_PATH>`.

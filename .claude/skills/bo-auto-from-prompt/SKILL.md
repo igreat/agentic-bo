@@ -14,13 +14,15 @@ uv run python -m src.bo_workflow.cli auto-proxy-from-prompt \
   --dataset <CSV_PATH> \
   --prompt "<USER_PROMPT>" \
   --iterations <T> \
-  --batch-size <N>
+  --batch-size <N> \
+  --engine <hebo|bo_lcb|random>
 ```
 
 Optional overrides:
 
 - `--target <TARGET_COLUMN>`
 - `--objective <min|max>`
+- `--engine <hebo|bo_lcb|random>`
 - `--max-features <K>`
 - `--spec-out <PATH>`
 

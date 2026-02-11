@@ -9,6 +9,7 @@ import secrets
 from typing import Any, Literal
 
 from hebo.design_space.design_space import DesignSpace
+from hebo.optimizers.bo import BO
 from hebo.optimizers.hebo import HEBO
 import numpy as np
 import pandas as pd
@@ -22,6 +23,7 @@ from sklearn.preprocessing import OrdinalEncoder
 from .plotting import plot_optimization_convergence
 
 Objective = Literal["min", "max"]
+OptimizerName = Literal["hebo", "bo_lcb", "random"]
 
 _RUN_ADJECTIVES = (
     "amber",
@@ -235,6 +237,7 @@ class BOEngine:
         dataset_path: str | Path,
         target_column: str,
         objective: Objective,
+        default_engine: OptimizerName = "hebo",
         run_id: str | None = None,
         num_initial_random_samples: int = 10,
         default_batch_size: int = 1,
@@ -244,6 +247,8 @@ class BOEngine:
     ) -> dict[str, Any]:
         if objective not in {"min", "max"}:
             raise ValueError("objective must be either 'min' or 'max'")
+        if default_engine not in {"hebo", "bo_lcb", "random"}:
+            raise ValueError("default_engine must be one of: hebo, bo_lcb, random")
 
         dataset_path = Path(dataset_path).resolve()
         if not dataset_path.exists():
@@ -292,6 +297,7 @@ class BOEngine:
             "dataset_path": str(dataset_path),
             "target_column": target_column,
             "objective": objective,
+            "default_engine": default_engine,
             "seed": int(seed),
             "num_initial_random_samples": int(num_initial_random_samples),
             "default_batch_size": int(default_batch_size),
@@ -340,6 +346,7 @@ class BOEngine:
             dataset_path=spec["dataset_path"],
             target_column=spec["target_column"],
             objective=spec["objective"],
+            default_engine=spec.get("default_engine", "hebo"),
             run_id=run_id or spec.get("run_id"),
             num_initial_random_samples=int(spec.get("num_initial_random_samples", 10)),
             default_batch_size=int(spec.get("default_batch_size", 1)),
@@ -525,16 +532,28 @@ class BOEngine:
         }
 
     def _build_optimizer(
-        self, state: dict[str, Any], observations: list[dict[str, Any]]
-    ) -> HEBO:
-        np.random.seed(int(state["seed"]))
+        self,
+        state: dict[str, Any],
+        observations: list[dict[str, Any]],
+        engine_name: OptimizerName,
+    ) -> HEBO | BO:
+        np.random.seed(int(state["seed"]) + len(observations))
         design_space = DesignSpace().parse(state["design_parameters"])
-        optimizer = HEBO(
-            design_space,
-            model_name="gp",
-            rand_sample=int(state["num_initial_random_samples"]),
-            scramble_seed=int(state["seed"]),
-        )
+        if engine_name == "hebo":
+            optimizer: HEBO | BO = HEBO(
+                design_space,
+                model_name="gp",
+                rand_sample=int(state["num_initial_random_samples"]),
+                scramble_seed=int(state["seed"]),
+            )
+        elif engine_name == "bo_lcb":
+            optimizer = BO(
+                design_space,
+                model_name="gp",
+                rand_sample=int(state["num_initial_random_samples"]),
+            )
+        else:
+            raise ValueError(f"Unsupported optimizer engine '{engine_name}'")
 
         if observations:
             x_rows = [
@@ -548,17 +567,34 @@ class BOEngine:
             optimizer.observe(x_obs, y_obs)
         return optimizer
 
-    def suggest(self, run_id: str, *, batch_size: int | None = None) -> dict[str, Any]:
+    def suggest(
+        self,
+        run_id: str,
+        *,
+        batch_size: int | None = None,
+        engine_name: OptimizerName | None = None,
+    ) -> dict[str, Any]:
         state = self._load_state(run_id)
         if state["status"] not in {"oracle_ready", "running"}:
             raise ValueError(
                 f"Run '{run_id}' is not ready for suggestions. Current status: {state['status']}"
             )
 
+        engine = str(engine_name or state.get("default_engine", "hebo"))
+        if engine not in {"hebo", "bo_lcb", "random"}:
+            raise ValueError("engine_name must be one of: hebo, bo_lcb, random")
+        engine_typed: OptimizerName = engine  # validated above
+
         size = int(batch_size or state["default_batch_size"])
         observations = _read_jsonl(self._paths(run_id).observations)
-        optimizer = self._build_optimizer(state, observations)
-        proposals = optimizer.suggest(n_suggestions=size)
+        if engine_typed == "random":
+            np.random.seed(int(state["seed"]) + len(observations))
+            proposals = DesignSpace().parse(state["design_parameters"]).sample(size)
+        else:
+            if engine_typed == "bo_lcb" and size != 1:
+                raise ValueError("bo_lcb currently supports batch-size=1 only.")
+            optimizer = self._build_optimizer(state, observations, engine_typed)
+            proposals = optimizer.suggest(n_suggestions=size)
 
         rows = []
         for _, row in proposals.iterrows():
@@ -569,6 +605,7 @@ class BOEngine:
                 "event_time": _utc_now_iso(),
                 "suggestion_id": secrets.token_hex(16),
                 "iteration": len(observations),
+                "engine": engine_typed,
                 "x": x,
             }
             _append_jsonl(self._paths(run_id).suggestions, payload)
@@ -580,6 +617,7 @@ class BOEngine:
 
         return {
             "run_id": run_id,
+            "engine": engine_typed,
             "num_suggestions": len(rows),
             "suggestions": rows,
         }
@@ -620,6 +658,7 @@ class BOEngine:
 
         for idx, obs in enumerate(observations):
             x = dict(obs.get("x", {}))
+            engine = str(obs.get("engine", state.get("default_engine", "hebo")))
             for feature in state["active_features"]:
                 if feature not in x:
                     if feature in state["fixed_features"]:
@@ -651,6 +690,7 @@ class BOEngine:
                 "event_time": _utc_now_iso(),
                 "iteration": next_iteration + idx,
                 "source": source,
+                "engine": engine,
                 "x": {k: _to_python_scalar(v) for k, v in x.items()},
                 "y": y_float,
                 "y_internal": y_internal,
@@ -690,7 +730,13 @@ class BOEngine:
 
         payloads = []
         for row, y_val in zip(pending, y_pred, strict=True):
-            payloads.append({"x": row["x"], "y": float(y_val)})
+            payloads.append(
+                {
+                    "x": row["x"],
+                    "y": float(y_val),
+                    "engine": row.get("engine", state.get("default_engine", "hebo")),
+                }
+            )
 
         observed = self.observe(run_id, payloads, source="proxy-oracle")
         return {
@@ -705,9 +751,10 @@ class BOEngine:
         *,
         num_iterations: int,
         batch_size: int = 1,
+        engine_name: OptimizerName | None = None,
     ) -> dict[str, Any]:
         for _ in range(num_iterations):
-            self.suggest(run_id, batch_size=batch_size)
+            self.suggest(run_id, batch_size=batch_size, engine_name=engine_name)
             self.evaluate_last_suggestions(run_id, max_new=batch_size)
         state = self._load_state(run_id)
         state["status"] = "completed"
@@ -723,6 +770,7 @@ class BOEngine:
             "run_id": run_id,
             "status": state["status"],
             "objective": state["objective"],
+            "default_engine": state.get("default_engine", "hebo"),
             "target_column": state["target_column"],
             "active_features": state["active_features"],
             "ignored_features": state["ignored_features"],
@@ -761,11 +809,22 @@ class BOEngine:
             _write_json(self._paths(run_id).report, report)
             return report
 
-        y_values = np.asarray([float(row["y"]) for row in observations], dtype=float)
-        history = y_values.reshape(1, -1)
+        grouped: dict[str, list[float]] = {}
+        for row in observations:
+            engine = str(row.get("engine", state.get("default_engine", "hebo")))
+            grouped.setdefault(engine, []).append(float(row["y"]))
+
+        methods_data: dict[str, np.ndarray] = {}
+        for engine, values in grouped.items():
+            label = {
+                "hebo": "HEBO",
+                "bo_lcb": "BO (LCB)",
+                "random": "Random Search",
+            }.get(engine, engine)
+            methods_data[label] = np.asarray(values, dtype=float)
 
         plot_optimization_convergence(
-            {"HEBO": history},
+            methods_data,
             title=f"Run {run_id}",
             ylabel=state["target_column"],
             objective=state["objective"],
