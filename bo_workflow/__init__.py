@@ -1,4 +1,4 @@
 from .engine import BOEngine
-from .observers import InteractiveObserver, Observer, ProxyObserver
+from .observers import CallbackObserver, Observer, ProxyObserver
 
-__all__ = ["BOEngine", "InteractiveObserver", "Observer", "ProxyObserver"]
+__all__ = ["BOEngine", "CallbackObserver", "Observer", "ProxyObserver"]

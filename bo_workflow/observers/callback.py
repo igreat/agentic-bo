@@ -1,4 +1,4 @@
-"""InteractiveObserver — delegates evaluation to a user-provided callback."""
+"""CallbackObserver — delegates evaluation to a user-provided callback."""
 
 from collections.abc import Callable
 from typing import Any
@@ -6,7 +6,7 @@ from typing import Any
 from .base import Observer
 
 
-class InteractiveObserver(Observer):
+class CallbackObserver(Observer):
     """Delegates evaluation to a user-provided callback.
 
     The callback receives the list of suggestion dicts and returns
@@ -21,7 +21,7 @@ class InteractiveObserver(Observer):
 
     @property
     def source(self) -> str:
-        return "interactive"
+        return "callback"
 
     def evaluate(self, suggestions: list[dict[str, Any]]) -> list[dict[str, Any]]:
         return self.callback(suggestions)

@@ -1,7 +1,7 @@
 """Pluggable observer layer for BO evaluation."""
 
 from .base import Observer
-from .interactive import InteractiveObserver
+from .callback import CallbackObserver
 from .proxy import ProxyObserver
 
-__all__ = ["InteractiveObserver", "Observer", "ProxyObserver"]
+__all__ = ["CallbackObserver", "Observer", "ProxyObserver"]
