@@ -9,7 +9,7 @@ This repository is intended to be an **agent-operable optimization engine**:
 - run iterative BO suggestions,
 - track state and results for human-in-the-loop workflows.
 
-One **big thing** missing is a **data conversion and preprocessing layer** which would make this much more flexible to more problems types. Hence this is the next major thing We'll be working on 🤞
+One thing missing is a **data conversion and preprocessing layer** which would make this much more flexible to different problem types. This is the next major piece of work.
 
 ## Scope (current vs target)
 
@@ -117,7 +117,7 @@ scripts/
 Skills in `.claude/skills/` provide the agent interface:
 
 - `bo-init-run` — initialize a run
-- `bo-build-oracle` — train proxy oracle
+- `bo-build-proxy-oracle` — train proxy oracle
 - `bo-next-batch` — suggest candidates
 - `bo-record-observation` — record results
 - `bo-report-run` — status and reports
