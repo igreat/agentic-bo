@@ -16,7 +16,7 @@ Run these four commands in sequence:
 uv run python -m bo_workflow.cli init \
   --dataset <CSV_PATH> --target <TARGET_COL> --objective <min|max> --engine <hebo|bo_lcb|random> --seed <SEED>
 
-# 2. Train oracle
+# 2. Train proxy oracle
 uv run python -m bo_workflow.cli build-oracle --run-id <RUN_ID>
 
 # 3. Run proxy BO loop
@@ -28,6 +28,10 @@ uv run python -m bo_workflow.cli report --run-id <RUN_ID>
 ```
 
 Extract `<RUN_ID>` from the `init` output's `run_id` field.
+
+## How it works
+
+The CLI constructs a `ProxyObserver(run_dir)` and passes it to `engine.run_optimization()`. The engine runs suggest/observe loops without any oracle awareness — the observer is self-contained.
 
 ## Resuming a completed run
 

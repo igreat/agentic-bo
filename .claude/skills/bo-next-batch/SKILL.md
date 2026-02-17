@@ -13,6 +13,8 @@ Use this skill to get candidate experiments.
 uv run python -m bo_workflow.cli suggest --run-id <RUN_ID> --batch-size <N>
 ```
 
+Accepts status `initialized`, `oracle_ready`, or `running`. No oracle needed — HEBO/BO/random work directly from the design space.
+
 ## Return
 
 - list of suggestions with `suggestion_id`

@@ -1,11 +1,11 @@
 ---
-name: bo-build-oracle
+name: bo-build-proxy-oracle
 description: Train and persist a proxy oracle for an initialized BO run.
 ---
 
-# BO Build Oracle
+# BO Build Proxy Oracle
 
-Use this skill to train a surrogate model from the run dataset.
+Use this skill to train a surrogate model from the run dataset. This is only needed for proxy-mode workflows (`run-proxy`). Human-in-the-loop workflows (manual `suggest`/`observe`) do not require an oracle.
 
 ## Command
 
