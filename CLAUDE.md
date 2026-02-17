@@ -25,7 +25,7 @@ bo_workflow/
   observers/
     base.py       # Observer ABC — evaluate(suggestions) interface
     proxy.py      # ProxyObserver — self-contained, captures run_dir at init
-    interactive.py # InteractiveObserver — delegates to user callback
+    callback.py    # CallbackObserver — delegates to user callback
 data/
   HER_virtual_data.csv  # example dataset (HER virtual screen)
 scripts/
@@ -140,7 +140,7 @@ This also applies to `suggest`: it accepts status `initialized`, `oracle_ready`,
 - **Always label proxy results as simulations.** The proxy oracle is a surrogate trained from data, not a real experiment.
 - **Include oracle CV RMSE** when presenting optimization results so the user knows surrogate quality.
 - **Prefer explicit `--target` and `--objective`.**
-- **Never auto-evaluate with proxy oracle in human-in-the-loop mode.** If the user is recording real observations, do not call `evaluate-last`.
+- **Never auto-evaluate with proxy oracle in human-in-the-loop mode.** If the user is recording real observations, do not call `run-proxy` or otherwise invoke the proxy oracle.
 
 ## Observation format
 

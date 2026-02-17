@@ -10,6 +10,8 @@ import secrets
 import sys
 from typing import Any
 
+from .observers.base import Observer
+
 from hebo.design_space.design_space import DesignSpace
 from hebo.optimizers.bo import BO
 from hebo.optimizers.hebo import HEBO
@@ -90,6 +92,10 @@ class BOEngine:
     def __init__(self, runs_root: str | Path = "runs") -> None:
         self.runs_root = Path(runs_root)
         self.runs_root.mkdir(parents=True, exist_ok=True)
+
+    def get_run_dir(self, run_id: str) -> Path:
+        """Return the run directory for *run_id*."""
+        return self.runs_root / run_id
 
     def _paths(self, run_id: str) -> RunPaths:
         return RunPaths(run_dir=self.runs_root / run_id)
@@ -388,7 +394,7 @@ class BOEngine:
         self,
         run_id: str,
         *,
-        observer: Any,
+        observer: Observer,
         num_iterations: int,
         batch_size: int = 1,
         verbose: bool = False,

@@ -7,7 +7,7 @@ import numpy as np
 from matplotlib.axes import Axes
 from matplotlib.figure import Figure
 
-type Objective = Literal["min", "max"]
+from .utils import Objective
 type ErrorStyle = Literal["stderr", "iqr"]
 type YScale = Literal["linear", "log"]
 

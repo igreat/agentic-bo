@@ -10,8 +10,8 @@ from typing import Any, Literal
 import numpy as np
 import pandas as pd
 
-Objective = Literal["min", "max"]
-OptimizerName = Literal["hebo", "bo_lcb", "random"]
+type Objective = Literal["min", "max"]
+type OptimizerName = Literal["hebo", "bo_lcb", "random"]
 
 _RUN_ADJECTIVES = (
     "amber",

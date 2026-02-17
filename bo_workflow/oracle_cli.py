@@ -31,7 +31,7 @@ def handle(args: argparse.Namespace, engine: BOEngine) -> int | None:
     if args.command == "build-oracle":
         from .oracle import build_proxy_oracle
 
-        run_dir = engine._paths(args.run_id).run_dir
+        run_dir = engine.get_run_dir(args.run_id)
         payload = build_proxy_oracle(
             run_dir,
             cv_folds=args.cv_folds,
@@ -42,9 +42,9 @@ def handle(args: argparse.Namespace, engine: BOEngine) -> int | None:
         return 0
 
     if args.command == "run-proxy":
-        from .observers import ProxyObserver
+        from .observers.proxy import ProxyObserver
 
-        run_dir = engine._paths(args.run_id).run_dir
+        run_dir = engine.get_run_dir(args.run_id)
         observer = ProxyObserver(run_dir)
         payload = engine.run_optimization(
             args.run_id,

@@ -20,6 +20,11 @@ class ProxyObserver(Observer):
     def __init__(self, run_dir: str | Path) -> None:
         self._run_dir = Path(run_dir)
         paths = RunPaths(run_dir=self._run_dir)
+        if not paths.oracle_model.exists():
+            raise FileNotFoundError(
+                f"Oracle not found at {paths.oracle_model}. "
+                "Run 'build-oracle' first."
+            )
         state = read_json(paths.state)
         self._active_features = list(state["active_features"])
         self._objective = state["objective"]

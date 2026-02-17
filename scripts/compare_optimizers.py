@@ -25,7 +25,7 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from bo_workflow.engine import BOEngine  # noqa: E402
-from bo_workflow.observers import ProxyObserver  # noqa: E402
+from bo_workflow.observers.proxy import ProxyObserver  # noqa: E402
 from bo_workflow.oracle import build_proxy_oracle  # noqa: E402
 from bo_workflow.plotting import plot_optimization_convergence  # noqa: E402
 
@@ -160,7 +160,7 @@ def main(argv: list[str] | None = None) -> int:
             if args.verbose:
                 print(f"  init: run_id={run_id}")
 
-            run_dir = engine._paths(run_id).run_dir
+            run_dir = engine.get_run_dir(run_id)
             oracle_info = build_proxy_oracle(
                 run_dir,
                 cv_folds=args.cv_folds,
