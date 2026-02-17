@@ -153,8 +153,11 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     if args.command == "build-oracle":
-        payload = engine.build_oracle(
-            args.run_id,
+        from .oracle import build_proxy_oracle
+
+        run_dir = engine._paths(args.run_id).run_dir
+        payload = build_proxy_oracle(
+            run_dir,
             cv_folds=args.cv_folds,
             max_features=args.max_features,
             verbose=args.verbose,
@@ -178,8 +181,13 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     if args.command == "run-proxy":
-        payload = engine.run_proxy_optimization(
+        from .observers import ProxyObserver
+
+        run_dir = engine._paths(args.run_id).run_dir
+        observer = ProxyObserver(run_dir)
+        payload = engine.run_optimization(
             args.run_id,
+            observer=observer,
             num_iterations=args.iterations,
             batch_size=args.batch_size,
             verbose=args.verbose,
