@@ -10,7 +10,7 @@ Use this skill to get candidate experiments.
 ## Command
 
 ```bash
-uv run python -m src.bo_workflow.cli suggest --run-id <RUN_ID> --batch-size <N>
+uv run python -m bo_workflow.cli suggest --run-id <RUN_ID> --batch-size <N>
 ```
 
 ## Return

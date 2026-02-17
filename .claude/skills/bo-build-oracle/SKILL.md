@@ -10,7 +10,7 @@ Use this skill to train a surrogate model from the run dataset.
 ## Command
 
 ```bash
-uv run python -m src.bo_workflow.cli build-oracle --run-id <RUN_ID>
+uv run python -m bo_workflow.cli build-oracle --run-id <RUN_ID>
 ```
 
 Optional flags: `--cv-folds <N>` (default 5), `--max-features <K>` (limit active features for high-dimensional datasets).

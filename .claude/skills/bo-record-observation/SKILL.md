@@ -10,7 +10,7 @@ Use this skill when outcomes for suggested experiments are available.
 ## Command
 
 ```bash
-uv run python -m src.bo_workflow.cli observe --run-id <RUN_ID> --data <JSON_OR_FILE>
+uv run python -m bo_workflow.cli observe --run-id <RUN_ID> --data <JSON_OR_FILE>
 ```
 
 ## Accepted `--data` formats
@@ -27,4 +27,4 @@ The `y` key can also be the target column name (e.g. `"Target"` instead of `"y"`
 - number of recorded observations
 - updated best value
 
-Quick status check: `uv run python -m src.bo_workflow.cli status --run-id <RUN_ID>`
+Quick status check: `uv run python -m bo_workflow.cli status --run-id <RUN_ID>`

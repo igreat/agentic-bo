@@ -21,9 +21,8 @@ ENGINE_LABELS = {
 }
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-SRC_ROOT = REPO_ROOT / "src"
-if str(SRC_ROOT) not in sys.path:
-    sys.path.insert(0, str(SRC_ROOT))
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
 
 from bo_workflow.engine import BOEngine  # noqa: E402
 from bo_workflow.observers import ProxyObserver  # noqa: E402

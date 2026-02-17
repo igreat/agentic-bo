@@ -14,7 +14,7 @@ HEBO's published metadata pins ancient NumPy/pymoo versions. Install it with `--
 ## Architecture
 
 ```
-src/bo_workflow/
+bo_workflow/
   engine.py    # BOEngine class — all logic, deterministic, JSON-in/JSON-out
   cli.py       # argparse CLI wrapping BOEngine methods
   plotting.py  # convergence plot generation
@@ -55,7 +55,7 @@ Each run produces files under `runs/<run_id>/`:
 
 ## CLI quick reference
 
-All commands: `uv run python -m src.bo_workflow.cli <command> [flags]`
+All commands: `uv run python -m bo_workflow.cli <command> [flags]`
 
 | Command | Key flags | Purpose |
 |---------|-----------|---------|
@@ -72,13 +72,13 @@ Engine options: `hebo` (default), `bo_lcb`, `random`. Note: `bo_lcb` currently s
 ## MVP demo (copy-paste)
 
 ```bash
-uv run python -m src.bo_workflow.cli init \
+uv run python -m bo_workflow.cli init \
   --dataset data/HER_virtual_data.csv \
   --target Target --objective max --seed 42
 
 # grab the run_id from the JSON output, then:
-uv run python -m src.bo_workflow.cli build-oracle --run-id <RUN_ID>
-uv run python -m src.bo_workflow.cli run-proxy --run-id <RUN_ID> --iterations 20
+uv run python -m bo_workflow.cli build-oracle --run-id <RUN_ID>
+uv run python -m bo_workflow.cli run-proxy --run-id <RUN_ID> --iterations 20
 ```
 
 Expected artifacts in `runs/<RUN_ID>/`: `state.json`, `oracle.pkl`, `oracle_meta.json`, `suggestions.jsonl`, `observations.jsonl`, `convergence.pdf`, `report.json`.

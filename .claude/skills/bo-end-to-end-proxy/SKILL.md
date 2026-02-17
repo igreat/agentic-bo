@@ -13,18 +13,18 @@ Run these four commands in sequence:
 
 ```bash
 # 1. Initialize
-uv run python -m src.bo_workflow.cli init \
+uv run python -m bo_workflow.cli init \
   --dataset <CSV_PATH> --target <TARGET_COL> --objective <min|max> --engine <hebo|bo_lcb|random> --seed <SEED>
 
 # 2. Train oracle
-uv run python -m src.bo_workflow.cli build-oracle --run-id <RUN_ID>
+uv run python -m bo_workflow.cli build-oracle --run-id <RUN_ID>
 
 # 3. Run proxy BO loop
-uv run python -m src.bo_workflow.cli run-proxy --run-id <RUN_ID> \
+uv run python -m bo_workflow.cli run-proxy --run-id <RUN_ID> \
   --iterations <T> --batch-size <N>
 
 # 4. Generate report
-uv run python -m src.bo_workflow.cli report --run-id <RUN_ID>
+uv run python -m bo_workflow.cli report --run-id <RUN_ID>
 ```
 
 Extract `<RUN_ID>` from the `init` output's `run_id` field.

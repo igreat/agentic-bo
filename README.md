@@ -31,20 +31,20 @@ uv pip install --no-deps "hebo @ git+https://github.com/huawei-noah/HEBO.git#sub
 ## Quick start
 
 ```bash
-uv run python -m src.bo_workflow.cli init \
+uv run python -m bo_workflow.cli init \
   --dataset data/HER_virtual_data.csv \
   --target Target --objective max --seed 42
 
 # grab the run_id from the JSON output, then:
-uv run python -m src.bo_workflow.cli build-oracle --run-id <RUN_ID>
-uv run python -m src.bo_workflow.cli run-proxy --run-id <RUN_ID> --iterations 20
-uv run python -m src.bo_workflow.cli report --run-id <RUN_ID>
+uv run python -m bo_workflow.cli build-oracle --run-id <RUN_ID>
+uv run python -m bo_workflow.cli run-proxy --run-id <RUN_ID> --iterations 20
+uv run python -m bo_workflow.cli report --run-id <RUN_ID>
 ```
 
 ## CLI commands
 
 ```bash
-uv run python -m src.bo_workflow.cli --help
+uv run python -m bo_workflow.cli --help
 ```
 
 | Command | Purpose |
@@ -92,7 +92,7 @@ Each run writes to `runs/<RUN_ID>/`:
 ## Layout
 
 ```text
-src/bo_workflow/
+bo_workflow/
   engine.py    # BOEngine — all logic, JSON-in/JSON-out
   cli.py       # argparse CLI wrapping engine methods
   plotting.py  # convergence plot generation
