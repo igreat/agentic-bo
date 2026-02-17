@@ -5,7 +5,6 @@ optimizers from logged observations when needed. That replay-first design keeps
 the workflow resumable and robust for human-in-the-loop usage.
 """
 
-import json
 from pathlib import Path
 import pickle
 import secrets
@@ -615,67 +614,6 @@ class BOEngine:
         )
         return {"run_id": run_id, "recorded": len(rows), "observations": rows}
 
-    def evaluate_last_suggestions(
-        self, run_id: str, *, max_new: int | None = None, verbose: bool = False
-    ) -> dict[str, Any]:
-        """Evaluate pending suggestions with proxy oracle (simulation mode)."""
-        state = self._load_state(run_id)
-        if state.get("oracle") is None:
-            raise ValueError(
-                f"Oracle not built for run '{run_id}'. Run build-oracle first."
-            )
-        suggestions = read_jsonl(self._paths(run_id).suggestions)
-        observations = read_jsonl(self._paths(run_id).observations)
-
-        observed_suggestion_ids = {
-            str(row["suggestion_id"])
-            for row in observations
-            if row.get("suggestion_id") is not None
-        }
-        already_seen_x = {json.dumps(row["x"], sort_keys=True) for row in observations}
-        pending: list[dict[str, Any]] = []
-        for suggestion in suggestions:
-            suggestion_id = suggestion.get("suggestion_id")
-            if suggestion_id is not None:
-                if str(suggestion_id) in observed_suggestion_ids:
-                    continue
-                pending.append(suggestion)
-                continue
-
-            # Backward-compatible fallback for historical runs without IDs.
-            if json.dumps(suggestion["x"], sort_keys=True) not in already_seen_x:
-                pending.append(suggestion)
-        if max_new is not None:
-            pending = pending[:max_new]
-
-        if not pending:
-            self._log(verbose, f"[eval] run_id={run_id} no pending suggestions")
-            return {"run_id": run_id, "evaluated": 0, "observations": []}
-
-        x_df = pd.DataFrame([row["x"] for row in pending])[state["active_features"]]
-        y_pred = self._oracle_predict_original_scale(run_id, state, x_df)
-
-        payloads = []
-        for row, y_val in zip(pending, y_pred, strict=True):
-            payloads.append(
-                {
-                    "x": row["x"],
-                    "y": float(y_val),
-                    "engine": row.get("engine", state.get("default_engine", "hebo")),
-                    "suggestion_id": row.get("suggestion_id"),
-                }
-            )
-
-        observed = self.observe(
-            run_id, payloads, source="proxy-oracle", verbose=verbose
-        )
-        self._log(verbose, f"[eval] run_id={run_id} evaluated={observed['recorded']}")
-        return {
-            "run_id": run_id,
-            "evaluated": observed["recorded"],
-            "observations": observed["observations"],
-        }
-
     def run_proxy_optimization(
         self,
         run_id: str,
@@ -685,9 +623,29 @@ class BOEngine:
         verbose: bool = False,
     ) -> dict[str, Any]:
         """Run a full simulated BO loop using proxy evaluation."""
+        from .observers import ProxyObserver
+
+        return self.run_optimization(
+            run_id,
+            observer=ProxyObserver(),
+            num_iterations=num_iterations,
+            batch_size=batch_size,
+            verbose=verbose,
+        )
+
+    def run_optimization(
+        self,
+        run_id: str,
+        *,
+        observer: Any,
+        num_iterations: int,
+        batch_size: int = 1,
+        verbose: bool = False,
+    ) -> dict[str, Any]:
+        """Run a BO loop with a pluggable observer for evaluation."""
         self._log(
             verbose,
-            f"[run-proxy] run_id={run_id} iterations={num_iterations} batch_size={batch_size}",
+            f"[run] run_id={run_id} iterations={num_iterations} batch_size={batch_size} observer={observer.source}",
         )
         progress = tqdm(
             range(num_iterations),
@@ -697,8 +655,10 @@ class BOEngine:
             file=sys.stderr,
         )
         for _ in progress:
-            self.suggest(run_id, batch_size=batch_size, verbose=verbose)
-            self.evaluate_last_suggestions(run_id, max_new=batch_size, verbose=verbose)
+            result = self.suggest(run_id, batch_size=batch_size, verbose=verbose)
+            observations = observer.evaluate(self, run_id, result["suggestions"])
+            if observations:
+                self.observe(run_id, observations, source=observer.source, verbose=verbose)
             if verbose:
                 status = self.status(run_id)
                 best = status.get("best_value")
@@ -708,7 +668,7 @@ class BOEngine:
         state["status"] = "completed"
         state["updated_at"] = utc_now_iso()
         self._save_state(run_id, state)
-        self._log(verbose, f"[run-proxy] run_id={run_id} completed")
+        self._log(verbose, f"[run] run_id={run_id} completed")
         return self.report(run_id, verbose=verbose)
 
     def status(self, run_id: str) -> dict[str, Any]:
