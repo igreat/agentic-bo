@@ -93,13 +93,23 @@ Each run writes to `runs/<RUN_ID>/`:
 
 ```text
 bo_workflow/
-  engine.py    # BOEngine — all logic, JSON-in/JSON-out
-  cli.py       # argparse CLI wrapping engine methods
-  plotting.py  # convergence plot generation
+  engine.py       # BOEngine — suggest/observe loop, no oracle knowledge
+  engine_cli.py   # CLI subcommands: init, suggest, observe, status, report
+  oracle.py       # standalone proxy oracle — train, load, predict on run_dir
+  oracle_cli.py   # CLI subcommands: build-oracle, run-proxy
+  cli.py          # top-level entrypoint — composes subparsers from each module
+  plotting.py     # convergence plot generation
+  utils.py        # RunPaths, JSON I/O, shared types
+  observers/
+    base.py       # Observer ABC — evaluate(suggestions) interface
+    proxy.py      # ProxyObserver — self-contained, captures run_dir at init
+    callback.py   # CallbackObserver — delegates to user callback
 data/
   HER_virtual_data.csv  # example dataset (HER virtual screen)
+scripts/
+  compare_optimizers.py  # benchmark hebo/bo_lcb/random
 .claude/
-  skills/      # Claude Code skills mapping to CLI commands
+  skills/         # Claude Code skills mapping to CLI commands
 ```
 
 ## Claude Skills

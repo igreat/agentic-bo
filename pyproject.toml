@@ -20,12 +20,7 @@ dependencies = [
 ]
 
 [dependency-groups]
-dev = [
-    "pytest>=8.0",
-    "ruff>=0.15.0",
-]
+dev = ["pytest>=8.0", "ruff>=0.15.0"]
 
 [tool.pytest.ini_options]
-markers = [
-    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
-]
+markers = ["slow: marks tests as slow (deselect with '-m \"not slow\"')"]
