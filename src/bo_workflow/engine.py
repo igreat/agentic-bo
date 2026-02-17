@@ -409,7 +409,9 @@ class BOEngine:
             result = self.suggest(run_id, batch_size=batch_size, verbose=verbose)
             observations = observer.evaluate(result["suggestions"])
             if observations:
-                self.observe(run_id, observations, source=observer.source, verbose=verbose)
+                self.observe(
+                    run_id, observations, source=observer.source, verbose=verbose
+                )
             if verbose:
                 status = self.status(run_id)
                 best = status.get("best_value")
