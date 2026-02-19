@@ -10,7 +10,6 @@ dependencies = [
     "gpytorch>=1.15.1",
     "matplotlib>=3.10.8",
     "numpy>=2.4.2",
-    "openpyxl>=3.1.5",
     "pandas>=3.0.0",
     "pymoo",
     "scikit-learn>=1.8.0",
