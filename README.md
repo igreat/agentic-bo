@@ -9,7 +9,7 @@ This repository is intended to be an **agent-operable optimization engine**:
 - run iterative BO suggestions,
 - track state and results for human-in-the-loop workflows.
 
-One **big thing** missing is a **data conversion and preprocessing layer** which would make this much more flexible to more problems types. Hence this is the next major thing We'll be working on 🤞
+One thing missing is a **data conversion and preprocessing layer** which would make this much more flexible to different problem types. This is the next major piece of work.
 
 ## Scope (current vs target)
 
@@ -31,20 +31,20 @@ uv pip install --no-deps "hebo @ git+https://github.com/huawei-noah/HEBO.git#sub
 ## Quick start
 
 ```bash
-uv run python -m src.bo_workflow.cli init \
+uv run python -m bo_workflow.cli init \
   --dataset data/HER_virtual_data.csv \
   --target Target --objective max --seed 42
 
 # grab the run_id from the JSON output, then:
-uv run python -m src.bo_workflow.cli build-oracle --run-id <RUN_ID>
-uv run python -m src.bo_workflow.cli run-proxy --run-id <RUN_ID> --iterations 20
-uv run python -m src.bo_workflow.cli report --run-id <RUN_ID>
+uv run python -m bo_workflow.cli build-oracle --run-id <RUN_ID>
+uv run python -m bo_workflow.cli run-proxy --run-id <RUN_ID> --iterations 20
+uv run python -m bo_workflow.cli report --run-id <RUN_ID>
 ```
 
 ## CLI commands
 
 ```bash
-uv run python -m src.bo_workflow.cli --help
+uv run python -m bo_workflow.cli --help
 ```
 
 | Command | Purpose |
@@ -92,14 +92,24 @@ Each run writes to `runs/<RUN_ID>/`:
 ## Layout
 
 ```text
-src/bo_workflow/
-  engine.py    # BOEngine — all logic, JSON-in/JSON-out
-  cli.py       # argparse CLI wrapping engine methods
-  plotting.py  # convergence plot generation
+bo_workflow/
+  engine.py       # BOEngine — suggest/observe loop, no oracle knowledge
+  engine_cli.py   # CLI subcommands: init, suggest, observe, status, report
+  oracle.py       # standalone proxy oracle — train, load, predict on run_dir
+  oracle_cli.py   # CLI subcommands: build-oracle, run-proxy
+  cli.py          # top-level entrypoint — composes subparsers from each module
+  plotting.py     # convergence plot generation
+  utils.py        # RunPaths, JSON I/O, shared types
+  observers/
+    base.py       # Observer ABC — evaluate(suggestions) interface
+    proxy.py      # ProxyObserver — self-contained, captures run_dir at init
+    callback.py   # CallbackObserver — delegates to user callback
 data/
   HER_virtual_data.csv  # example dataset (HER virtual screen)
+scripts/
+  compare_optimizers.py  # benchmark hebo/bo_lcb/random
 .claude/
-  skills/      # Claude Code skills mapping to CLI commands
+  skills/         # Claude Code skills mapping to CLI commands
 ```
 
 ## Claude Skills
@@ -107,7 +117,7 @@ data/
 Skills in `.claude/skills/` provide the agent interface:
 
 - `bo-init-run` — initialize a run
-- `bo-build-oracle` — train proxy oracle
+- `bo-build-proxy-oracle` — train proxy oracle
 - `bo-next-batch` — suggest candidates
 - `bo-record-observation` — record results
 - `bo-report-run` — status and reports

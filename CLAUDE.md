@@ -14,13 +14,31 @@ HEBO's published metadata pins ancient NumPy/pymoo versions. Install it with `--
 ## Architecture
 
 ```
-src/bo_workflow/
-  engine.py    # BOEngine class — all logic, deterministic, JSON-in/JSON-out
-  cli.py       # argparse CLI wrapping BOEngine methods
-  plotting.py  # convergence plot generation
+bo_workflow/
+  engine.py       # BOEngine class — suggest/observe loop, no oracle knowledge
+  engine_cli.py   # CLI subcommands: init, suggest, observe, status, report
+  oracle.py       # standalone proxy oracle — train, load, predict on run_dir
+  oracle_cli.py   # CLI subcommands: build-oracle, run-proxy
+  cli.py          # top-level entrypoint — composes subparsers from each module
+  plotting.py     # convergence plot generation
+  utils.py        # RunPaths, JSON I/O, shared types
+  observers/
+    base.py       # Observer ABC — evaluate(suggestions) interface
+    proxy.py      # ProxyObserver — self-contained, captures run_dir at init
+    callback.py    # CallbackObserver — delegates to user callback
 data/
   HER_virtual_data.csv  # example dataset (HER virtual screen)
+scripts/
+  compare_optimizers.py  # benchmark hebo/bo_lcb/random
 ```
+
+### Key design boundaries
+
+- **Engine has zero oracle awareness.** It only knows the `Observer` ABC and calls `observer.evaluate(suggestions)`. No oracle imports in `engine.py`.
+- **Oracle is standalone.** `oracle.py` operates on `run_dir: Path`, not `engine: BOEngine`. Reads/writes state.json and oracle files directly.
+- **Observers are self-contained.** `ProxyObserver(run_dir)` captures all context at construction. `evaluate(suggestions)` takes no engine or run_id.
+- **CLI is the wiring layer.** `build-oracle` calls `oracle.build_proxy_oracle(run_dir)` directly. `run-proxy` constructs `ProxyObserver(run_dir)` and passes it to `engine.run_optimization()`.
+- **Each module owns its CLI surface.** `engine_cli.py` and `oracle_cli.py` each define `register_commands()` + `handle()`. `cli.py` composes them.
 
 Skills in `.claude/skills/` map 1:1 to CLI subcommands. The engine is the source of truth; skills are the agent interface.
 
@@ -55,7 +73,7 @@ Each run produces files under `runs/<run_id>/`:
 
 ## CLI quick reference
 
-All commands: `uv run python -m src.bo_workflow.cli <command> [flags]`
+All commands: `uv run python -m bo_workflow.cli <command> [flags]`
 
 | Command | Key flags | Purpose |
 |---------|-----------|---------|
@@ -72,16 +90,28 @@ Engine options: `hebo` (default), `bo_lcb`, `random`. Note: `bo_lcb` currently s
 ## MVP demo (copy-paste)
 
 ```bash
-uv run python -m src.bo_workflow.cli init \
+uv run python -m bo_workflow.cli init \
   --dataset data/HER_virtual_data.csv \
   --target Target --objective max --seed 42
 
 # grab the run_id from the JSON output, then:
-uv run python -m src.bo_workflow.cli build-oracle --run-id <RUN_ID>
-uv run python -m src.bo_workflow.cli run-proxy --run-id <RUN_ID> --iterations 20
+uv run python -m bo_workflow.cli build-oracle --run-id <RUN_ID>
+uv run python -m bo_workflow.cli run-proxy --run-id <RUN_ID> --iterations 20
 ```
 
 Expected artifacts in `runs/<RUN_ID>/`: `state.json`, `oracle.pkl`, `oracle_meta.json`, `suggestions.jsonl`, `observations.jsonl`, `convergence.pdf`, `report.json`.
+
+## Human-in-the-loop workflow
+
+The engine supports step-by-step usage without a proxy oracle. `suggest` accepts status `initialized`, `oracle_ready`, or `running` — no oracle needed for HEBO/BO/random.
+
+```bash
+uv run python -m bo_workflow.cli init --dataset ... --target ... --objective max
+uv run python -m bo_workflow.cli suggest --run-id <RUN_ID>
+# human runs experiment in the lab
+uv run python -m bo_workflow.cli observe --run-id <RUN_ID> --data '{"x": {...}, "y": 5.2}'
+# repeat suggest/observe
+```
 
 ## Default dataset
 
@@ -103,14 +133,14 @@ p.write_text(json.dumps(state, indent=2))
 
 Then call `run-proxy` with the additional iterations desired. The engine naturally loads all existing observations, so the optimizer continues from the current best — no work is repeated.
 
-This also applies to `suggest`: it only accepts status `oracle_ready` or `running`.
+This also applies to `suggest`: it accepts status `initialized`, `oracle_ready`, or `running`.
 
 ## Guardrails
 
 - **Always label proxy results as simulations.** The proxy oracle is a surrogate trained from data, not a real experiment.
 - **Include oracle CV RMSE** when presenting optimization results so the user knows surrogate quality.
 - **Prefer explicit `--target` and `--objective`.**
-- **Never auto-evaluate with proxy oracle in human-in-the-loop mode.** If the user is recording real observations, do not call `evaluate-last`.
+- **Never auto-evaluate with proxy oracle in human-in-the-loop mode.** If the user is recording real observations, do not call `run-proxy` or otherwise invoke the proxy oracle.
 
 ## Observation format
 

@@ -21,11 +21,12 @@ ENGINE_LABELS = {
 }
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-SRC_ROOT = REPO_ROOT / "src"
-if str(SRC_ROOT) not in sys.path:
-    sys.path.insert(0, str(SRC_ROOT))
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
 
 from bo_workflow.engine import BOEngine  # noqa: E402
+from bo_workflow.observers.proxy import ProxyObserver  # noqa: E402
+from bo_workflow.oracle import build_proxy_oracle  # noqa: E402
 from bo_workflow.plotting import plot_optimization_convergence  # noqa: E402
 
 
@@ -159,8 +160,9 @@ def main(argv: list[str] | None = None) -> int:
             if args.verbose:
                 print(f"  init: run_id={run_id}")
 
-            oracle_info = engine.build_oracle(
-                run_id,
+            run_dir = engine.get_run_dir(run_id)
+            oracle_info = build_proxy_oracle(
+                run_dir,
                 cv_folds=args.cv_folds,
                 max_features=args.max_features,
             )
@@ -171,8 +173,10 @@ def main(argv: list[str] | None = None) -> int:
                     f"(cv_rmse={oracle_info.get('selected_rmse'):.4f})"
                 )
 
-            engine.run_proxy_optimization(
+            observer = ProxyObserver(run_dir)
+            engine.run_optimization(
                 run_id,
+                observer=observer,
                 num_iterations=args.iterations,
                 batch_size=args.batch_size,
             )

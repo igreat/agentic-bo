@@ -10,7 +10,7 @@ Use this skill to summarize run progress.
 ## Quick status check
 
 ```bash
-uv run python -m src.bo_workflow.cli status --run-id <RUN_ID>
+uv run python -m bo_workflow.cli status --run-id <RUN_ID>
 ```
 
 Returns: run status, best value, number of observations. No side effects.
@@ -18,7 +18,7 @@ Returns: run status, best value, number of observations. No side effects.
 ## Full report with plot
 
 ```bash
-uv run python -m src.bo_workflow.cli report --run-id <RUN_ID>
+uv run python -m bo_workflow.cli report --run-id <RUN_ID>
 ```
 
 Returns: best value, best candidate, oracle info, and generates:

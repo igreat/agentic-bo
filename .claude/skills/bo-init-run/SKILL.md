@@ -10,7 +10,7 @@ Use this skill when the user asks to start an optimization campaign.
 ## Command
 
 ```bash
-uv run python -m src.bo_workflow.cli init \
+uv run python -m bo_workflow.cli init \
   --dataset <CSV_PATH> --target <TARGET_COL> --objective <min|max>
 ```
 

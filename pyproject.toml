@@ -4,6 +4,7 @@ version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.12"
+# HEBO is installed separately with --no-deps; see CLAUDE.md for details.
 dependencies = [
     "disjoint-set",
     "gpytorch>=1.15.1",
@@ -18,6 +19,7 @@ dependencies = [
 ]
 
 [dependency-groups]
-dev = [
-    "ruff>=0.15.0",
-]
+dev = ["pytest>=8.0", "ruff>=0.15.0"]
+
+[tool.pytest.ini_options]
+markers = ["slow: marks tests as slow (deselect with '-m \"not slow\"')"]
