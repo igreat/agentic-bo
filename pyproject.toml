@@ -16,10 +16,28 @@ dependencies = [
     "scipy>=1.17.0",
     "torch>=2.10.0",
     "tqdm>=4.67.3",
+    "rdkit>=2024.3.1",
+    "ase>=3.22.0",
+    "crem>=0.2.9",
+    "tblite>=0.5.0",
 ]
 
+[project.optional-dependencies]
+xtb = ["tblite>=0.3.0"]
+dft = ["pyscf>=2.4.0"]
+ml-energy = ["torchani>=2.2"]
+
 [dependency-groups]
+<<<<<<< Updated upstream
 dev = ["pytest>=8.0", "ruff>=0.15.0"]
 
 [tool.pytest.ini_options]
 markers = ["slow: marks tests as slow (deselect with '-m \"not slow\"')"]
+=======
+dev = [
+    "ruff>=0.15.0",
+]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+>>>>>>> Stashed changes

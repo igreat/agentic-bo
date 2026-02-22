@@ -142,3 +142,31 @@ class RunPaths:
     @property
     def convergence_plot(self) -> Path:
         return self.run_dir / "convergence.pdf"
+
+    @property
+    def scaffold_spec(self) -> Path:
+        return self.run_dir / "scaffold_spec.json"
+
+    @property
+    def feasibility_log(self) -> Path:
+        return self.run_dir / "feasibility.jsonl"
+
+    @property
+    def descriptor_cache(self) -> Path:
+        return self.run_dir / "descriptor_cache.json"
+
+    @property
+    def energy_cache(self) -> Path:
+        return self.run_dir / "energy_cache.json"
+
+    @property
+    def crem_candidates(self) -> Path:
+        return self.run_dir / "crem_candidates.json"
+
+    @property
+    def crem_feasibility(self) -> Path:
+        return self.run_dir / "crem_feasibility.json"
+
+    @property
+    def validation_results(self) -> Path:
+        return self.run_dir / "validation_results.json"
