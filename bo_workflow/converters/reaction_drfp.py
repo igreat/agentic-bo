@@ -104,6 +104,11 @@ def decode_nearest(
 ) -> list[dict]:
     """Find k nearest reactions in the catalog by Tanimoto similarity.
 
+    The catalog does not have to be the one produced by ``encode``.  Any CSV
+    with matching ``fp_*`` columns works -- e.g. a large external database of
+    commercially available reactions.  This is useful for human-in-the-loop
+    workflows where BO suggests novel fingerprints outside the training set.
+
     Parameters
     ----------
     query_fp : 1-D array of fingerprint bits (rounded to 0/1)
