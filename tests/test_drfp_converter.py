@@ -3,7 +3,6 @@
 from pathlib import Path
 
 import numpy as np
-import pandas as pd
 import pytest
 
 from bo_workflow.converters.reaction_drfp import decode_nearest, encode_reactions
