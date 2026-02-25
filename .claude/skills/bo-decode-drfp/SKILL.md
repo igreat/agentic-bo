@@ -23,5 +23,5 @@ Optional flags: `--k <N>` (number of nearest neighbors, default 3).
 ## Notes
 
 - `--query` accepts a JSON dict of fingerprint bit values, matching the format produced by `suggest`.
-- `--catalog` should point to the `catalog.csv` produced by the `encode` step.
+- `--catalog` can be the `catalog.csv` from `encode`, or any external CSV with matching `fp_*` columns (e.g. a large database of commercially available reactions). Useful for human-in-the-loop workflows where BO suggests fingerprints outside the training set.
 - Results are sorted by descending Tanimoto similarity.
