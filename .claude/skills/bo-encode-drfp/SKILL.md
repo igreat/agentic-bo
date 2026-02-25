@@ -14,7 +14,7 @@ uv run python -m bo_workflow.converters.reaction_drfp encode \
   --input <CSV_PATH> --output-dir <DIR>
 ```
 
-Optional flags: `--rxn-col <COL>` (default `rxn_smiles`), `--n-bits <N>` (default 256).
+Optional flags: `--rxn-col <COL>` (default `rxn_smiles`), `--n-bits <N>` (default 64).
 
 ## Return
 

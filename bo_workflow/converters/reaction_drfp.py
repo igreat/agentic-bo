@@ -19,7 +19,7 @@ Usage
 python -m bo_workflow.converters.reaction_drfp encode \
     --input data/buchwald_hartwig_rxns.csv \
     --output-dir data/bh_drfp \
-    --rxn-col rxn_smiles --n-bits 256
+    --rxn-col rxn_smiles
 
 # Decode: find nearest reaction to a query fingerprint
 python -m bo_workflow.converters.reaction_drfp decode \
@@ -43,7 +43,7 @@ from drfp import DrfpEncoder
 
 def encode_reactions(
     input_path: Path,
-    n_bits: int = 256,
+    n_bits: int = 64,
     rxn_col: str = "rxn_smiles",
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Read a CSV with reaction SMILES, compute DRFP.
@@ -178,7 +178,11 @@ def _cmd_encode(args: argparse.Namespace) -> None:
 
 def _cmd_decode(args: argparse.Namespace) -> None:
     catalog = pd.read_csv(args.catalog)
-    query = json.loads(args.query)
+    query_str = args.query
+    if Path(query_str).exists():
+        query = json.loads(Path(query_str).read_text())
+    else:
+        query = json.loads(query_str)
 
     fp_cols = sorted(
         [c for c in catalog.columns if c.startswith("fp_")],
@@ -205,12 +209,12 @@ def main() -> int:
     enc.add_argument("--input", required=True, help="Input CSV with rxn_smiles column")
     enc.add_argument("--output-dir", required=True, help="Output directory for features.csv and catalog.csv")
     enc.add_argument("--rxn-col", default="rxn_smiles", help="Column containing reaction SMILES")
-    enc.add_argument("--n-bits", type=int, default=256, help="DRFP fingerprint length")
+    enc.add_argument("--n-bits", type=int, default=64, help="DRFP fingerprint length")
 
     # decode
     dec = sub.add_parser("decode", help="Fingerprint -> nearest reaction (k-NN)")
     dec.add_argument("--catalog", required=True, help="catalog.csv from encode step")
-    dec.add_argument("--query", required=True, help="JSON dict of fingerprint values (from HEBO suggestion)")
+    dec.add_argument("--query", required=True, help="JSON dict of fingerprint values (from HEBO suggestion), or path to a .json file")
     dec.add_argument("--k", type=int, default=3, help="Number of nearest neighbors")
 
     args = parser.parse_args()

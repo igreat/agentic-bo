@@ -16,6 +16,8 @@ wheels/
 .venv
 runs/
 results/
+data/*_drfp/
+data/*_drfp*/
 
 papers
 BO-Tutorial-for-Sci
