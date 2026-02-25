@@ -2,6 +2,10 @@
 __pycache__/
 **/__pycache__/
 *.py[oc]
+.pytest_cache/
+.ipynb_checkpoints/
+.mypy_cache/
+
 build/
 dist/
 wheels/
@@ -18,5 +22,4 @@ BO-Tutorial-for-Sci
 bo-proposal.docx
 
 .ruff_cache/
-.mypy_cache
 .claude/settings.local.json
