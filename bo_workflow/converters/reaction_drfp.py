@@ -43,7 +43,7 @@ from drfp import DrfpEncoder
 
 def encode_reactions(
     input_path: Path,
-    n_bits: int = 64,
+    n_bits: int = 128,
     rxn_col: str = "rxn_smiles",
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Read a CSV with reaction SMILES, compute DRFP.
@@ -209,7 +209,7 @@ def main() -> int:
     enc.add_argument("--input", required=True, help="Input CSV with rxn_smiles column")
     enc.add_argument("--output-dir", required=True, help="Output directory for features.csv and catalog.csv")
     enc.add_argument("--rxn-col", default="rxn_smiles", help="Column containing reaction SMILES")
-    enc.add_argument("--n-bits", type=int, default=64, help="DRFP fingerprint length")
+    enc.add_argument("--n-bits", type=int, default=128, help="DRFP fingerprint length")
 
     # decode
     dec = sub.add_parser("decode", help="Fingerprint -> nearest reaction (k-NN)")
