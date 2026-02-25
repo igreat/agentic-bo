@@ -93,7 +93,7 @@ Converter commands (separate entrypoint): `uv run python -m bo_workflow.converte
 
 | Command | Key flags | Purpose |
 |---------|-----------|---------|
-| `encode` | `--input --output-dir` (req), `--rxn-col --n-bits` (opt) | Encode reaction SMILES to DRFP features |
+| `encode` | `--input --output-dir` (req), `--rxn-col --n-bits` (opt, default 64) | Encode reaction SMILES to DRFP features |
 | `decode` | `--catalog --query` (req), `--k` (opt) | Decode fingerprint suggestions to nearest reactions |
 
 Engine options: `hebo` (default), `bo_lcb`, `random`. Note: `bo_lcb` currently supports batch-size 1 only.
