@@ -26,8 +26,11 @@ bo_workflow/
     base.py       # Observer ABC — evaluate(suggestions) interface
     proxy.py      # ProxyObserver — self-contained, captures run_dir at init
     callback.py    # CallbackObserver — delegates to user callback
+  converters/
+    reaction_drfp.py  # DRFP fingerprint encode/decode for reaction SMILES
 data/
-  HER_virtual_data.csv  # example dataset (HER virtual screen)
+  HER_virtual_data.csv       # example dataset (HER virtual screen)
+  buchwald_hartwig_rxns.csv  # Buchwald-Hartwig reaction SMILES dataset
 scripts/
   compare_optimizers.py  # benchmark hebo/bo_lcb/random
 ```
@@ -39,6 +42,7 @@ scripts/
 - **Observers are self-contained.** `ProxyObserver(run_dir)` captures all context at construction. `evaluate(suggestions)` takes no engine or run_id.
 - **CLI is the wiring layer.** `build-oracle` calls `oracle.build_proxy_oracle(run_dir)` directly. `run-proxy` constructs `ProxyObserver(run_dir)` and passes it to `engine.run_optimization()`.
 - **Each module owns its CLI surface.** `engine_cli.py` and `oracle_cli.py` each define `register_commands()` + `handle()`. `cli.py` composes them.
+- **Converters are standalone.** Each converter has its own `__main__`-style CLI (`python -m bo_workflow.converters.reaction_drfp`). They transform data before/after the BO loop but do not depend on the engine or oracle.
 
 Skills in `.claude/skills/` map 1:1 to CLI subcommands. The engine is the source of truth; skills are the agent interface.
 
@@ -84,6 +88,13 @@ All commands: `uv run python -m bo_workflow.cli <command> [flags]`
 | `run-proxy` | `--run-id --iterations` (req), `--batch-size` (opt) | Full proxy BO loop |
 | `status` | `--run-id` (req) | Quick run summary |
 | `report` | `--run-id` (req) | Full report + convergence plot |
+
+Converter commands (separate entrypoint): `uv run python -m bo_workflow.converters.reaction_drfp <subcommand> [flags]`
+
+| Command | Key flags | Purpose |
+|---------|-----------|---------|
+| `encode` | `--input --output-dir` (req), `--rxn-col --n-bits` (opt, default 128) | Encode reaction SMILES to DRFP features |
+| `decode` | `--catalog --query` (req), `--k` (opt) | Decode fingerprint suggestions to nearest reactions |
 
 Engine options: `hebo` (default), `bo_lcb`, `random`. Note: `bo_lcb` currently supports batch-size 1 only.
 
