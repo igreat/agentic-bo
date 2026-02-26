@@ -14,111 +14,24 @@ simulation and does NOT map predictions back to a fixed reference library.
 from __future__ import annotations
 
 import argparse
-import csv
 import json
 from pathlib import Path
-from typing import Any
 import sys
 
 import pandas as pd
-from rdkit import Chem
 
 _ROOT = str(Path(__file__).resolve().parent.parent)
 if _ROOT not in sys.path:
     sys.path.insert(0, _ROOT)
 
 from bo_workflow.engine import BOEngine
-
-
-def _canonical(smi: str) -> str | None:
-    mol = Chem.MolFromSmiles(str(smi))
-    if mol is None:
-        return None
-    return Chem.MolToSmiles(mol, canonical=True, isomericSmiles=True)
-
-
-def _to_pic50(ic50_nm: float) -> float:
-    import math
-
-    if ic50_nm <= 0:
-        raise ValueError("ic50_nM must be > 0")
-    return 9.0 - math.log10(float(ic50_nm))
-
-
-def _load_seed_rows(
-    seed_csv: Path,
-    smiles_column: str,
-    target_column: str,
-) -> list[tuple[str, float]]:
-    frame = pd.read_csv(seed_csv)
-    if smiles_column not in frame.columns:
-        raise ValueError(f"Missing smiles column '{smiles_column}' in {seed_csv}")
-    if target_column not in frame.columns:
-        raise ValueError(f"Missing target column '{target_column}' in {seed_csv}")
-
-    rows: list[tuple[str, float]] = []
-    for _, row in frame.iterrows():
-        smi = str(row[smiles_column]).strip()
-        if not smi:
-            continue
-        can = _canonical(smi)
-        if can is None:
-            continue
-
-        y_raw = row[target_column]
-        if pd.isna(y_raw):
-            continue
-        rows.append((can, float(y_raw)))
-
-    if len(rows) < 5:
-        raise ValueError("Need at least 5 valid labeled seed rows.")
-    return rows
-
-
-def _load_candidate_smiles(candidate_csv: Path, smiles_column: str) -> list[str]:
-    frame = pd.read_csv(candidate_csv)
-    if smiles_column not in frame.columns:
-        raise ValueError(f"Missing smiles column '{smiles_column}' in {candidate_csv}")
-
-    smiles: list[str] = []
-    seen: set[str] = set()
-    for value in frame[smiles_column].dropna().tolist():
-        smi = str(value).strip()
-        if not smi:
-            continue
-        can = _canonical(smi)
-        if can is None or can in seen:
-            continue
-        seen.add(can)
-        smiles.append(can)
-    return smiles
-
-
-def _build_runtime_dataset(
-    out_csv: Path,
-    seed_rows: list[tuple[str, float]],
-    candidate_smiles: list[str],
-) -> dict[str, int]:
-    out_csv.parent.mkdir(parents=True, exist_ok=True)
-
-    seed_map = {smi: y for smi, y in seed_rows}
-    all_smiles = list(seed_map.keys())
-    for smi in candidate_smiles:
-        if smi not in seed_map:
-            all_smiles.append(smi)
-
-    with out_csv.open("w", newline="", encoding="utf-8") as handle:
-        writer = csv.writer(handle)
-        writer.writerow(["smiles", "pIC50"])
-        for smi in all_smiles:
-            y = seed_map.get(smi)
-            writer.writerow([smi, "" if y is None else y])
-
-    return {
-        "seed_count": len(seed_map),
-        "candidate_count": len(candidate_smiles),
-        "total_pool": len(all_smiles),
-    }
+from bo_workflow.workflows.smiles_workflow_common import (
+    build_runtime_dataset,
+    load_candidate_smiles,
+    load_seed_rows,
+    parse_observation_rows,
+    to_pic50,
+)
 
 
 def cmd_init(args: argparse.Namespace) -> int:
@@ -126,17 +39,17 @@ def cmd_init(args: argparse.Namespace) -> int:
 
     target_col = "pIC50"
     if args.seed_target == "pIC50":
-        seed_rows = _load_seed_rows(args.seed_data, args.smiles_column, "pIC50")
+        seed_rows = load_seed_rows(args.seed_data, args.smiles_column, "pIC50")
     else:
-        raw_rows = _load_seed_rows(args.seed_data, args.smiles_column, "ic50_nM")
-        seed_rows = [(smi, _to_pic50(y)) for smi, y in raw_rows]
+        raw_rows = load_seed_rows(args.seed_data, args.smiles_column, "ic50_nM")
+        seed_rows = [(smi, to_pic50(y)) for smi, y in raw_rows]
 
     candidate_smiles: list[str] = []
     if args.candidate_data is not None:
-        candidate_smiles = _load_candidate_smiles(args.candidate_data, args.smiles_column)
+        candidate_smiles = load_candidate_smiles(args.candidate_data, args.smiles_column)
 
     temp_dataset = Path("data") / f"egfr_real_runtime_{args.run_id or 'auto'}.csv"
-    counts = _build_runtime_dataset(temp_dataset, seed_rows, candidate_smiles)
+    counts = build_runtime_dataset(temp_dataset, seed_rows, candidate_smiles)
 
     init_state = engine.init_smiles_run(
         dataset_path=temp_dataset,
@@ -212,53 +125,16 @@ def cmd_suggest(args: argparse.Namespace) -> int:
     return 0
 
 
-def _parse_observation_rows(
-    obs_path: Path,
-    target_column: str,
-) -> list[dict[str, Any]]:
-    frame = pd.read_csv(obs_path)
-
-    required = {"smiles", target_column}
-    missing = required - set(frame.columns)
-    if missing:
-        raise ValueError(f"Observation CSV missing columns: {sorted(missing)}")
-
-    has_suggestion_id = "suggestion_id" in frame.columns
-
-    rows: list[dict[str, Any]] = []
-    for _, row in frame.iterrows():
-        smi = str(row["smiles"]).strip()
-        can = _canonical(smi)
-        if can is None:
-            continue
-
-        y_raw = row[target_column]
-        if pd.isna(y_raw):
-            continue
-
-        rec: dict[str, Any] = {
-            "x": {"smiles": can},
-            "y": float(y_raw),
-        }
-        if has_suggestion_id and pd.notna(row["suggestion_id"]):
-            rec["suggestion_id"] = str(row["suggestion_id"])
-        rows.append(rec)
-
-    if not rows:
-        raise ValueError("No valid observations parsed from CSV.")
-    return rows
-
-
 def cmd_observe(args: argparse.Namespace) -> int:
     engine = BOEngine()
 
     if args.target_type == "pIC50":
-        obs_rows = _parse_observation_rows(args.data, "pIC50")
+        obs_rows = parse_observation_rows(args.data, "pIC50")
     else:
-        raw = _parse_observation_rows(args.data, "ic50_nM")
+        raw = parse_observation_rows(args.data, "ic50_nM")
         obs_rows = []
         for row in raw:
-            obs_rows.append({**row, "y": _to_pic50(float(row["y"]))})
+            obs_rows.append({**row, "y": to_pic50(float(row["y"]))})
 
     result = engine.observe(
         args.run_id,

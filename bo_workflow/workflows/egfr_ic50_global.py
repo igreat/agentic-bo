@@ -15,15 +15,8 @@ All results are simulated proxy-oracle experiments.
 from __future__ import annotations
 
 import argparse
-import csv
 import json
-import math
 from pathlib import Path
-
-import numpy as np
-import pandas as pd
-from rdkit import Chem
-from sklearn.ensemble import RandomForestRegressor
 
 from bo_workflow.engine import BOEngine
 from bo_workflow.experiment_strategies import (
@@ -31,6 +24,11 @@ from bo_workflow.experiment_strategies import (
     _tanimoto_fp,
     prescreen_candidates,
     select_diverse_train,
+)
+from bo_workflow.workflows.smiles_workflow_common import (
+    is_reasonable_seed_smiles,
+    load_full_dataset,
+    reselect_active_features,
 )
 from bo_workflow.workflows.data_utils import (
     append_labeled_rows,
@@ -40,12 +38,6 @@ from bo_workflow.workflows.data_utils import (
     split_from_seed_smiles,
     write_smiles_target_csv,
 )
-
-
-def _to_pic50(ic50_nm: float) -> float:
-    if ic50_nm <= 0:
-        raise ValueError("ic50_nM must be > 0")
-    return 9.0 - math.log10(float(ic50_nm))
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -153,174 +145,6 @@ def parse_args(argv=None):
     return build_parser().parse_args(argv)
 
 
-def _load_full_dataset(
-    dataset_path: Path,
-    target_column: str,
-    *,
-    max_pic50: float | None,
-    fix_tiny_ic50_as_molar: bool,
-):
-    with open(dataset_path) as f:
-        rows = list(csv.DictReader(f))
-
-    data = []
-    dropped_extreme = 0
-    fixed_tiny = 0
-    for r in rows:
-        smi = r.get("smiles", "")
-        can = _canonical(smi)
-        if not can:
-            continue
-
-        if target_column == "pIC50":
-            y = float(r["pIC50"])
-        else:
-            ic50_nm = float(r["ic50_nM"])
-            if fix_tiny_ic50_as_molar and ic50_nm < 1e-6:
-                ic50_nm = ic50_nm * 1e9
-                fixed_tiny += 1
-            y = _to_pic50(ic50_nm)
-
-        if max_pic50 is not None and y > max_pic50:
-            dropped_extreme += 1
-            continue
-
-        data.append((smi, can, y))
-
-    if not data:
-        raise ValueError("No valid molecules found in dataset")
-
-    if fixed_tiny > 0:
-        print(
-            f"Data quality: converted {fixed_tiny} tiny ic50_nM values (<1e-6) from M to nM before pIC50"
-        )
-    if dropped_extreme > 0:
-        print(
-            f"Data quality: dropped {dropped_extreme} rows with pIC50 > {max_pic50}"
-        )
-
-    return data
-
-
-def _is_reasonable_seed_smiles(smiles: str) -> bool:
-    """Basic med-chem seed filter: exclude salts/multi-fragments/inorganics."""
-    mol = Chem.MolFromSmiles(smiles)
-    if mol is None:
-        return False
-
-    if "." in Chem.MolToSmiles(mol):
-        return False
-
-    allowed = {1, 5, 6, 7, 8, 9, 14, 15, 16, 17, 35, 53}
-    atoms = [a.GetAtomicNum() for a in mol.GetAtoms()]
-    if not atoms:
-        return False
-    if any(z not in allowed for z in atoms):
-        return False
-
-    heavy = mol.GetNumHeavyAtoms()
-    if heavy < 8 or heavy > 90:
-        return False
-
-    if 6 not in atoms:
-        return False
-
-    return True
-
-
-def _reselect_active_features(
-    *,
-    state_path: Path,
-    train_csv: Path,
-    desc_lookup_path: Path,
-    seed: int,
-    max_dims: int = 15,
-    verbose: bool = False,
-) -> int:
-    """Reselect top descriptor features from currently observed labeled data.
-
-    This keeps the model aligned with newly added descriptors (e.g., dft_* from
-    xTB) while limiting HEBO dimensionality for GP stability.
-    """
-    state = json.loads(state_path.read_text())
-    desc_lookup = json.loads(desc_lookup_path.read_text())
-    train_df = pd.read_csv(train_csv)
-
-    target_col = str(state.get("target_column", "pIC50"))
-    smiles_col = str(state.get("smiles_direct", {}).get("smiles_column", "smiles"))
-    if target_col not in train_df.columns or smiles_col not in train_df.columns:
-        return 0
-
-    y_series = pd.to_numeric(train_df[target_col], errors="coerce")
-    valid_rows: list[dict[str, float]] = []
-    y_vals: list[float] = []
-    for smi, y in zip(train_df[smiles_col].astype(str), y_series):
-        if pd.isna(y):
-            continue
-        row_desc = desc_lookup.get(smi)
-        if row_desc is None:
-            continue
-        valid_rows.append(row_desc)
-        y_vals.append(float(y))
-
-    if len(valid_rows) < 5:
-        return 0
-
-    x_imp = pd.DataFrame(valid_rows)
-    variable_cols: list[str] = []
-    for col in x_imp.columns:
-        vals = pd.to_numeric(x_imp[col], errors="coerce").dropna()
-        if len(vals) == 0:
-            continue
-        if np.isclose(float(vals.min()), float(vals.max())):
-            continue
-        variable_cols.append(str(col))
-
-    if not variable_cols:
-        return 0
-
-    x_var = x_imp[variable_cols].apply(pd.to_numeric, errors="coerce").fillna(0.0)
-    y_arr = np.asarray(y_vals, dtype=float)
-
-    keep_n = min(max_dims, len(variable_cols))
-    if len(variable_cols) > keep_n:
-        rf = RandomForestRegressor(n_estimators=200, random_state=seed, n_jobs=1)
-        rf.fit(x_var, y_arr)
-        top_idx = np.argsort(rf.feature_importances_)[::-1][:keep_n]
-        selected = [variable_cols[i] for i in top_idx]
-    else:
-        selected = list(variable_cols)
-
-    design_params: list[dict[str, float | str]] = []
-    selected_final: list[str] = []
-    for col in selected:
-        vals = pd.to_numeric(x_var[col], errors="coerce").dropna()
-        if len(vals) == 0:
-            continue
-        lb = float(vals.min())
-        ub = float(vals.max())
-        if np.isclose(lb, ub):
-            continue
-        selected_final.append(col)
-        design_params.append({"name": col, "type": "num", "lb": lb, "ub": ub})
-
-    if not selected_final:
-        return 0
-
-    state["active_features"] = selected_final
-    state["design_parameters"] = design_params
-    state["updated_at"] = pd.Timestamp.utcnow().isoformat()
-    state_path.write_text(json.dumps(state, indent=2))
-
-    if verbose:
-        n_energy = sum(1 for f in selected_final if str(f).startswith("dft_"))
-        print(
-            f"  Reselected {len(selected_final)} active features (energy={n_energy})"
-        )
-
-    return len(selected_final)
-
-
 def run(args: argparse.Namespace) -> int:
     if not args.dataset.exists():
         raise FileNotFoundError(f"Dataset not found: {args.dataset}")
@@ -331,7 +155,7 @@ def run(args: argparse.Namespace) -> int:
         if not args.seed_smiles_csv.exists():
             raise FileNotFoundError(f"Seed CSV not found: {args.seed_smiles_csv}")
 
-    full_data = _load_full_dataset(
+    full_data = load_full_dataset(
         args.dataset,
         args.target_column,
         max_pic50=args.max_pic50,
@@ -346,7 +170,7 @@ def run(args: argparse.Namespace) -> int:
             args.seed_smiles_column,
             args.seed_count,
             canonicalize=_canonical,
-            filter_fn=_is_reasonable_seed_smiles if apply_filter else None,
+            filter_fn=is_reasonable_seed_smiles if apply_filter else None,
         )
     else:
         seed_smiles = []
@@ -374,7 +198,7 @@ def run(args: argparse.Namespace) -> int:
             quality_mode=args.seed_quality_mode,
             decent_low_q=args.seed_decent_low_q,
             decent_high_q=args.seed_decent_high_q,
-            filter_fn=_is_reasonable_seed_smiles if apply_filter else None,
+            filter_fn=is_reasonable_seed_smiles if apply_filter else None,
         )
 
     print(f"Loaded full dataset: {len(full_by_can)} molecules")
@@ -578,7 +402,7 @@ def run(args: argparse.Namespace) -> int:
             if args.verbose:
                 print(f"  Enriched {newly_enriched} newly observed molecules with descriptors/energy")
 
-        _reselect_active_features(
+        reselect_active_features(
             state_path=state_path,
             train_csv=train_csv,
             desc_lookup_path=dl_path,
