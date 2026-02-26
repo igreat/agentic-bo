@@ -47,6 +47,12 @@ uv run python -m bo_workflow.cli report --run-id <RUN_ID>
 uv run python -m bo_workflow.cli --help
 ```
 
+or install/use as a program entrypoint:
+
+```bash
+uv run bo-workflow --help
+```
+
 | Command | Purpose |
 |---------|---------|
 | `init` | Create a run from a CSV dataset |
@@ -56,10 +62,37 @@ uv run python -m bo_workflow.cli --help
 | `run-proxy` | Run an end-to-end simulated BO loop |
 | `status` | Show best-so-far and run metadata |
 | `report` | Generate JSON report and convergence plot |
+| `screen` | One-command screening from a SMILES dataset |
+| `smiles-discovery` | Discovery pipeline from one SMILES or a SMILES file |
+| `egfr-ic50-global` | Global EGFR IC50 experiment (train/lookup split + prescreen loop) |
 
 Add `--verbose` to `init`, `build-oracle`, `suggest`, `observe`, `run-proxy`, and `report` to print progress logs (and a tqdm bar for `run-proxy`).
 
 Engine options: `hebo` (default), `bo_lcb`, `random`. Set once at init with `--engine`.
+
+## SMILES-file discovery (EGFR-style)
+
+Run from one SMILES or a `.smi/.txt/.csv` SMILES file:
+
+```bash
+uv run bo-workflow smiles-discovery \
+  --smiles-file data/my_seeds.smi \
+  --dataset data/egfr_quinazoline.csv \
+  --target pIC50 --objective max \
+  --iterations 20 --top-k 10
+```
+
+Output is JSON with `run_id`, `oracle_cv_rmse`, and ranked `top_candidates`.
+All returned scores are proxy-oracle simulations.
+
+Unified EGFR global experiment entry:
+
+```bash
+uv run bo-workflow egfr-ic50-global \
+  --dataset data/egfr_ic50.csv \
+  --split-mode auto --seed-count 50 \
+  --iterations 30 --rounds 20 --experiments-per-round 4
+```
 
 ## Compare optimizers (demo)
 
@@ -97,6 +130,7 @@ bo_workflow/
   engine_cli.py   # CLI subcommands: init, suggest, observe, status, report
   oracle.py       # standalone proxy oracle — train, load, predict on run_dir
   oracle_cli.py   # CLI subcommands: build-oracle, run-proxy
+  workflows/      # domain workflows (egfr_ic50_global, etc.)
   cli.py          # top-level entrypoint — composes subparsers from each module
   plotting.py     # convergence plot generation
   utils.py        # RunPaths, JSON I/O, shared types
@@ -107,7 +141,9 @@ bo_workflow/
 data/
   HER_virtual_data.csv  # example dataset (HER virtual screen)
 scripts/
-  compare_optimizers.py  # benchmark hebo/bo_lcb/random
+  compare_optimizers.py        # benchmark hebo/bo_lcb/random
+  egfr_ic50_global_experiment.py  # thin wrapper -> bo_workflow.workflows.egfr_ic50_global
+  egfr_smiles_discovery.py        # thin wrapper -> bo_workflow cli smiles-discovery
 .claude/
   skills/         # Claude Code skills mapping to CLI commands
 ```

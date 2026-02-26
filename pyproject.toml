@@ -27,17 +27,12 @@ xtb = ["tblite>=0.3.0"]
 dft = ["pyscf>=2.4.0"]
 ml-energy = ["torchani>=2.2"]
 
+[project.scripts]
+bo-workflow = "bo_workflow.cli:main"
+
 [dependency-groups]
-<<<<<<< Updated upstream
 dev = ["pytest>=8.0", "ruff>=0.15.0"]
 
 [tool.pytest.ini_options]
-markers = ["slow: marks tests as slow (deselect with '-m \"not slow\"')"]
-=======
-dev = [
-    "ruff>=0.15.0",
-]
-
-[tool.pytest.ini_options]
 pythonpath = ["."]
->>>>>>> Stashed changes
+markers = ["slow: marks tests as slow (deselect with '-m \"not slow\"')"]

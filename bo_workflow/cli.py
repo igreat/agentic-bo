@@ -1,39 +1,13 @@
-"""Top-level CLI entrypoint — composes subcommands from each module."""
+"""Compatibility facade for top-level CLI.
 
-import argparse
-from pathlib import Path
+New code should import from `bo_workflow.interfaces.cli.root`.
+"""
+
 import sys
 
-from .engine import BOEngine
-from . import engine_cli, oracle_cli
+from .interfaces.cli.root import build_parser, main
 
-
-def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="BO workflow CLI")
-    parser.add_argument(
-        "--runs-root",
-        type=Path,
-        default=Path("runs"),
-        help="Directory where run state and artifacts are stored",
-    )
-    sub = parser.add_subparsers(dest="command", required=True)
-    engine_cli.register_commands(sub)
-    oracle_cli.register_commands(sub)
-    return parser
-
-
-def main(argv: list[str] | None = None) -> int:
-    parser = build_parser()
-    args = parser.parse_args(argv)
-    engine = BOEngine(runs_root=args.runs_root)
-
-    for handler in (engine_cli.handle, oracle_cli.handle):
-        result = handler(args, engine)
-        if result is not None:
-            return result
-
-    parser.print_help()
-    return 1
+__all__ = ["build_parser", "main"]
 
 
 if __name__ == "__main__":
