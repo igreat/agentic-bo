@@ -54,6 +54,10 @@ uv run python -m bo_workflow.cli --help
 | `run-proxy` | Run an end-to-end simulated BO loop |
 | `status` | Show best-so-far and run metadata |
 | `report` | Generate JSON report and convergence plot |
+| `encode` | Encode reaction SMILES into DRFP fingerprint features |
+| `decode` | Decode fingerprint suggestions back to nearest real reactions |
+
+Converter commands use a separate entrypoint: `uv run python -m bo_workflow.converters.reaction_drfp <encode|decode> [flags]`
 
 Converter commands use separate module entrypoints:
 
