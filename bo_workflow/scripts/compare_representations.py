@@ -13,17 +13,13 @@ from pathlib import Path
 
 import numpy as np
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
-if str(REPO_ROOT) not in sys.path:
-    sys.path.insert(0, str(REPO_ROOT))
-
-from bo_workflow.converters.reaction_drfp import encode_reactions  # noqa: E402
-from bo_workflow.converters.molecule_descriptors import encode_molecules  # noqa: E402
-from bo_workflow.converters.combined import encode_combined  # noqa: E402
-from bo_workflow.engine import BOEngine  # noqa: E402
-from bo_workflow.observers.proxy import ProxyObserver  # noqa: E402
-from bo_workflow.oracle import build_proxy_oracle  # noqa: E402
-from bo_workflow.plotting import plot_optimization_convergence  # noqa: E402
+from bo_workflow.converters.reaction_drfp import encode_reactions
+from bo_workflow.converters.molecule_descriptors import encode_molecules
+from bo_workflow.converters.combined import encode_combined
+from bo_workflow.engine import BOEngine
+from bo_workflow.observers.proxy import ProxyObserver
+from bo_workflow.oracle import build_proxy_oracle
+from bo_workflow.plotting import plot_optimization_convergence
 
 
 REP_LABELS = {

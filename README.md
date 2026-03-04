@@ -54,30 +54,48 @@ uv run python -m bo_workflow.cli --help
 | `run-proxy` | Run an end-to-end simulated BO loop |
 | `status` | Show best-so-far and run metadata |
 | `report` | Generate JSON report and convergence plot |
-| `encode` | Encode reaction SMILES into DRFP fingerprint features |
-| `decode` | Decode fingerprint suggestions back to nearest real reactions |
 
-Converter commands use a separate entrypoint: `uv run python -m bo_workflow.converters.reaction_drfp <encode|decode> [flags]`
+Converter commands use separate module entrypoints:
+
+- `uv run python -m bo_workflow.converters.reaction_drfp <encode|decode> [flags]`
+- `uv run python -m bo_workflow.converters.molecule_descriptors <encode|decode> [flags]`
+
+Examples:
+
+```bash
+# Reaction SMILES -> DRFP bits
+uv run python -m bo_workflow.converters.reaction_drfp encode \
+  --input data/buchwald_hartwig_rxns.csv --output-dir data/bh_drfp
+
+# Molecule SMILES -> RDKit descriptors + Morgan bits
+uv run python -m bo_workflow.converters.molecule_descriptors encode \
+  --input data/egfr_ic50.csv --output-dir data/egfr_desc --smiles-cols smiles
+```
 
 Add `--verbose` to `init`, `build-oracle`, `suggest`, `observe`, `run-proxy`, and `report` to print progress logs (and a tqdm bar for `run-proxy`).
 
 Engine options: `hebo` (default), `bo_lcb`, `random`. Set once at init with `--engine`.
 
-## Compare optimizers (demo)
+## Benchmark scripts
 
-For a single chart comparing `hebo`, `bo_lcb`, and `random`, run:
+Compare `hebo`, `bo_lcb`, and `random` on any dataset:
 
 ```bash
-uv run python scripts/compare_optimizers.py \
+uv run python -m bo_workflow.scripts.compare_optimizers \
   --dataset data/HER_virtual_data.csv \
   --target Target --objective max \
   --iterations 20 --batch-size 1 --repeats 1
 ```
 
-Outputs:
+Run the EGFR global simulation (descriptor-space BO against a real IC50 dataset):
 
-- plot: `results/compare/optimizers.pdf`
-- summary: `results/compare/optimizers_summary.json`
+```bash
+uv run python -m bo_workflow.scripts.egfr_ic50_global_experiment \
+  --dataset data/egfr_ic50.csv \
+  --seed-count 50 --rounds 20 --batch-size 4
+```
+
+Each round suggests molecules in descriptor space, maps them to the nearest real molecule, looks up the true pIC50, and records it as an observation. Reports best found vs best in dataset.
 
 ## Run artifacts
 
@@ -107,12 +125,18 @@ bo_workflow/
     proxy.py      # ProxyObserver — self-contained, captures run_dir at init
     callback.py   # CallbackObserver — delegates to user callback
   converters/
+    molecule_descriptors.py  # RDKit descriptor encode/decode for molecule SMILES
     reaction_drfp.py  # DRFP fingerprint encode/decode for reaction SMILES
+  scripts/
+    compare_optimizers.py           # benchmark hebo/bo_lcb/random
+    compare_representations.py      # benchmark descriptor/DRFP/combined representations
+    egfr_ic50_global_experiment.py  # EGFR global simulation experiment
+    egfr_utils.py                   # shared data loading helpers for EGFR scripts
 data/
   HER_virtual_data.csv       # example dataset (HER virtual screen)
   buchwald_hartwig_rxns.csv  # Buchwald-Hartwig reaction SMILES dataset
-scripts/
-  compare_optimizers.py  # benchmark hebo/bo_lcb/random
+  egfr_ic50.csv              # EGFR IC50 dataset (~10k molecules)
+  egfr_seed50_mixed.csv      # EGFR seed set (50 labeled molecules)
 .claude/
   skills/         # Claude Code skills mapping to CLI commands
 ```
@@ -129,6 +153,8 @@ Skills in `.claude/skills/` provide the agent interface:
 - `bo-end-to-end-proxy` — full automated loop
 - `bo-encode-drfp` — encode reaction SMILES to DRFP features
 - `bo-decode-drfp` — decode suggestions back to real reactions
+- `bo-encode-molecule-descriptors` — encode molecule SMILES to descriptor features
+- `bo-decode-molecule-descriptors` — decode descriptor suggestions to real molecules
 
 ## Credits
 

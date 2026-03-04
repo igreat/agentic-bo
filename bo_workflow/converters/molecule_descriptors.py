@@ -1,8 +1,7 @@
 """SMILES column -> RDKit molecular descriptor converter.
 
-Column-focused design matching ``reaction_drfp.py``: encodes one or more
-SMILES columns into molecular descriptor columns and passes all other
-columns through unchanged.
+Encodes one or more SMILES columns into molecular descriptor 
+columns and passes all other columns through unchanged.
 
 Features per SMILES column:
   - 11 basic descriptors (MolWt, LogP, TPSA, etc.)
@@ -43,14 +42,12 @@ import pandas as pd
 from collections.abc import Callable
 
 from rdkit import Chem
-from rdkit.Chem import AllChem, Descriptors, rdMolDescriptors
+from rdkit.Chem import AllChem, Descriptors, rdFingerprintGenerator, rdMolDescriptors
 
 # ---------------------------------------------------------------------------
 # Descriptor calculation
 # ---------------------------------------------------------------------------
 
-# RDKit populates Descriptors.* dynamically, so Pylance can't resolve them.
-# Use getattr to avoid false "not a known attribute" errors.
 _DESCRIPTOR_FNS: dict[str, Callable] = {
     "MolWt": getattr(Descriptors, "MolWt"),
     "LogP": getattr(Descriptors, "MolLogP"),
@@ -69,6 +66,14 @@ _GASTEIGER_NAMES = ("GasteigerMean", "GasteigerStd", "GasteigerMin", "GasteigerM
 
 # Prefix for Morgan FP bit columns
 _MORGAN_PREFIX = "mfp"
+
+
+def canonicalize_smiles(smiles: str) -> str | None:
+    """Return canonical SMILES, or None if parsing fails."""
+    mol = Chem.MolFromSmiles(str(smiles))
+    if mol is None:
+        return None
+    return Chem.MolToSmiles(mol)
 
 
 def _aromatic_proportion(mol: Chem.Mol) -> float:
@@ -116,7 +121,10 @@ def compute_morgan_fp(mol: Chem.Mol, n_bits: int = 64) -> dict[str, int]:
 
     Returns a dict mapping ``mfp_0`` .. ``mfp_{n_bits-1}`` to 0/1 values.
     """
-    fp = AllChem.GetMorganFingerprintAsBitVect(mol, radius=2, nBits=n_bits)
+    fp = rdFingerprintGenerator.GetMorganGenerator(
+        radius=2,
+        fpSize=n_bits,
+    ).GetFingerprint(mol)
     return {f"{_MORGAN_PREFIX}_{i}": int(fp[i]) for i in range(n_bits)}
 
 
@@ -188,6 +196,7 @@ def is_descriptor_col(col: str) -> bool:
 # Encode: SMILES columns -> descriptor columns
 # ---------------------------------------------------------------------------
 
+
 def encode_molecules(
     input_path: Path,
     smiles_cols: list[str],
@@ -241,6 +250,7 @@ def encode_molecules(
 # Decode: descriptors -> nearest molecules via Euclidean distance
 # ---------------------------------------------------------------------------
 
+
 def decode_nearest(
     query_descriptors: np.ndarray,
     catalog: pd.DataFrame,
@@ -292,6 +302,7 @@ def decode_nearest(
 # CLI
 # ---------------------------------------------------------------------------
 
+
 def _cmd_encode(args: argparse.Namespace) -> None:
     out_dir = Path(args.output_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -310,16 +321,21 @@ def _cmd_encode(args: argparse.Namespace) -> None:
 
     desc_cols = [c for c in features_df.columns if is_descriptor_col(c)]
     passthrough = [c for c in features_df.columns if c not in desc_cols]
-    print(json.dumps({
-        "status": "ok",
-        "input": str(args.input),
-        "features_csv": str(features_path),
-        "catalog_csv": str(catalog_path),
-        "rows": len(features_df),
-        "descriptor_columns": len(desc_cols),
-        "passthrough_columns": passthrough,
-        "smiles_cols": args.smiles_cols,
-    }, indent=2))
+    print(
+        json.dumps(
+            {
+                "status": "ok",
+                "input": str(args.input),
+                "features_csv": str(features_path),
+                "catalog_csv": str(catalog_path),
+                "rows": len(features_df),
+                "descriptor_columns": len(desc_cols),
+                "passthrough_columns": passthrough,
+                "smiles_cols": args.smiles_cols,
+            },
+            indent=2,
+        )
+    )
 
 
 def _cmd_decode(args: argparse.Namespace) -> None:
@@ -344,11 +360,15 @@ def main() -> int:
     enc.add_argument("--input", required=True, help="Input CSV with SMILES columns")
     enc.add_argument("--output-dir", required=True, help="Output directory")
     enc.add_argument(
-        "--smiles-cols", nargs="+", required=True,
+        "--smiles-cols",
+        nargs="+",
+        required=True,
         help="Column names containing SMILES strings",
     )
     enc.add_argument(
-        "--morgan-bits", type=int, default=64,
+        "--morgan-bits",
+        type=int,
+        default=64,
         help="Morgan fingerprint length per SMILES column (default: 64)",
     )
 
