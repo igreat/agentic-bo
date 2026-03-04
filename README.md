@@ -9,12 +9,10 @@ This repository is intended to be an **agent-operable optimization engine**:
 - run iterative BO suggestions,
 - track state and results for human-in-the-loop workflows.
 
-One thing missing is a **data conversion and preprocessing layer** which would make this much more flexible to different problem types. This is the next major piece of work.
+## Scope
 
-## Scope (current vs target)
-
-- **Current MVP:** single-objective BO from tabular datasets with persisted run state and JSON CLI.
-- **Target direction:** richer problem adapters (constraints/compositions/encodings), so different chemistry problems can be transformed into a common BO interface.
+- Single-objective BO from tabular datasets with persisted run state and JSON CLI.
+- **Converters** transform non-tabular inputs (e.g. reaction SMILES) into numerical features the BO engine can optimize over, and decode suggestions back to interpretable results.
 
 ## Setup
 
@@ -56,6 +54,10 @@ uv run python -m bo_workflow.cli --help
 | `run-proxy` | Run an end-to-end simulated BO loop |
 | `status` | Show best-so-far and run metadata |
 | `report` | Generate JSON report and convergence plot |
+| `encode` | Encode reaction SMILES into DRFP fingerprint features |
+| `decode` | Decode fingerprint suggestions back to nearest real reactions |
+
+Converter commands use a separate entrypoint: `uv run python -m bo_workflow.converters.reaction_drfp <encode|decode> [flags]`
 
 Add `--verbose` to `init`, `build-oracle`, `suggest`, `observe`, `run-proxy`, and `report` to print progress logs (and a tqdm bar for `run-proxy`).
 
@@ -104,8 +106,11 @@ bo_workflow/
     base.py       # Observer ABC — evaluate(suggestions) interface
     proxy.py      # ProxyObserver — self-contained, captures run_dir at init
     callback.py   # CallbackObserver — delegates to user callback
+  converters/
+    reaction_drfp.py  # DRFP fingerprint encode/decode for reaction SMILES
 data/
-  HER_virtual_data.csv  # example dataset (HER virtual screen)
+  HER_virtual_data.csv       # example dataset (HER virtual screen)
+  buchwald_hartwig_rxns.csv  # Buchwald-Hartwig reaction SMILES dataset
 scripts/
   compare_optimizers.py  # benchmark hebo/bo_lcb/random
 .claude/
@@ -122,6 +127,8 @@ Skills in `.claude/skills/` provide the agent interface:
 - `bo-record-observation` — record results
 - `bo-report-run` — status and reports
 - `bo-end-to-end-proxy` — full automated loop
+- `bo-encode-drfp` — encode reaction SMILES to DRFP features
+- `bo-decode-drfp` — decode suggestions back to real reactions
 
 ## Credits
 
