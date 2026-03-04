@@ -30,6 +30,7 @@ python -m bo_workflow.converters.reaction_drfp decode \
 
 import argparse
 import json
+import re
 from pathlib import Path
 
 import numpy as np
@@ -37,9 +38,45 @@ import pandas as pd
 from drfp import DrfpEncoder
 
 
+_FP_COL_RE = re.compile(r"^fp_(\d+)$")
+
+
+def _sorted_fp_cols(columns: list[str]) -> list[str]:
+    """Return fp_<n> columns sorted by n, with strict validation."""
+    fp_cols: list[tuple[int, str]] = []
+    invalid: list[str] = []
+    for col in columns:
+        if not col.startswith("fp_"):
+            continue
+        match = _FP_COL_RE.fullmatch(col)
+        if match is None:
+            invalid.append(col)
+            continue
+        fp_cols.append((int(match.group(1)), col))
+
+    if invalid:
+        raise ValueError(
+            "Invalid fingerprint column names: "
+            f"{invalid}. Expected format: fp_<non-negative integer>."
+        )
+
+    fp_cols = sorted(fp_cols, key=lambda item: item[0])
+    return [col for _, col in fp_cols]
+
+
+def _to_json_value(value: object) -> object:
+    """Convert numpy/pandas scalar values into JSON-serializable Python values."""
+    if pd.isna(value):
+        return None
+    if isinstance(value, np.generic):
+        return value.item()
+    return value
+
+
 # ---------------------------------------------------------------------------
 # Encode: reaction SMILES column -> DRFP fingerprint columns
 # ---------------------------------------------------------------------------
+
 
 def encode_reactions(
     input_path: Path,
@@ -69,10 +106,17 @@ def encode_reactions(
     fp_cols = [f"fp_{i}" for i in range(n_bits)]
     fp_df = pd.DataFrame(fp_array, columns=fp_cols)
 
+    passthrough_cols = [col for col in df.columns if col != rxn_col]
+    collisions = sorted(set(passthrough_cols).intersection(fp_cols))
+    if collisions:
+        raise ValueError(
+            "Input columns collide with generated fingerprint columns: "
+            f"{collisions}. Rename or drop these columns before encoding."
+        )
+
     # Pass through every non-rxn column unchanged
-    for col in df.columns:
-        if col != rxn_col:
-            fp_df[col] = df[col].values
+    for col in passthrough_cols:
+        fp_df[col] = df[col].values
 
     # Catalog keeps the original rxn_col too (needed for decode lookup)
     catalog_df = fp_df.copy()
@@ -84,6 +128,7 @@ def encode_reactions(
 # ---------------------------------------------------------------------------
 # Decode: fingerprint -> nearest reaction via Tanimoto similarity
 # ---------------------------------------------------------------------------
+
 
 def _tanimoto(a: np.ndarray, b: np.ndarray) -> float:
     """Tanimoto similarity between two binary vectors."""
@@ -119,10 +164,20 @@ def decode_nearest(
     -------
     List of dicts with keys: rank, similarity, and all non-fingerprint columns
     """
-    fp_cols = sorted(
-        [c for c in catalog.columns if c.startswith("fp_")],
-        key=lambda c: int(c.split("_")[1]),
-    )
+    if k < 1:
+        raise ValueError(f"k must be >= 1, got {k}")
+
+    fp_cols = _sorted_fp_cols([str(c) for c in catalog.columns])
+    if not fp_cols:
+        raise ValueError("Catalog must contain fingerprint columns named fp_<n>.")
+    if query_fp.ndim != 1:
+        raise ValueError("query_fp must be a 1-D array")
+    if len(query_fp) != len(fp_cols):
+        raise ValueError(
+            "Query fingerprint length does not match catalog fingerprint width: "
+            f"len(query_fp)={len(query_fp)} vs len(fp_cols)={len(fp_cols)}"
+        )
+
     catalog_fps = catalog[fp_cols].values.astype(np.uint8)
 
     similarities = np.array([_tanimoto(query_fp, row) for row in catalog_fps])
@@ -136,7 +191,7 @@ def decode_nearest(
             "similarity": round(float(similarities[idx]), 4),
         }
         for col in meta_cols:
-            entry[col] = catalog.iloc[idx][col]
+            entry[col] = _to_json_value(catalog.iloc[idx][col])
         results.append(entry)
 
     return results
@@ -145,6 +200,7 @@ def decode_nearest(
 # ---------------------------------------------------------------------------
 # CLI
 # ---------------------------------------------------------------------------
+
 
 def _cmd_encode(args: argparse.Namespace) -> None:
     out_dir = Path(args.output_dir)
@@ -164,33 +220,50 @@ def _cmd_encode(args: argparse.Namespace) -> None:
 
     n_fp = sum(1 for c in features_df.columns if c.startswith("fp_"))
     non_fp = [c for c in features_df.columns if not c.startswith("fp_")]
-    print(json.dumps({
-        "status": "ok",
-        "input": str(args.input),
-        "features_csv": str(features_path),
-        "catalog_csv": str(catalog_path),
-        "reactions": len(features_df),
-        "fingerprint_bits": n_fp,
-        "passthrough_columns": non_fp,
-        "rxn_col": args.rxn_col,
-    }, indent=2))
+    print(
+        json.dumps(
+            {
+                "status": "ok",
+                "input": str(args.input),
+                "features_csv": str(features_path),
+                "catalog_csv": str(catalog_path),
+                "reactions": len(features_df),
+                "fingerprint_bits": n_fp,
+                "passthrough_columns": non_fp,
+                "rxn_col": args.rxn_col,
+            },
+            indent=2,
+        )
+    )
 
 
 def _cmd_decode(args: argparse.Namespace) -> None:
     catalog = pd.read_csv(args.catalog)
+    if args.k < 1:
+        raise ValueError(f"--k must be >= 1, got {args.k}")
+
     query_str = args.query
     if Path(query_str).exists():
         query = json.loads(Path(query_str).read_text())
     else:
         query = json.loads(query_str)
 
-    fp_cols = sorted(
-        [c for c in catalog.columns if c.startswith("fp_")],
-        key=lambda c: int(c.split("_")[1]),
-    )
+    if not isinstance(query, dict):
+        raise ValueError("Query must be a JSON object.")
+
+    # Engine suggestions are often wrapped as {"x": {"fp_0": ...}}
+    if "x" in query and isinstance(query["x"], dict):
+        query_values = query["x"]
+    else:
+        query_values = query
+
+    fp_cols = _sorted_fp_cols([str(c) for c in catalog.columns])
+    if not fp_cols:
+        raise ValueError("Catalog must contain fingerprint columns named fp_<n>.")
+
     # Round continuous HEBO suggestions to binary
     query_fp = np.array(
-        [1 if float(query.get(c, 0)) > 0.5 else 0 for c in fp_cols],
+        [1 if float(query_values.get(c, 0)) > 0.5 else 0 for c in fp_cols],
         dtype=np.uint8,
     )
 
@@ -207,14 +280,24 @@ def main() -> int:
     # encode
     enc = sub.add_parser("encode", help="Reaction SMILES -> DRFP feature CSV")
     enc.add_argument("--input", required=True, help="Input CSV with rxn_smiles column")
-    enc.add_argument("--output-dir", required=True, help="Output directory for features.csv and catalog.csv")
-    enc.add_argument("--rxn-col", default="rxn_smiles", help="Column containing reaction SMILES")
+    enc.add_argument(
+        "--output-dir",
+        required=True,
+        help="Output directory for features.csv and catalog.csv",
+    )
+    enc.add_argument(
+        "--rxn-col", default="rxn_smiles", help="Column containing reaction SMILES"
+    )
     enc.add_argument("--n-bits", type=int, default=128, help="DRFP fingerprint length")
 
     # decode
     dec = sub.add_parser("decode", help="Fingerprint -> nearest reaction (k-NN)")
     dec.add_argument("--catalog", required=True, help="catalog.csv from encode step")
-    dec.add_argument("--query", required=True, help="JSON dict of fingerprint values (from HEBO suggestion), or path to a .json file")
+    dec.add_argument(
+        "--query",
+        required=True,
+        help="JSON dict of fingerprint values (from HEBO suggestion), or path to a .json file",
+    )
     dec.add_argument("--k", type=int, default=3, help="Number of nearest neighbors")
 
     args = parser.parse_args()
