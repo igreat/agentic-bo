@@ -27,12 +27,18 @@ bo_workflow/
     proxy.py      # ProxyObserver — self-contained, captures run_dir at init
     callback.py    # CallbackObserver — delegates to user callback
   converters/
+    molecule_descriptors.py  # RDKit descriptor encode/decode for molecule SMILES
     reaction_drfp.py  # DRFP fingerprint encode/decode for reaction SMILES
+  scripts/
+    compare_optimizers.py           # benchmark hebo/bo_lcb/random
+    compare_representations.py      # benchmark descriptor/DRFP/combined representations
+    egfr_ic50_global_experiment.py  # EGFR global simulation (descriptor BO + real dataset lookup)
+    egfr_utils.py                   # shared data loading helpers for EGFR scripts
 data/
   HER_virtual_data.csv       # example dataset (HER virtual screen)
   buchwald_hartwig_rxns.csv  # Buchwald-Hartwig reaction SMILES dataset
-scripts/
-  compare_optimizers.py  # benchmark hebo/bo_lcb/random
+  egfr_ic50.csv              # EGFR IC50 dataset (full, ~10k molecules)
+  egfr_seed50_mixed.csv      # EGFR seed set (50 labeled molecules)
 ```
 
 ### Key design boundaries
@@ -48,17 +54,26 @@ Skills in `.claude/skills/` map 1:1 to CLI subcommands. The engine is the source
 
 ## Script-first policy
 
-- Before writing ad-hoc one-off scripts, check `scripts/` and prefer existing scripts when they already cover the task.
+- Before writing ad-hoc one-off scripts, check `bo_workflow/scripts/` and prefer existing scripts when they already cover the task.
 - For explicit optimizer benchmarking/comparison requests, use:
 
 ```bash
-uv run python scripts/compare_optimizers.py \
+uv run python -m bo_workflow.scripts.compare_optimizers \
   --dataset data/HER_virtual_data.csv \
   --target Target --objective max \
   --iterations 20 --batch-size 1 --repeats 3 --verbose
 ```
 
-- Only create a new script if no existing command/script fits the request. If creating one, keep it reusable and place it under `scripts/`.
+- For EGFR molecular optimization experiments (descriptor-space BO with real dataset lookup), use:
+
+```bash
+uv run python -m bo_workflow.scripts.egfr_ic50_global_experiment \
+  --dataset data/egfr_ic50.csv \
+  --seed-count 50 --rounds 20 --batch-size 4
+```
+
+- **Long-running scripts** (EGFR experiments, compare scripts with >1 repeat) can take 10–30+ minutes. Always run them with `run_in_background=true` in the Bash tool — do not use a fixed timeout, there is no safe upper bound.
+- Only create a new script if no existing command/script fits the request. If creating one, keep it reusable and place it under `bo_workflow/scripts/`.
 
 ## Run artifacts
 
@@ -89,12 +104,17 @@ All commands: `uv run python -m bo_workflow.cli <command> [flags]`
 | `status` | `--run-id` (req) | Quick run summary |
 | `report` | `--run-id` (req) | Full report + convergence plot |
 
-Converter commands (separate entrypoint): `uv run python -m bo_workflow.converters.reaction_drfp <subcommand> [flags]`
+Converter commands (separate entrypoints):
 
-| Command | Key flags | Purpose |
-|---------|-----------|---------|
-| `encode` | `--input --output-dir` (req), `--rxn-col --n-bits` (opt, default 128) | Encode reaction SMILES to DRFP features |
-| `decode` | `--catalog --query` (req), `--k` (opt) | Decode fingerprint suggestions to nearest reactions |
+- `uv run python -m bo_workflow.converters.reaction_drfp <subcommand> [flags]`
+- `uv run python -m bo_workflow.converters.molecule_descriptors <subcommand> [flags]`
+
+| Converter | Command | Key flags | Purpose |
+|---------|---------|-----------|---------|
+| `reaction_drfp` | `encode` | `--input --output-dir` (req), `--rxn-col --n-bits` (opt, default 128) | Encode reaction SMILES to DRFP features |
+| `reaction_drfp` | `decode` | `--catalog --query` (req), `--k` (opt) | Decode fingerprint suggestions to nearest reactions |
+| `molecule_descriptors` | `encode` | `--input --output-dir --smiles-cols` (req), `--morgan-bits` (opt, default 64) | Encode molecule SMILES columns to RDKit descriptor features |
+| `molecule_descriptors` | `decode` | `--catalog --query` (req), `--k` (opt) | Decode descriptor suggestions to nearest molecules |
 
 Engine options: `hebo` (default), `bo_lcb`, `random`. Note: `bo_lcb` currently supports batch-size 1 only.
 

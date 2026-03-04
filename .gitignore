@@ -5,6 +5,7 @@ __pycache__/
 .pytest_cache/
 .ipynb_checkpoints/
 .mypy_cache/
+.DS_Store
 
 build/
 dist/
@@ -18,6 +19,8 @@ runs/
 results/
 data/*_drfp/
 data/*_drfp*/
+data/*egfr_*/
+data/egfr_global_features*
 
 papers
 BO-Tutorial-for-Sci

@@ -13,21 +13,17 @@ import sys
 import numpy as np
 from tqdm import tqdm
 
+from bo_workflow.engine import BOEngine
+from bo_workflow.observers.proxy import ProxyObserver
+from bo_workflow.oracle import build_proxy_oracle
+from bo_workflow.plotting import plot_optimization_convergence
+
 ENGINE_CHOICES = ("hebo", "bo_lcb", "random")
 ENGINE_LABELS = {
     "hebo": "HEBO",
     "bo_lcb": "BO (LCB)",
     "random": "Random Search",
 }
-
-REPO_ROOT = Path(__file__).resolve().parents[1]
-if str(REPO_ROOT) not in sys.path:
-    sys.path.insert(0, str(REPO_ROOT))
-
-from bo_workflow.engine import BOEngine  # noqa: E402
-from bo_workflow.observers.proxy import ProxyObserver  # noqa: E402
-from bo_workflow.oracle import build_proxy_oracle  # noqa: E402
-from bo_workflow.plotting import plot_optimization_convergence  # noqa: E402
 
 
 def _read_observation_values(path: Path) -> list[float]:
