@@ -86,6 +86,74 @@ def _infer_design_parameters(
     return params, fixed_features, dropped_features
 
 
+def _suggest_botorch(
+    state: dict[str, Any],
+    observations: list[dict[str, Any]],
+    batch_size: int,
+) -> pd.DataFrame:
+    """Suggest candidates using BoTorch qLogNEI acquisition."""
+    import torch
+    from botorch.acquisition.logei import qLogNoisyExpectedImprovement
+    from botorch.fit import fit_gpytorch_mll
+    from botorch.models import SingleTaskGP
+    from botorch.models.transforms.input import Normalize
+    from botorch.models.transforms.outcome import Standardize
+    from botorch.optim import optimize_acqf
+    from gpytorch.mlls import ExactMarginalLogLikelihood
+
+    params = state["design_parameters"]
+    cat_params = [p for p in params if p["type"] == "cat"]
+    if cat_params:
+        raise ValueError(
+            f"BoTorch engine does not support categorical features: {[p['name'] for p in cat_params]}. "
+            "Use hebo or random engine instead."
+        )
+
+    num_params = [p for p in params if p["type"] == "num"]
+    feature_names = [p["name"] for p in num_params]
+    d = len(feature_names)
+
+    if len(observations) < state["num_initial_random_samples"]:
+        np.random.seed(int(state["seed"]) + len(observations))
+        return DesignSpace().parse(params).sample(batch_size)
+
+    X_train = torch.tensor(
+        [[float(obs["x"][name]) for name in feature_names] for obs in observations],
+        dtype=torch.double,
+    )
+    # y_internal is already negated for max objectives, so minimizing y_internal = maximizing y
+    # BoTorch maximizes, so we negate y_internal (minimize y_internal = maximize -y_internal)
+    Y_train = torch.tensor(
+        [[-float(obs["y_internal"])] for obs in observations],
+        dtype=torch.double,
+    )
+
+    bounds = torch.tensor(
+        [[p["lb"] for p in num_params], [p["ub"] for p in num_params]],
+        dtype=torch.double,
+    )
+
+    model = SingleTaskGP(
+        X_train,
+        Y_train,
+        input_transform=Normalize(d=d, bounds=bounds),
+        outcome_transform=Standardize(m=1),
+    )
+    mll = ExactMarginalLogLikelihood(model.likelihood, model)
+    fit_gpytorch_mll(mll)
+
+    acqf = qLogNoisyExpectedImprovement(model=model, X_baseline=X_train)
+    candidates, _ = optimize_acqf(
+        acqf,
+        bounds=bounds,
+        q=batch_size,
+        num_restarts=10,
+        raw_samples=512,
+    )
+
+    return pd.DataFrame(candidates.detach().numpy(), columns=feature_names)
+
+
 class BOEngine:
     """Dataset-driven Bayesian optimization engine with persisted run state."""
 
@@ -131,8 +199,8 @@ class BOEngine:
         """Initialize a run from a dataset and inferred design space."""
         if objective not in {"min", "max"}:
             raise ValueError("objective must be either 'min' or 'max'")
-        if default_engine not in {"hebo", "bo_lcb", "random"}:
-            raise ValueError("default_engine must be one of: hebo, bo_lcb, random")
+        if default_engine not in {"hebo", "bo_lcb", "random", "botorch"}:
+            raise ValueError("default_engine must be one of: hebo, bo_lcb, random, botorch")
 
         dataset_path = Path(dataset_path).resolve()
         if not dataset_path.exists():
@@ -277,8 +345,8 @@ class BOEngine:
             )
 
         engine = str(state.get("default_engine", "hebo"))
-        if engine not in {"hebo", "bo_lcb", "random"}:
-            raise ValueError("default_engine must be one of: hebo, bo_lcb, random")
+        if engine not in {"hebo", "bo_lcb", "random", "botorch"}:
+            raise ValueError("default_engine must be one of: hebo, bo_lcb, random, botorch")
         engine_typed: OptimizerName = engine  # type: ignore[assignment]  # validated above
 
         size = int(batch_size or state["default_batch_size"])
@@ -286,6 +354,8 @@ class BOEngine:
         if engine_typed == "random":
             np.random.seed(int(state["seed"]) + len(observations))
             proposals = DesignSpace().parse(state["design_parameters"]).sample(size)
+        elif engine_typed == "botorch":
+            proposals = _suggest_botorch(state, observations, size)
         else:
             if engine_typed == "bo_lcb" and size != 1:
                 raise ValueError("bo_lcb currently supports batch-size=1 only.")
@@ -489,6 +559,7 @@ class BOEngine:
                 "hebo": "HEBO",
                 "bo_lcb": "BO (LCB)",
                 "random": "Random Search",
+                "botorch": "BoTorch (qLogNEI)",
             }.get(engine, engine)
             methods_data[label] = np.asarray(values, dtype=float)
 

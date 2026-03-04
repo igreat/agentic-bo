@@ -11,7 +11,7 @@ import numpy as np
 import pandas as pd
 
 type Objective = Literal["min", "max"]
-type OptimizerName = Literal["hebo", "bo_lcb", "random"]
+type OptimizerName = Literal["hebo", "bo_lcb", "random", "botorch"]
 
 _RUN_ADJECTIVES = (
     "amber",
