@@ -76,7 +76,10 @@ def profile_column(series: pd.Series, name: str) -> dict[str, Any]:
     n_neg = int((numeric < 0).sum())
     mn = float(numeric.min())
     mx = float(numeric.max())
-    skewness = float(scipy_stats.skew(numeric))
+    # scipy skew returns NaN for n < 3; std is NaN for n < 2
+    skewness = float(scipy_stats.skew(numeric)) if n >= 3 else 0.0
+    if not np.isfinite(skewness):
+        skewness = 0.0
 
     log_range: float | None = None
     if mn > 0:
@@ -143,7 +146,7 @@ def profile_column(series: pd.Series, name: str) -> dict[str, Any]:
         "max": mx,
         "mean": float(numeric.mean()),
         "median": float(numeric.median()),
-        "std": float(numeric.std()),
+        "std": float(numeric.std()) if n >= 2 else 0.0,
         "skewness": skewness,
         "fraction_zero": n_zero / n,
         "fraction_negative": n_neg / n,
@@ -182,6 +185,12 @@ def apply_transform(
 ) -> tuple[pd.Series, str]:
     """Apply a named transform to a Series. Returns (result, new_column_name)."""
     numeric = pd.to_numeric(series, errors="coerce")
+    n_non_numeric = int(series.notna().sum()) - int(numeric.notna().sum())
+    if n_non_numeric > 0:
+        raise ValueError(
+            f"'{name}': {n_non_numeric} non-numeric values cannot be coerced. "
+            "Pass a numeric column (e.g. not a SMILES column)."
+        )
     prefix = _PREFIXES[transform]
     new_name = f"{prefix}_{name}"
 
@@ -323,10 +332,12 @@ def _build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-if __name__ == "__main__":
-    parser = _build_parser()
-    args = parser.parse_args()
+def main(argv=None) -> int:
+    args = _build_parser().parse_args(argv)
     if args.subcommand == "profile":
-        sys.exit(cmd_profile(args))
-    else:
-        sys.exit(cmd_transform(args))
+        return cmd_profile(args)
+    return cmd_transform(args)
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

@@ -92,14 +92,20 @@ def _suggest_botorch(
     batch_size: int,
 ) -> pd.DataFrame:
     """Suggest candidates using BoTorch qLogNEI acquisition."""
-    import torch
-    from botorch.acquisition.logei import qLogNoisyExpectedImprovement
-    from botorch.fit import fit_gpytorch_mll
-    from botorch.models import SingleTaskGP
-    from botorch.models.transforms.input import Normalize
-    from botorch.models.transforms.outcome import Standardize
-    from botorch.optim import optimize_acqf
-    from gpytorch.mlls import ExactMarginalLogLikelihood
+    try:
+        import torch
+        from botorch.acquisition.logei import qLogNoisyExpectedImprovement
+        from botorch.fit import fit_gpytorch_mll
+        from botorch.models import SingleTaskGP
+        from botorch.models.transforms.input import Normalize
+        from botorch.models.transforms.outcome import Standardize
+        from botorch.optim import optimize_acqf
+        from gpytorch.mlls import ExactMarginalLogLikelihood
+    except ImportError as exc:
+        raise ValueError(
+            "BoTorch engine requires botorch, torch, and gpytorch to be installed. "
+            "Install via: uv add botorch"
+        ) from exc
 
     params = state["design_parameters"]
     cat_params = [p for p in params if p["type"] == "cat"]
@@ -133,6 +139,7 @@ def _suggest_botorch(
         dtype=torch.double,
     )
 
+    torch.manual_seed(int(state["seed"]) + len(observations))
     model = SingleTaskGP(
         X_train,
         Y_train,

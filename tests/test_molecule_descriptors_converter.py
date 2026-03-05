@@ -134,7 +134,7 @@ def test_encode_passthrough_columns_preserved(encoded: tuple) -> None:
     assert "ic50_nM" in catalog_df.columns
 
 
-def test_encode_row_count_preserved(egfr_csv: Path, encoded: tuple) -> None:
+def test_encode_row_count_preserved(encoded: tuple) -> None:
     features_df, catalog_df = encoded
     assert len(features_df) == len(_EGFR_SMILES)
     assert len(catalog_df) == len(_EGFR_SMILES)
@@ -268,7 +268,7 @@ def test_decode_results_are_json_serializable(encoded: tuple) -> None:
     query_vec = features_df[desc_cols].iloc[0].values.astype(np.float64)
 
     results = decode_nearest(query_vec, catalog_df, desc_cols, k=3)
-    payload = json.dumps(results, default=str)
+    payload = json.dumps(results)  # must not require default=str
     assert isinstance(payload, str)
 
 
