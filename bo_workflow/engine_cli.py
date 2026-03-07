@@ -67,7 +67,7 @@ def register_commands(sub: argparse._SubParsersAction) -> None:
     init_cmd.add_argument(
         "--engine",
         type=str,
-        choices=["hebo", "bo_lcb", "random"],
+        choices=["hebo", "bo_lcb", "random", "botorch"],
         default="hebo",
         help="Default optimizer engine for this run",
     )

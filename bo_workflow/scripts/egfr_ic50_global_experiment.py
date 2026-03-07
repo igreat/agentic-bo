@@ -2,27 +2,30 @@
 """EGFR IC50 global simulation experiment.
 
 Simulates a multi-round molecular optimization campaign against the full EGFR
-IC50 dataset.  Each "round" asks HEBO for suggestions in descriptor space,
+IC50 dataset.  Each "round" asks the engine for suggestions in descriptor space,
 maps them back to the nearest real molecule, and looks up the true pIC50 as
 a proxy for a real experiment.
 
 Workflow:
   1. Load full EGFR IC50 dataset, convert to pIC50.
-  2. Select seed molecules as initial labeled training set.
-  3. Encode all molecules to RDKit descriptor features.
-  4. Init BO run (seeds labeled, remaining molecules unlabeled).
-  5. Build proxy oracle on labeled molecules.
-  6. Each round:
-       a. Suggest next batch via HEBO in descriptor space.
-       b. Decode suggestions to nearest real molecules.
+  2. Encode all molecules to RDKit descriptor features (all labeled).
+  3. Init BO run.
+  4. Optionally feed seed observations to bootstrap the GP.
+  5. Each round:
+       a. Suggest next batch via engine in descriptor space.
+       b. Decode suggestions to nearest unobserved real molecule.
        c. Look up real pIC50 from full dataset.
-       d. Record observations; rebuild oracle.
-  7. Report best found vs best in dataset.
+       d. Record observations.
+  6. Report best found vs best in dataset.
 
 Usage:
+    # No pre-seeding (engine handles random warmup):
     uv run python -m bo_workflow.scripts.egfr_ic50_global_experiment \\
-        --dataset data/egfr_ic50.csv \\
-        --seed-count 50 --rounds 20 --batch-size 4
+        --dataset data/egfr_ic50.csv --rounds 20 --batch-size 4
+
+    # With 50 stratified seeds fed before round 1:
+    uv run python -m bo_workflow.scripts.egfr_ic50_global_experiment \\
+        --dataset data/egfr_ic50.csv --seed-count 50 --rounds 20 --batch-size 4
 """
 
 import argparse
@@ -44,7 +47,6 @@ from bo_workflow.converters.molecule_descriptors import (
 from bo_workflow.scripts.egfr_utils import (
     is_reasonable_seed_smiles,
     load_full_dataset,
-    reselect_active_features,
 )
 
 
@@ -58,11 +60,6 @@ def select_seed_molecules(
 
     Samples evenly from n quantile bins so the seed set covers the full
     activity range rather than clustering at one end.
-
-    # TODO: port Kevin's select_representative_split / build_lookup_table from
-    # bo_workflow.tools.data.splits (data-conversion branch). That approach
-    # separates the data into a labeled train set and a held-out lookup pool,
-    # and supports quality modes (top/decent/mixed) + diversity fill.
     """
     pool = data
     if filter_fn is not None:
@@ -89,22 +86,22 @@ def select_seed_molecules(
 
 def build_features_csv(
     output_path: Path,
-    seed_rows: list[tuple[str, str, float]],
     all_data: list[tuple[str, str, float]],
     morgan_bits: int,
 ) -> tuple[pd.DataFrame, list[str], dict[str, dict[str, float]], dict[str, float]]:
     """Encode all molecules to descriptor features and write a features CSV.
 
-    Seeds have their real pIC50; all other molecules have NaN (unlabeled).
+    All molecules are labeled with their real pIC50 so the proxy oracle has
+    maximum training data from the start.
     Returns (catalog_df, descriptor_cols, descriptor_lookup, pic50_lookup).
     """
-    seed_pic50 = {can: y for _, can, y in seed_rows}
+    all_pic50_map = {can: y for _, can, y in all_data}
 
-    # Write raw CSV: smiles + pIC50 (NaN for non-seeds)
+    # Write raw CSV: smiles + pIC50 for ALL molecules
     raw_csv = output_path.with_suffix(".raw.csv")
     raw_csv.parent.mkdir(parents=True, exist_ok=True)
     records = [
-        {"smiles": smi, "pIC50": seed_pic50.get(can, float("nan"))}
+        {"smiles": smi, "pIC50": all_pic50_map[can]}
         for smi, can, _ in all_data
     ]
     pd.DataFrame(records).to_csv(raw_csv, index=False)
@@ -125,8 +122,6 @@ def build_features_csv(
     )
 
     # Build lookups
-    # pic50_lookup uses all_data (full ground-truth) so BO-suggested molecules
-    # that aren't seeds can still be looked up during simulation.
     all_pic50: dict[str, float] = {can: y for _, can, y in all_data}
     descriptor_lookup: dict[str, dict[str, float]] = {}
     pic50_lookup: dict[str, float] = {}
@@ -157,13 +152,18 @@ def main(argv=None) -> int:
     )
     p.add_argument("--dataset", type=Path, default=Path("data/egfr_ic50.csv"))
     p.add_argument("--target-column", default="ic50_nM", choices=["ic50_nM", "pIC50"])
-    p.add_argument("--seed-count", type=int, default=50)
+    p.add_argument(
+        "--seed-count", type=int, default=0,
+        help="Number of stratified seed molecules to pre-feed as initial GP observations. "
+             "0 = no pre-seeding; the engine handles its own random warmup.",
+    )
+    p.add_argument("--no-seed-filter", action="store_true", help="Disable med-chem seed filter")
     p.add_argument("--rounds", type=int, default=20)
     p.add_argument("--batch-size", type=int, default=4)
     p.add_argument("--morgan-bits", type=int, default=64)
-    p.add_argument("--no-seed-filter", action="store_true", help="Disable med-chem seed filter")
     p.add_argument("--seed", type=int, default=42)
     p.add_argument("--cv-folds", type=int, default=5)
+    p.add_argument("--engine", default="hebo", choices=["hebo", "bo_lcb", "random", "botorch"])
     p.add_argument("--verbose", action="store_true")
     args = p.parse_args(argv)
 
@@ -180,53 +180,66 @@ def main(argv=None) -> int:
     best_dataset_smi = next(smi for smi, _, y in all_data if y == best_in_dataset)
     print(f"  Best pIC50 in dataset: {best_in_dataset:.3f}")
 
-    # 2. Seed selection
-    filter_fn = None if args.no_seed_filter else is_reasonable_seed_smiles
-    seed_rows = select_seed_molecules(all_data, args.seed_count, seed=args.seed, filter_fn=filter_fn)
-    seed_pic50_values = [y for _, _, y in seed_rows]
-    print(f"  {len(seed_rows)} seed molecules (pIC50 range: {min(seed_pic50_values):.2f}–{max(seed_pic50_values):.2f})")
-
-    # 3. Encode to descriptors
+    # 2. Encode to descriptors
     features_csv = Path("data/egfr_global_features.csv")
     print(f"Encoding {len(all_data)} molecules to descriptors (morgan_bits={args.morgan_bits})...")
     catalog_df, descriptor_cols, descriptor_lookup, pic50_lookup = build_features_csv(
-        features_csv, seed_rows, all_data, morgan_bits=args.morgan_bits
+        features_csv, all_data, morgan_bits=args.morgan_bits
     )
     print(f"  {len(descriptor_cols)} descriptor features, {len(pic50_lookup)} labeled molecules")
 
-    # 4. Init BO run
+    # 3. Init BO run
     engine = BOEngine()
     init = engine.init_run(
         dataset_path=features_csv,
         target_column="pIC50",
         objective="max",
+        default_engine=args.engine,
         seed=args.seed,
         default_batch_size=args.batch_size,
         verbose=args.verbose,
     )
     run_id = init["run_id"]
     run_dir = engine.get_run_dir(run_id)
-    print(f"Run: {run_id}")
+    print(f"Run: {run_id}  (engine={args.engine})")
 
-    # 5. Optimization rounds
-    observed_canonical: set[str] = {can for _, can, _ in seed_rows}
-    best_found = max(y for _, _, y in seed_rows)
+    # 4. Optionally pre-feed seed observations to bootstrap the GP
+    # With seed_count=0 the engine handles its own random warmup
+    # (num_initial_random_samples rounds of Sobol/numpy random before GP kicks in).
+    # With seed_count>0 the GP is fitted from round 1 using stratified coverage
+    # of the activity range, which avoids the random-corner-sampling artifact
+    # (the best molecule sits at a descriptor-space extreme and trivially
+    # dominates nearest-neighbor decoding during random warmup).
+    observed_canonical: set[str] = set()
+    best_found = float("-inf")
+
+    if args.seed_count > 0:
+        filter_fn = None if args.no_seed_filter else is_reasonable_seed_smiles
+        seed_rows = select_seed_molecules(
+            all_data, args.seed_count, seed=args.seed, filter_fn=filter_fn
+        )
+        seed_pic50_values = [y for _, _, y in seed_rows]
+        print(
+            f"  {len(seed_rows)} seed molecules "
+            f"(pIC50 range: {min(seed_pic50_values):.2f}–{max(seed_pic50_values):.2f})"
+        )
+        seed_obs = [
+            {"x": descriptor_lookup[can], "y": y}
+            for _, can, y in seed_rows
+            if can in descriptor_lookup
+        ]
+        engine.observe(run_id, seed_obs, verbose=False)
+        print(f"  Fed {len(seed_obs)} seed observations to engine")
+        observed_canonical = {can for _, can, _ in seed_rows}
+        best_found = max(seed_pic50_values)
+    else:
+        print("  No pre-seeding; engine will use random warmup for first rounds")
+
     round_results = []
 
     print(f"\nRunning {args.rounds} rounds (batch_size={args.batch_size})...")
 
     for round_num in range(1, args.rounds + 1):
-        # Reselect top features via RF importance before suggesting
-        reselect_active_features(
-            state_path=run_dir / "state.json",
-            descriptor_lookup=descriptor_lookup,
-            descriptor_cols=descriptor_cols,
-            observed_canonical=observed_canonical,
-            pic50_lookup=pic50_lookup,
-            max_dims=15,
-            verbose=args.verbose,
-        )
-
         suggestions_result = engine.suggest(run_id, batch_size=args.batch_size, verbose=False)
         suggestions = suggestions_result.get("suggestions", [])
 
@@ -277,12 +290,6 @@ def main(argv=None) -> int:
         if obs_to_record:
             engine.observe(run_id, obs_to_record, verbose=False)
 
-        # TODO: port Kevin's prescreen_candidates from bo_workflow.domain.strategies
-        # (data-conversion branch). It adds exploit/explore/novelty slots with
-        # adaptive reallocation, UCB scoring, kNN Tanimoto predictions, and
-        # structural diversity filters. Currently we just take the first
-        # non-observed nearest neighbor from every HEBO suggestion.
-
         round_best = max((h["real_pIC50"] for h in round_hits if h["in_dataset"]), default=float("-inf"))
         if round_best > best_found:
             best_found = round_best
@@ -299,13 +306,14 @@ def main(argv=None) -> int:
             f"  overall_best={best_found:.3f}"
         )
 
-    # 7. Final oracle build for surrogate quality report
+    # 6. Final oracle build for surrogate quality report
     final_oracle = build_proxy_oracle(run_dir, cv_folds=args.cv_folds, verbose=False)
 
     output = {
         "run_id": run_id,
+        "engine": args.engine,
         "dataset": str(args.dataset),
-        "seed_count": len(seed_rows),
+        "seed_count": args.seed_count,
         "total_molecules": len(all_data),
         "oracle_note": "All results are simulations via proxy oracle + real dataset lookup.",
         "best_in_dataset": {"smiles": best_dataset_smi, "pIC50": best_in_dataset},

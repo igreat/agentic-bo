@@ -292,7 +292,8 @@ def decode_nearest(
             "distance": round(float(distances[idx]), 4),
         }
         for col in meta_cols:
-            entry[col] = catalog.iloc[idx][col]
+            val = catalog.iloc[idx][col]
+            entry[col] = val.item() if hasattr(val, "item") else val
         results.append(entry)
 
     return results

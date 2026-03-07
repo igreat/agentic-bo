@@ -69,7 +69,7 @@ uv run python -m bo_workflow.scripts.compare_optimizers \
 ```bash
 uv run python -m bo_workflow.scripts.egfr_ic50_global_experiment \
   --dataset data/egfr_ic50.csv \
-  --seed-count 50 --rounds 20 --batch-size 4
+  --rounds 20 --batch-size 4 [--seed-count 50]
 ```
 
 - **Long-running scripts** (EGFR experiments, compare scripts with >1 repeat) can take 10–30+ minutes. Always run them with `run_in_background=true` in the Bash tool — do not use a fixed timeout, there is no safe upper bound.
@@ -108,6 +108,7 @@ Converter commands (separate entrypoints):
 
 - `uv run python -m bo_workflow.converters.reaction_drfp <subcommand> [flags]`
 - `uv run python -m bo_workflow.converters.molecule_descriptors <subcommand> [flags]`
+- `uv run python -m bo_workflow.converters.column_transform <subcommand> [flags]`
 
 | Converter | Command | Key flags | Purpose |
 |---------|---------|-----------|---------|
@@ -115,8 +116,10 @@ Converter commands (separate entrypoints):
 | `reaction_drfp` | `decode` | `--catalog --query` (req), `--k` (opt) | Decode fingerprint suggestions to nearest reactions |
 | `molecule_descriptors` | `encode` | `--input --output-dir --smiles-cols` (req), `--morgan-bits` (opt, default 64) | Encode molecule SMILES columns to RDKit descriptor features |
 | `molecule_descriptors` | `decode` | `--catalog --query` (req), `--k` (opt) | Decode descriptor suggestions to nearest molecules |
+| `column_transform` | `profile` | `--input` (req), `--cols` (opt) | Analyse columns and recommend transforms |
+| `column_transform` | `transform` | `--input --cols --transform --output` (req), `--keep-original` (opt) | Apply a named transform; renames column with prefix (e.g. `log10_ic50_nM`) |
 
-Engine options: `hebo` (default), `bo_lcb`, `random`. Note: `bo_lcb` currently supports batch-size 1 only.
+Engine options: `hebo` (default), `bo_lcb`, `random`, `botorch`. Note: `bo_lcb` currently supports batch-size 1 only. `botorch` requires numeric-only features.
 
 ## MVP demo (copy-paste)
 
