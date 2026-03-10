@@ -127,7 +127,7 @@ def main(argv: list[str] | None = None) -> int:
     if "bo_lcb" in args.engines and args.batch_size != 1:
         raise ValueError("bo_lcb currently supports batch-size=1 only")
 
-    drop_cols = [c.strip() for c in args.drop_cols.split(",")] if args.drop_cols else []
+    drop_cols = [c.strip() for c in args.drop_cols.split(",") if c.strip()] if args.drop_cols else []
 
     engine = BOEngine(runs_root=args.runs_root)
     methods_data: dict[str, np.ndarray] = {}

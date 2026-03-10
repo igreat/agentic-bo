@@ -14,6 +14,8 @@ Example state.json entry::
     }
 """
 
+import math
+
 import pandas as pd
 
 from .base import Constraint
@@ -27,8 +29,8 @@ class SimplexConstraint(Constraint):
             raise ValueError("SimplexConstraint requires at least 2 columns.")
         if len(set(cols)) != len(cols):
             raise ValueError("SimplexConstraint columns must be unique.")
-        if total <= 0:
-            raise ValueError(f"SimplexConstraint total must be positive, got {total}.")
+        if not math.isfinite(total) or total <= 0:
+            raise ValueError(f"SimplexConstraint total must be a finite positive number, got {total}.")
         self.cols = list(cols)
         self.total = float(total)
 

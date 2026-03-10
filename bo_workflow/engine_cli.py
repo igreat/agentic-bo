@@ -163,7 +163,7 @@ def handle(args: argparse.Namespace, engine: BOEngine) -> int | None:
         intent_payload = None
         if args.intent_json is not None:
             intent_payload = _parse_json_object(args.intent_json)
-        drop_cols = [c.strip() for c in args.drop_cols.split(",")] if args.drop_cols else []
+        drop_cols = [c.strip() for c in args.drop_cols.split(",") if c.strip()] if args.drop_cols else []
         constraints = _parse_simplex_groups(args.simplex_groups)
         payload = engine.init_run(
             dataset_path=args.dataset,

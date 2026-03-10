@@ -111,7 +111,6 @@ def _suggest_botorch(
 
     params = state["design_parameters"]
     feature_names = [p["name"] for p in params]
-    num_dims = [i for i, p in enumerate(params) if p["type"] == "num"]
     cat_dims = [i for i, p in enumerate(params) if p["type"] == "cat"]
 
     if len(observations) < state["num_initial_random_samples"]:
@@ -343,7 +342,7 @@ class BOEngine:
             "active_features": [p["name"] for p in design_params],
             "fixed_features": fixed_features,
             "dropped_features": dropped_features,
-            "excluded_cols": list(drop_cols) if drop_cols else [],
+            "drop_cols": list(drop_cols) if drop_cols else [],
             "ignored_features": [],
             "constraints": [],
             "objective_transform": {
@@ -356,6 +355,7 @@ class BOEngine:
             loaded = load_constraints({"constraints": constraints})
             active_set = set(state["active_features"])
             constrained_cols: set[str] = set()
+            numeric_features = {p["name"] for p in design_params if p["type"] == "num"}
             for c in loaded:
                 serialized = c.to_dict()
                 if serialized["type"] == "simplex":
@@ -363,6 +363,11 @@ class BOEngine:
                     if unknown:
                         raise ValueError(
                             f"Simplex constraint references columns not in active features: {unknown}"
+                        )
+                    non_numeric = [col for col in serialized["cols"] if col not in numeric_features]
+                    if non_numeric:
+                        raise ValueError(
+                            f"Simplex constraint columns must be numeric features: {non_numeric}"
                         )
                     overlap = sorted(set(serialized["cols"]) & constrained_cols)
                     if overlap:
