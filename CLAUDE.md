@@ -119,7 +119,7 @@ Converter commands (separate entrypoints):
 | `column_transform` | `profile` | `--input` (req), `--cols` (opt) | Analyse columns and recommend transforms |
 | `column_transform` | `transform` | `--input --cols --transform --output` (req), `--keep-original` (opt) | Apply a named transform; renames column with prefix (e.g. `log10_ic50_nM`) |
 
-Engine options: `hebo` (default), `bo_lcb`, `random`, `botorch`. Note: `bo_lcb` currently supports batch-size 1 only. `botorch` requires numeric-only features.
+Engine options: `hebo` (default), `bo_lcb`, `random`, `botorch`. Note: `bo_lcb` currently supports batch-size 1 only. `botorch` requires numeric-only features — it will error on categorical columns. Use `hebo` for any dataset with categorical features.
 
 ## MVP demo (copy-paste)
 

@@ -75,6 +75,12 @@ def register_commands(sub: argparse._SubParsersAction) -> None:
     init_cmd.add_argument("--batch-size", type=int, default=1)
     init_cmd.add_argument("--max-categories", type=int, default=64)
     init_cmd.add_argument(
+        "--drop-cols",
+        type=str,
+        default=None,
+        help="Comma-separated column names to exclude from the feature space (e.g. rxn_smiles)",
+    )
+    init_cmd.add_argument(
         "--intent-json",
         type=str,
         default=None,
@@ -111,6 +117,7 @@ def handle(args: argparse.Namespace, engine: BOEngine) -> int | None:
         intent_payload = None
         if args.intent_json is not None:
             intent_payload = _parse_json_object(args.intent_json)
+        drop_cols = [c.strip() for c in args.drop_cols.split(",")] if args.drop_cols else []
         payload = engine.init_run(
             dataset_path=args.dataset,
             target_column=args.target,
@@ -121,6 +128,7 @@ def handle(args: argparse.Namespace, engine: BOEngine) -> int | None:
             num_initial_random_samples=args.init_random,
             default_batch_size=args.batch_size,
             max_categories=args.max_categories,
+            drop_cols=drop_cols,
             intent=intent_payload,
             verbose=args.verbose,
         )

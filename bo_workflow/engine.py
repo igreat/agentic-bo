@@ -200,6 +200,7 @@ class BOEngine:
         default_batch_size: int = 1,
         seed: int = 7,
         max_categories: int = 64,
+        drop_cols: list[str] | None = None,
         intent: dict[str, Any] | None = None,
         verbose: bool = False,
     ) -> dict[str, Any]:
@@ -221,6 +222,11 @@ class BOEngine:
             )
 
         feature_frame = data.drop(columns=[target_column])
+        if drop_cols:
+            unknown = [c for c in drop_cols if c not in feature_frame.columns]
+            if unknown:
+                raise ValueError(f"--drop-cols contains unknown columns: {unknown}")
+            feature_frame = feature_frame.drop(columns=drop_cols)
         design_params, fixed_features, dropped_features = _infer_design_parameters(
             feature_frame,
             max_categories=max_categories,
@@ -265,6 +271,7 @@ class BOEngine:
             "active_features": [p["name"] for p in design_params],
             "fixed_features": fixed_features,
             "dropped_features": dropped_features,
+            "excluded_cols": list(drop_cols) if drop_cols else [],
             "ignored_features": [],
             "objective_transform": {
                 "internal_objective": "min",

@@ -21,6 +21,7 @@ data/*_drfp/
 data/*_drfp*/
 data/*egfr_*/
 data/egfr_global_features*
+data/bh_*
 
 papers
 BO-Tutorial-for-Sci
@@ -28,3 +29,8 @@ bo-proposal.docx
 
 .ruff_cache/
 .claude/settings.local.json
+
+# ignore these for the time being as they can be a maintanence burden
+# I'm just having them in my local file for testing
+AGENTS.md
+.agents/
