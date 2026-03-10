@@ -153,6 +153,23 @@ uv run python -m bo_workflow.cli observe --run-id <RUN_ID> --data '{"x": {...}, 
 
 Treat dataset semantics (what the target means, valid constraints, and success thresholds) as problem-specific context from the user or project docs.
 
+## Demo Datasets
+
+### Primary demo — Use Case 1 (organic synthesis, Response 1)
+`data/bh_clean.csv` — Buchwald-Hartwig C-N coupling reaction optimization
+- Features: `aryl_halide`, `ligand`, `base`, `additive` (all categorical)
+- Target: `yield` (maximize, 0–100%)
+- No encoder, no decoder, no DFT features needed
+- Works end-to-end today with proxy mode
+- Derived from `data/buchwald_hartwig_rxns.csv` (drop `rxn_smiles` column only)
+
+### Secondary demo — after simplex implementation
+`data/oer_clean.csv` — OER electrocatalyst optimization
+- Features: Metal_1/2/3 (categorical) + proportion + process conditions (numeric)
+- Target: `Overpotential mV @10 mA cm-2` (minimize)
+- Requires simplex constraint before suggestions are chemically valid
+- Cleanup: drop 3 rows where Metal_1 is NaN, fill Metal_2/Metal_3 NaN → "None"
+
 ## Resuming a completed run
 
 `run-proxy` sets the run status to `completed` when it finishes. To continue optimizing from where it left off (appending more iterations without re-running earlier ones), flip the status back to `running` before calling `run-proxy` again:
