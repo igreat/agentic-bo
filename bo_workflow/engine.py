@@ -10,6 +10,7 @@ import secrets
 import sys
 from typing import Any
 
+from .constraints import load_constraints
 from .observers.base import Observer
 
 from hebo.design_space.design_space import DesignSpace
@@ -201,6 +202,7 @@ class BOEngine:
         seed: int = 7,
         max_categories: int = 64,
         drop_cols: list[str] | None = None,
+        constraints: list[dict[str, Any]] | None = None,
         intent: dict[str, Any] | None = None,
         verbose: bool = False,
     ) -> dict[str, Any]:
@@ -273,11 +275,33 @@ class BOEngine:
             "dropped_features": dropped_features,
             "excluded_cols": list(drop_cols) if drop_cols else [],
             "ignored_features": [],
+            "constraints": [],
             "objective_transform": {
                 "internal_objective": "min",
                 "target_max_for_restore": target_max_for_restore,
             },
         }
+        if constraints:
+            # Validate and round-trip through constraint objects to catch errors early.
+            loaded = load_constraints({"constraints": constraints})
+            active_set = set(state["active_features"])
+            constrained_cols: set[str] = set()
+            for c in loaded:
+                serialized = c.to_dict()
+                if serialized["type"] == "simplex":
+                    unknown = [col for col in serialized["cols"] if col not in active_set]
+                    if unknown:
+                        raise ValueError(
+                            f"Simplex constraint references columns not in active features: {unknown}"
+                        )
+                    overlap = sorted(set(serialized["cols"]) & constrained_cols)
+                    if overlap:
+                        raise ValueError(
+                            f"Constraint columns may only belong to one simplex group: {overlap}"
+                        )
+                    constrained_cols.update(serialized["cols"])
+            state["constraints"] = [c.to_dict() for c in loaded]
+
         self._save_state(run_id, state)
         self._log(
             verbose,
@@ -296,6 +320,8 @@ class BOEngine:
                     "num_initial_random_samples": int(num_initial_random_samples),
                     "default_batch_size": int(default_batch_size),
                     "max_categories": int(max_categories),
+                    "drop_cols": list(drop_cols) if drop_cols else [],
+                    "constraints": state["constraints"],
                 },
             }
             write_json(self._paths(run_id).intent, intent_payload)
@@ -375,6 +401,10 @@ class BOEngine:
                 raise ValueError("bo_lcb currently supports batch-size=1 only.")
             optimizer = self._build_optimizer(state, observations, engine_typed)
             proposals = optimizer.suggest(n_suggestions=size)
+
+        active_constraints = load_constraints(state)
+        for constraint in active_constraints:
+            proposals = constraint.apply(proposals)
 
         rows = []
         for _, row in proposals.iterrows():
@@ -526,6 +556,7 @@ class BOEngine:
             "target_column": state["target_column"],
             "active_features": state["active_features"],
             "ignored_features": state["ignored_features"],
+            "constraints": state.get("constraints", []),
             "num_observations": len(observations),
         }
         if observations:

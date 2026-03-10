@@ -78,7 +78,9 @@ uv run python -m bo_workflow.converters.molecule_descriptors encode \
 
 Add `--verbose` to `init`, `build-oracle`, `suggest`, `observe`, `run-proxy`, and `report` to print progress logs (and a tqdm bar for `run-proxy`).
 
-Engine options: `hebo` (default), `bo_lcb`, `random`. Set once at init with `--engine`.
+Engine options: `hebo` (default), `bo_lcb`, `random`, `botorch`. `bo_lcb` supports batch-size 1 only. `botorch` requires numeric-only features, so use `hebo` for mixed or categorical datasets.
+
+Constraints are explicit run configuration, not something inferred from the CSV. If the problem has composition variables that must sum to a fixed total, declare them at init time with `--simplex-groups 'col1,col2,...:total'`.
 
 ## Benchmark scripts
 
@@ -124,6 +126,9 @@ bo_workflow/
   cli.py          # top-level entrypoint — composes subparsers from each module
   plotting.py     # convergence plot generation
   utils.py        # RunPaths, JSON I/O, shared types
+  constraints/
+    base.py       # Constraint ABC — enforce search-space constraints at suggest time
+    simplex.py    # SimplexConstraint — composition variables summing to a fixed total
   observers/
     base.py       # Observer ABC — evaluate(suggestions) interface
     proxy.py      # ProxyObserver — self-contained, captures run_dir at init

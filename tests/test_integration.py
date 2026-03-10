@@ -110,6 +110,54 @@ def test_oer_mixed_variables(engine: BOEngine, oer_csv: Path) -> None:
     assert len(cat_params) >= 1, "OER dataset should have at least one categorical parameter"
 
 
+def test_oer_simplex_constraint_projects_suggestions(
+    engine: BOEngine, oer_csv: Path
+) -> None:
+    """Simplex-constrained OER suggestions should sum to the declared total."""
+    state = engine.init_run(
+        dataset_path=oer_csv,
+        target_column="Overpotential mV @10 mA cm-2",
+        objective="min",
+        seed=42,
+        constraints=[
+            {
+                "type": "simplex",
+                "cols": [
+                    "Metal_1_Proportion",
+                    "Metal_2_Proportion",
+                    "Metal_3_Proportion",
+                ],
+                "total": 100.0,
+            }
+        ],
+    )
+    run_id = state["run_id"]
+
+    result = engine.suggest(run_id, batch_size=4)
+
+    assert state["constraints"] == [
+        {
+            "type": "simplex",
+            "cols": [
+                "Metal_1_Proportion",
+                "Metal_2_Proportion",
+                "Metal_3_Proportion",
+            ],
+            "total": 100.0,
+        }
+    ]
+    for suggestion in result["suggestions"]:
+        total = (
+            float(suggestion["x"]["Metal_1_Proportion"])
+            + float(suggestion["x"]["Metal_2_Proportion"])
+            + float(suggestion["x"]["Metal_3_Proportion"])
+        )
+        assert total == pytest.approx(100.0)
+
+    status = engine.status(run_id)
+    assert status["constraints"] == state["constraints"]
+
+
 @pytest.mark.slow
 def test_bh_feature_selection(engine: BOEngine, bh_csv: Path) -> None:
     """BH dataset, max objective, feature selection with max_features=20."""
@@ -196,4 +244,23 @@ def test_init_invalid_target_column(engine: BOEngine, her_csv: Path) -> None:
             dataset_path=her_csv,
             target_column="nonexistent_column",
             objective="max",
+        )
+
+
+def test_init_simplex_constraint_unknown_feature_raises(
+    engine: BOEngine, her_csv: Path
+) -> None:
+    """Simplex constraints must reference active features."""
+    with pytest.raises(ValueError, match="not in active features"):
+        engine.init_run(
+            dataset_path=her_csv,
+            target_column="Target",
+            objective="max",
+            constraints=[
+                {
+                    "type": "simplex",
+                    "cols": ["unknown_a", "unknown_b"],
+                    "total": 1.0,
+                }
+            ],
         )

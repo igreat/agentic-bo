@@ -26,6 +26,9 @@ bo_workflow/
     base.py       # Observer ABC — evaluate(suggestions) interface
     proxy.py      # ProxyObserver — self-contained, captures run_dir at init
     callback.py    # CallbackObserver — delegates to user callback
+  constraints/
+    base.py       # Constraint ABC — apply(suggestions) interface
+    simplex.py    # SimplexConstraint — post-hoc normalization (upgradeable to bijection)
   converters/
     molecule_descriptors.py  # RDKit descriptor encode/decode for molecule SMILES
     reaction_drfp.py  # DRFP fingerprint encode/decode for reaction SMILES
@@ -49,6 +52,7 @@ data/
 - **CLI is the wiring layer.** `build-oracle` calls `oracle.build_proxy_oracle(run_dir)` directly. `run-proxy` constructs `ProxyObserver(run_dir)` and passes it to `engine.run_optimization()`.
 - **Each module owns its CLI surface.** `engine_cli.py` and `oracle_cli.py` each define `register_commands()` + `handle()`. `cli.py` composes them.
 - **Converters are standalone.** Each converter has its own `__main__`-style CLI (`python -m bo_workflow.converters.reaction_drfp`). They transform data before/after the BO loop but do not depend on the engine or oracle.
+- **Constraints are search-space properties.** `constraints/` is the enforcement layer — each `Constraint` subclass receives raw suggestions from the optimizer and projects them into the feasible region via `apply()`. Constraints are stored in `state.json["constraints"]` and enforced at every `suggest` call. The agent is responsible for inferring constraints from the user's problem description (e.g. "proportions sum to 100%") and passing them via `--simplex-groups`; the engine never auto-detects them.
 
 Skills in `.claude/skills/` map 1:1 to CLI subcommands. The engine is the source of truth; skills are the agent interface.
 
@@ -96,7 +100,7 @@ All commands: `uv run python -m bo_workflow.cli <command> [flags]`
 
 | Command | Key flags | Purpose |
 |---------|-----------|---------|
-| `init` | `--dataset --target --objective` (req), `--engine --seed --init-random --batch-size` (opt) | Init run from CSV |
+| `init` | `--dataset --target --objective` (req), `--engine --seed --init-random --batch-size --simplex-groups --drop-cols` (opt) | Init run from CSV |
 | `build-oracle` | `--run-id` (req), `--cv-folds --max-features` (opt) | Train proxy oracle |
 | `suggest` | `--run-id` (req), `--batch-size` (opt) | Propose next candidates |
 | `observe` | `--run-id --data` (req) | Record real/simulated results |
@@ -120,6 +124,8 @@ Converter commands (separate entrypoints):
 | `column_transform` | `transform` | `--input --cols --transform --output` (req), `--keep-original` (opt) | Apply a named transform; renames column with prefix (e.g. `log10_ic50_nM`) |
 
 Engine options: `hebo` (default), `bo_lcb`, `random`, `botorch`. Note: `bo_lcb` currently supports batch-size 1 only. `botorch` requires numeric-only features — it will error on categorical columns. Use `hebo` for any dataset with categorical features.
+
+Constraints are domain knowledge, not something the engine can reliably infer from a dataset alone. When the problem description includes composition variables that must sum to a fixed total, pass them explicitly during `init` with `--simplex-groups 'col1,col2,...:total'`.
 
 ## MVP demo (copy-paste)
 
