@@ -98,6 +98,13 @@ def register_commands(sub: argparse._SubParsersAction) -> None:
         default="hebo",
         help="Default optimizer engine for this run",
     )
+    init_cmd.add_argument(
+        "--hebo-model",
+        type=str,
+        choices=["gp", "rf"],
+        default="gp",
+        help="Surrogate model used inside the HEBO optimizer",
+    )
     init_cmd.add_argument("--init-random", type=int, default=10)
     init_cmd.add_argument("--batch-size", type=int, default=1)
     init_cmd.add_argument("--max-categories", type=int, default=64)
@@ -163,6 +170,7 @@ def handle(args: argparse.Namespace, engine: BOEngine) -> int | None:
             target_column=args.target,
             objective=args.objective,
             default_engine=args.engine,
+            hebo_model=args.hebo_model,
             run_id=args.run_id,
             seed=args.seed,
             num_initial_random_samples=args.init_random,

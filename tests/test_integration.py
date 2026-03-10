@@ -7,6 +7,7 @@ using tmp_path for full isolation between tests.
 import math
 from pathlib import Path
 
+import pandas as pd
 import pytest
 
 from bo_workflow.engine import BOEngine
@@ -92,6 +93,34 @@ def test_her_full_proxy_loop(engine: BOEngine, her_csv: Path) -> None:
     _assert_standard_artifacts(paths)
 
 
+def test_her_full_proxy_loop_with_hebo_rf(engine: BOEngine, her_csv: Path) -> None:
+    """HER dataset, max objective, full proxy loop using HEBO's RF surrogate."""
+    state = engine.init_run(
+        dataset_path=her_csv,
+        target_column="Target",
+        objective="max",
+        default_engine="hebo",
+        hebo_model="rf",
+        seed=42,
+    )
+    run_id = state["run_id"]
+    run_dir = engine.get_run_dir(run_id)
+
+    build_proxy_oracle(run_dir)
+    observer = ProxyObserver(run_dir)
+    engine.run_optimization(run_id, observer=observer, num_iterations=ITERATIONS)
+
+    paths = RunPaths(run_dir=run_dir)
+    _assert_standard_artifacts(paths)
+
+    final_state = read_json(paths.state)
+    assert final_state["hebo_model"] == "rf"
+
+    report = read_json(paths.report)
+    assert report["default_engine"] == "hebo"
+    assert report["hebo_model"] == "rf"
+
+
 def test_hea_full_proxy_loop(engine: BOEngine, hea_csv: Path) -> None:
     """HEA dataset, max objective, full proxy loop."""
     _, paths = _run_full_proxy_loop(engine, hea_csv, "target", "max")
@@ -108,6 +137,45 @@ def test_oer_mixed_variables(engine: BOEngine, oer_csv: Path) -> None:
     state = read_json(paths.state)
     cat_params = [p for p in state["design_parameters"] if p["type"] == "cat"]
     assert len(cat_params) >= 1, "OER dataset should have at least one categorical parameter"
+
+
+def test_botorch_supports_mixed_categorical_suggestions(
+    engine: BOEngine, tmp_path: Path
+) -> None:
+    """BoTorch should support mixed categorical + numeric suggestions."""
+    dataset = tmp_path / "mixed_botorch.csv"
+    pd.DataFrame(
+        [
+            {"cat": "A", "num": 0.0, "target": 1.0},
+            {"cat": "A", "num": 0.5, "target": 0.8},
+            {"cat": "B", "num": 0.2, "target": 0.9},
+            {"cat": "B", "num": 0.7, "target": 0.7},
+            {"cat": "C", "num": 0.4, "target": 0.6},
+            {"cat": "C", "num": 0.9, "target": 0.5},
+        ]
+    ).to_csv(dataset, index=False)
+
+    state = engine.init_run(
+        dataset_path=dataset,
+        target_column="target",
+        objective="min",
+        default_engine="botorch",
+        num_initial_random_samples=3,
+        default_batch_size=1,
+        seed=42,
+    )
+    run_id = state["run_id"]
+
+    for y in [1.0, 0.9, 0.8]:
+        suggestion = engine.suggest(run_id)["suggestions"][0]
+        engine.observe(run_id, [{"x": suggestion["x"], "y": y}])
+
+    result = engine.suggest(run_id, batch_size=2)
+    assert result["engine"] == "botorch"
+    assert len(result["suggestions"]) == 2
+    for suggestion in result["suggestions"]:
+        assert suggestion["x"]["cat"] in {"A", "B", "C"}
+        assert 0.0 <= float(suggestion["x"]["num"]) <= 0.9
 
 
 def test_oer_simplex_constraint_projects_suggestions(
@@ -203,6 +271,24 @@ def test_human_loop_suggest_observe(engine: BOEngine, her_csv: Path) -> None:
     assert final_state["status"] == "running"
 
 
+def test_init_hebo_rf_persists_in_status(engine: BOEngine, her_csv: Path) -> None:
+    """HEBO surrogate selection should persist in state and status."""
+    state = engine.init_run(
+        dataset_path=her_csv,
+        target_column="Target",
+        objective="max",
+        default_engine="hebo",
+        hebo_model="rf",
+        seed=42,
+    )
+
+    assert state["hebo_model"] == "rf"
+
+    status = engine.status(state["run_id"])
+    assert status["default_engine"] == "hebo"
+    assert status["hebo_model"] == "rf"
+
+
 # ------------------------------------------------------------------
 # Negative / error-path tests
 # ------------------------------------------------------------------
@@ -244,6 +330,20 @@ def test_init_invalid_target_column(engine: BOEngine, her_csv: Path) -> None:
             dataset_path=her_csv,
             target_column="nonexistent_column",
             objective="max",
+        )
+
+
+def test_init_non_hebo_engine_rejects_hebo_model(
+    engine: BOEngine, her_csv: Path
+) -> None:
+    """Non-HEBO engines should reject HEBO surrogate configuration."""
+    with pytest.raises(ValueError, match="only supported when --engine hebo"):
+        engine.init_run(
+            dataset_path=her_csv,
+            target_column="Target",
+            objective="max",
+            default_engine="random",
+            hebo_model="rf",
         )
 
 

@@ -78,7 +78,7 @@ uv run python -m bo_workflow.converters.molecule_descriptors encode \
 
 Add `--verbose` to `init`, `build-oracle`, `suggest`, `observe`, `run-proxy`, and `report` to print progress logs (and a tqdm bar for `run-proxy`).
 
-Engine options: `hebo` (default), `bo_lcb`, `random`, `botorch`. `bo_lcb` supports batch-size 1 only. `botorch` requires numeric-only features, so use `hebo` for mixed or categorical datasets.
+Engine options: `hebo` (default), `bo_lcb`, `random`, `botorch`. `bo_lcb` supports batch-size 1 only. `botorch` now supports mixed numeric + categorical features via BoTorch's native mixed GP model, but `hebo` remains the default for categorical-heavy problems.
 
 Constraints are explicit run configuration, not something inferred from the CSV. If the problem has composition variables that must sum to a fixed total, declare them at init time with `--simplex-groups 'col1,col2,...:total'`.
 

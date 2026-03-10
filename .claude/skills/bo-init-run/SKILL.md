@@ -14,11 +14,12 @@ uv run python -m bo_workflow.cli init \
   --dataset <CSV_PATH> --target <TARGET_COL> --objective <min|max>
 ```
 
-Optional flags: `--engine <hebo|bo_lcb|random|botorch>` (default hebo), `--seed <N>` (default 7), `--init-random <N>` (default 10), `--batch-size <N>` (default 1), `--run-id <ID>`, `--intent-json <JSON_OR_PATH>`, `--drop-cols <col1,col2>`, `--simplex-groups <cols:total>` (repeatable).
+Optional flags: `--engine <hebo|bo_lcb|random|botorch>` (default hebo), `--hebo-model <gp|rf>` (HEBO only, default gp), `--seed <N>` (default 7), `--init-random <N>` (default 10), `--batch-size <N>` (default 1), `--run-id <ID>`, `--intent-json <JSON_OR_PATH>`, `--drop-cols <col1,col2>`, `--simplex-groups <cols:total>` (repeatable).
 
 **Engine constraints:**
 - `bo_lcb`: batch-size 1 only
-- `botorch`: numeric features only — will error if the dataset has any categorical columns; use `hebo` instead
+- `botorch`: supports mixed numeric + categorical features via BoTorch's native mixed GP model, but `hebo` is still the safer default for highly categorical spaces
+- `hebo --hebo-model rf`: preferred first fallback when `hebo --hebo-model gp` shows repeated jitter / GP fitting failures on mixed spaces
 
 **Simplex constraints:**
 

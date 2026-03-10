@@ -98,9 +98,10 @@ def _suggest_botorch(
         from botorch.acquisition.logei import qLogNoisyExpectedImprovement
         from botorch.fit import fit_gpytorch_mll
         from botorch.models import SingleTaskGP
-        from botorch.models.transforms.input import Normalize
+        from botorch.models.gp_regression_mixed import MixedSingleTaskGP
         from botorch.models.transforms.outcome import Standardize
         from botorch.optim import optimize_acqf
+        from botorch.optim.optimize_mixed import optimize_acqf_mixed_alternating
         from gpytorch.mlls import ExactMarginalLogLikelihood
     except ImportError as exc:
         raise ValueError(
@@ -109,23 +110,48 @@ def _suggest_botorch(
         ) from exc
 
     params = state["design_parameters"]
-    cat_params = [p for p in params if p["type"] == "cat"]
-    if cat_params:
-        raise ValueError(
-            f"BoTorch engine does not support categorical features: {[p['name'] for p in cat_params]}. "
-            "Use hebo or random engine instead."
-        )
-
-    num_params = [p for p in params if p["type"] == "num"]
-    feature_names = [p["name"] for p in num_params]
-    d = len(feature_names)
+    feature_names = [p["name"] for p in params]
+    num_dims = [i for i, p in enumerate(params) if p["type"] == "num"]
+    cat_dims = [i for i, p in enumerate(params) if p["type"] == "cat"]
 
     if len(observations) < state["num_initial_random_samples"]:
         np.random.seed(int(state["seed"]) + len(observations))
         return DesignSpace().parse(params).sample(batch_size)
 
+    def _encode_feature_value(param: dict[str, Any], value: Any) -> float:
+        if param["type"] == "num":
+            lb = float(param["lb"])
+            ub = float(param["ub"])
+            raw = float(value)
+            return 0.0 if np.isclose(lb, ub) else (raw - lb) / (ub - lb)
+
+        categories = list(param["categories"])
+        try:
+            return float(categories.index(str(value)))
+        except ValueError as exc:
+            raise ValueError(
+                f"Unknown categorical value '{value}' for feature '{param['name']}'."
+            ) from exc
+
+    def _decode_feature_value(param: dict[str, Any], value: float) -> Any:
+        if param["type"] == "num":
+            lb = float(param["lb"])
+            ub = float(param["ub"])
+            scaled = float(np.clip(value, 0.0, 1.0))
+            return lb + scaled * (ub - lb)
+
+        categories = list(param["categories"])
+        idx = int(np.clip(round(float(value)), 0, len(categories) - 1))
+        return categories[idx]
+
     X_train = torch.tensor(
-        [[float(obs["x"][name]) for name in feature_names] for obs in observations],
+        [
+            [
+                _encode_feature_value(param, obs["x"][param["name"]])
+                for param in params
+            ]
+            for obs in observations
+        ],
         dtype=torch.double,
     )
     # y_internal is already negated for max objectives, so minimizing y_internal = maximizing y
@@ -136,30 +162,68 @@ def _suggest_botorch(
     )
 
     bounds = torch.tensor(
-        [[p["lb"] for p in num_params], [p["ub"] for p in num_params]],
+        [
+            [
+                0.0 if p["type"] == "num" else 0.0
+                for p in params
+            ],
+            [
+                1.0 if p["type"] == "num" else float(len(p["categories"]) - 1)
+                for p in params
+            ],
+        ],
         dtype=torch.double,
     )
 
     torch.manual_seed(int(state["seed"]) + len(observations))
-    model = SingleTaskGP(
-        X_train,
-        Y_train,
-        input_transform=Normalize(d=d, bounds=bounds),
-        outcome_transform=Standardize(m=1),
-    )
+    if cat_dims:
+        model = MixedSingleTaskGP(
+            X_train,
+            Y_train,
+            cat_dims=cat_dims,
+            outcome_transform=Standardize(m=1),
+        )
+    else:
+        model = SingleTaskGP(
+            X_train,
+            Y_train,
+            outcome_transform=Standardize(m=1),
+        )
     mll = ExactMarginalLogLikelihood(model.likelihood, model)
     fit_gpytorch_mll(mll)
 
     acqf = qLogNoisyExpectedImprovement(model=model, X_baseline=X_train)
-    candidates, _ = optimize_acqf(
-        acqf,
-        bounds=bounds,
-        q=batch_size,
-        num_restarts=10,
-        raw_samples=512,
-    )
+    if cat_dims:
+        cat_choices = {
+            i: list(range(len(params[i]["categories"])))
+            for i in cat_dims
+        }
+        candidates, _ = optimize_acqf_mixed_alternating(
+            acq_function=acqf,
+            bounds=bounds,
+            cat_dims=cat_choices,
+            q=batch_size,
+            num_restarts=10,
+            raw_samples=512,
+        )
+    else:
+        candidates, _ = optimize_acqf(
+            acqf,
+            bounds=bounds,
+            q=batch_size,
+            num_restarts=10,
+            raw_samples=512,
+        )
 
-    return pd.DataFrame(candidates.detach().numpy(), columns=feature_names)
+    decoded_rows = []
+    for row in candidates.detach().cpu().numpy():
+        decoded_rows.append(
+            {
+                param["name"]: _decode_feature_value(param, row[i])
+                for i, param in enumerate(params)
+            }
+        )
+    return pd.DataFrame(decoded_rows, columns=feature_names)
 
 
 class BOEngine:
@@ -196,6 +260,7 @@ class BOEngine:
         target_column: str,
         objective: Objective,
         default_engine: OptimizerName = "hebo",
+        hebo_model: str = "gp",
         run_id: str | None = None,
         num_initial_random_samples: int = 10,
         default_batch_size: int = 1,
@@ -211,6 +276,10 @@ class BOEngine:
             raise ValueError("objective must be either 'min' or 'max'")
         if default_engine not in {"hebo", "bo_lcb", "random", "botorch"}:
             raise ValueError("default_engine must be one of: hebo, bo_lcb, random, botorch")
+        if hebo_model not in {"gp", "rf"}:
+            raise ValueError("hebo_model must be one of: gp, rf")
+        if default_engine != "hebo" and hebo_model != "gp":
+            raise ValueError("hebo_model is only supported when --engine hebo is selected.")
 
         dataset_path = Path(dataset_path).resolve()
         if not dataset_path.exists():
@@ -266,6 +335,7 @@ class BOEngine:
             "target_column": target_column,
             "objective": objective,
             "default_engine": default_engine,
+            "hebo_model": hebo_model,
             "seed": int(seed),
             "num_initial_random_samples": int(num_initial_random_samples),
             "default_batch_size": int(default_batch_size),
@@ -316,6 +386,8 @@ class BOEngine:
                     "dataset_path": str(dataset_path),
                     "target_column": target_column,
                     "objective": objective,
+                    "default_engine": default_engine,
+                    "hebo_model": hebo_model,
                     "seed": int(seed),
                     "num_initial_random_samples": int(num_initial_random_samples),
                     "default_batch_size": int(default_batch_size),
@@ -343,7 +415,7 @@ class BOEngine:
         if engine_name == "hebo":
             optimizer: HEBO | BO = HEBO(
                 design_space,
-                model_name="gp",
+                model_name=str(state.get("hebo_model", "gp")),
                 rand_sample=int(state["num_initial_random_samples"]),
                 scramble_seed=int(state["seed"]),
             )
@@ -553,6 +625,7 @@ class BOEngine:
             "status": state["status"],
             "objective": state["objective"],
             "default_engine": state.get("default_engine", "hebo"),
+            "hebo_model": state.get("hebo_model", "gp"),
             "target_column": state["target_column"],
             "active_features": state["active_features"],
             "ignored_features": state["ignored_features"],
@@ -623,6 +696,8 @@ class BOEngine:
             "generated_at": utc_now_iso(),
             "num_observations": len(observations),
             "objective": state["objective"],
+            "default_engine": state.get("default_engine", "hebo"),
+            "hebo_model": state.get("hebo_model", "gp"),
             "target_column": state["target_column"],
             "best_value": status.get("best_value"),
             "best_iteration": status.get("best_iteration"),

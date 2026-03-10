@@ -123,7 +123,7 @@ Converter commands (separate entrypoints):
 | `column_transform` | `profile` | `--input` (req), `--cols` (opt) | Analyse columns and recommend transforms |
 | `column_transform` | `transform` | `--input --cols --transform --output` (req), `--keep-original` (opt) | Apply a named transform; renames column with prefix (e.g. `log10_ic50_nM`) |
 
-Engine options: `hebo` (default), `bo_lcb`, `random`, `botorch`. Note: `bo_lcb` currently supports batch-size 1 only. `botorch` requires numeric-only features — it will error on categorical columns. Use `hebo` for any dataset with categorical features.
+Engine options: `hebo` (default), `bo_lcb`, `random`, `botorch`. Note: `bo_lcb` currently supports batch-size 1 only. `botorch` supports mixed numeric + categorical features via BoTorch's native mixed GP model, but `hebo` remains the default for strongly categorical problems.
 
 Constraints are domain knowledge, not something the engine can reliably infer from a dataset alone. When the problem description includes composition variables that must sum to a fixed total, pass them explicitly during `init` with `--simplex-groups 'col1,col2,...:total'`.
 
