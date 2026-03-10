@@ -42,6 +42,15 @@ data/
   buchwald_hartwig_rxns.csv  # Buchwald-Hartwig reaction SMILES dataset
   egfr_ic50.csv              # EGFR IC50 dataset (full, ~10k molecules)
   egfr_seed50_mixed.csv      # EGFR seed set (50 labeled molecules)
+  OER_catalyst_data.csv      # OER catalyst dataset (multi-metal, synthesis conditions)
+  caltech_oer/
+    plate_3496.csv           # Mn-Fe-Co-Ni-La-Ce oxides, 2121 compositions (Rohr 2020, Chem Sci)
+    plate_3851.csv           # Mn-Fe-Co-Ni-Cu-Ta oxides, 2119 compositions
+    plate_3860.csv           # Mn-Fe-Co-Cu-Sn-Ta oxides, 2121 compositions
+    plate_4098.csv           # Ca-Mn-Co-Ni-Sn-Sb oxides, 2121 compositions
+    # Source: data.caltech.edu/records/7b106-nf257 (Gregoire Group / TRI)
+    # Target: overpotential_V at 3 mA/cm² (lower is better → --objective min)
+    # All 6 molar_fraction cols sum to 1.0 → use --simplex-groups at init
 ```
 
 ### Key design boundaries

@@ -39,10 +39,12 @@ class SimplexConstraint(Constraint):
                 f"SimplexConstraint columns not found in suggestions: {missing}"
             )
         suggestions = suggestions.copy()
+        # Clip negatives first — proportions must be non-negative.
+        suggestions[self.cols] = suggestions[self.cols].clip(lower=0.0)
         row_sums = suggestions[self.cols].sum(axis=1)
         zero_mask = row_sums == 0
         if zero_mask.any():
-            # All-zero rows: distribute total uniformly rather than divide by zero.
+            # All-zero rows (including all-negative-then-clipped): distribute uniformly.
             for col in self.cols:
                 suggestions.loc[zero_mask, col] = self.total / len(self.cols)
             row_sums = suggestions[self.cols].sum(axis=1)
