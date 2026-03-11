@@ -18,11 +18,12 @@ from bo_workflow.observers.proxy import ProxyObserver
 from bo_workflow.oracle import build_proxy_oracle
 from bo_workflow.plotting import plot_optimization_convergence
 
-ENGINE_CHOICES = ("hebo", "bo_lcb", "random")
+ENGINE_CHOICES = ("hebo", "bo_lcb", "random", "botorch")
 ENGINE_LABELS = {
     "hebo": "HEBO",
     "bo_lcb": "BO (LCB)",
     "random": "Random Search",
+    "botorch": "BoTorch",
 }
 
 
@@ -89,6 +90,12 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--seed", type=int, default=7)
     parser.add_argument("--runs-root", type=Path, default=Path("runs"))
     parser.add_argument(
+        "--drop-cols",
+        type=str,
+        default=None,
+        help="Comma-separated column names to exclude from the feature space",
+    )
+    parser.add_argument(
         "--engines",
         nargs="+",
         choices=list(ENGINE_CHOICES),
@@ -119,6 +126,8 @@ def main(argv: list[str] | None = None) -> int:
         raise ValueError("--repeats must be >= 1")
     if "bo_lcb" in args.engines and args.batch_size != 1:
         raise ValueError("bo_lcb currently supports batch-size=1 only")
+
+    drop_cols = [c.strip() for c in args.drop_cols.split(",") if c.strip()] if args.drop_cols else []
 
     engine = BOEngine(runs_root=args.runs_root)
     methods_data: dict[str, np.ndarray] = {}
@@ -151,6 +160,7 @@ def main(argv: list[str] | None = None) -> int:
                 seed=run_seed,
                 num_initial_random_samples=args.init_random,
                 default_batch_size=args.batch_size,
+                drop_cols=drop_cols,
             )
             run_id = str(state["run_id"])
             if args.verbose:

@@ -53,3 +53,5 @@ p.write_text(json.dumps(state, indent=2))
 - Include oracle CV RMSE when presenting optimization results.
 - If user asks for real lab mode, do not auto-evaluate suggestions with the proxy oracle.
 - `bo_lcb` supports batch-size 1 only.
+- `botorch` supports mixed numeric + categorical features via BoTorch's native mixed GP model, but `hebo` is still the safer default for strongly categorical problems.
+- If a HEBO run on a mixed space shows repeated GP jitter / random-prediction fallback, retry with `--engine hebo --hebo-model rf` before making larger architectural changes.

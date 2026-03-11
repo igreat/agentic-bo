@@ -104,5 +104,5 @@ uv run python -m bo_workflow.converters.molecule_descriptors encode \
 # 4. Init BO — note updated --target name
 uv run python -m bo_workflow.cli init \
   --dataset data/egfr_log_desc/features.csv \
-  --target log10_ic50_nM --objective min --engine botorch
+  --target log10_ic50_nM --objective min --engine hebo
 ```
