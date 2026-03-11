@@ -1,6 +1,7 @@
 """Core BO engine.
 
-This module keeps optimization state on disk (`bo_runs/<run_id>/`) and rebuilds
+By default, this module keeps optimization state on disk under
+`<runs_root>/<run_id>` (with `runs_root` defaulting to `bo_runs`) and rebuilds
 optimizers from logged observations when needed. That replay-first design keeps
 the workflow resumable and robust for human-in-the-loop usage.
 """

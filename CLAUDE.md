@@ -10,6 +10,7 @@ The top-level goal is:
 - draft a paper or report.
 
 Bayesian optimization is an internal execution layer inside that larger workflow, not the whole product. BO run state lives under `bo_runs/<run_id>/`. Top-level research workflow artifacts live under `research_runs/<research_id>/`.
+If you're resuming runs from an older checkout, their state may live under `runs/<run_id>/` instead — either pass `--runs-root runs` to the CLI or move those run directories into `bo_runs/` before resuming.
 
 ## Setup
 
