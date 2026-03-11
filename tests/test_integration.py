@@ -240,6 +240,38 @@ def test_bh_feature_selection(engine: BOEngine, bh_csv: Path) -> None:
     assert "original_design_parameters" in state
 
 
+@pytest.mark.slow
+def test_simplex_constrained_columns_pinned_during_feature_selection(
+    engine: BOEngine, oer_csv: Path
+) -> None:
+    """Simplex-constrained columns must survive --max-features feature selection."""
+    simplex_cols = ["Metal_1_Proportion", "Metal_2_Proportion", "Metal_3_Proportion"]
+    state = engine.init_run(
+        dataset_path=oer_csv,
+        target_column="Overpotential mV @10 mA cm-2",
+        objective="min",
+        seed=42,
+        constraints=[{"type": "simplex", "cols": simplex_cols, "total": 100.0}],
+    )
+    run_id = state["run_id"]
+    paths = RunPaths(run_dir=engine.get_run_dir(run_id))
+
+    # Request far fewer features than the dataset has — constrained cols must survive.
+    from bo_workflow.oracle import build_proxy_oracle
+    build_proxy_oracle(paths.run_dir, max_features=3)
+
+    updated_state = read_json(paths.state)
+    active = set(updated_state["active_features"])
+    for col in simplex_cols:
+        assert col in active, f"Constrained column '{col}' was dropped by feature selection"
+
+    # Suggestions must still satisfy the constraint.
+    result = engine.suggest(run_id, batch_size=2)
+    for suggestion in result["suggestions"]:
+        total = sum(float(suggestion["x"][c]) for c in simplex_cols)
+        assert total == pytest.approx(100.0)
+
+
 # ------------------------------------------------------------------
 # Human-in-the-loop test
 # ------------------------------------------------------------------
