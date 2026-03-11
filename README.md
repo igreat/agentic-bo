@@ -105,7 +105,7 @@ Each round suggests molecules in descriptor space, maps them to the nearest real
 
 ## Run artifacts
 
-Each run writes to `runs/<RUN_ID>/`:
+Each run writes to `bo_runs/<RUN_ID>/`:
 
 `state.json`, `oracle.pkl`, `oracle_meta.json`, `suggestions.jsonl`, `observations.jsonl`, `convergence.pdf`, `report.json`
 

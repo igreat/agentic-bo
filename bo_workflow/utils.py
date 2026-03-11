@@ -103,7 +103,7 @@ def row_to_python_dict(row: pd.Series) -> dict[str, Any]:
 
 @dataclass(frozen=True)
 class RunPaths:
-    """Canonical file locations under `runs/<run_id>/`."""
+    """Canonical file locations under `bo_runs/<run_id>/`."""
 
     run_dir: Path
 

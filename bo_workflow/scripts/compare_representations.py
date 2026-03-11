@@ -93,7 +93,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--n-bits", type=int, default=256, help="DRFP fingerprint length")
     parser.add_argument("--morgan-bits", type=int, default=64, help="Morgan FP bits per SMILES col")
-    parser.add_argument("--runs-root", type=Path, default=Path("runs"))
+    parser.add_argument("--runs-root", type=Path, default=Path("bo_runs"))
     parser.add_argument(
         "--reps", nargs="+",
         choices=list(REP_LABELS),

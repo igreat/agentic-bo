@@ -1,6 +1,6 @@
 """Core BO engine.
 
-This module keeps optimization state on disk (`runs/<run_id>/`) and rebuilds
+This module keeps optimization state on disk (`bo_runs/<run_id>/`) and rebuilds
 optimizers from logged observations when needed. That replay-first design keeps
 the workflow resumable and robust for human-in-the-loop usage.
 """
@@ -228,7 +228,7 @@ def _suggest_botorch(
 class BOEngine:
     """Dataset-driven Bayesian optimization engine with persisted run state."""
 
-    def __init__(self, runs_root: str | Path = "runs") -> None:
+    def __init__(self, runs_root: str | Path = "bo_runs") -> None:
         self.runs_root = Path(runs_root)
         self.runs_root.mkdir(parents=True, exist_ok=True)
 
