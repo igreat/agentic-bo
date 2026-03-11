@@ -19,6 +19,10 @@ dependencies = [
     "drfp>=0.3.6",
 ]
 
+[project.optional-dependencies]
+dft = ["pyscf>=2.4", "rdkit>=2023.3", "pyscf-properties>=0.1"]
+dft-vbur = ["morfeus-ml>=0.7"]
+
 [dependency-groups]
 dev = ["pytest>=8.0", "ruff>=0.15.0"]
 
