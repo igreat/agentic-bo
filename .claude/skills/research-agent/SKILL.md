@@ -55,8 +55,12 @@ Use this `research_state.json` shape in v1:
   "bo_results": {
     "best_value": null,
     "best_x": null,
+    "best_iteration": null,
+    "num_observations": null,
+    "oracle_model": null,
     "oracle_rmse": null,
-    "report_path": null
+    "report_path": null,
+    "convergence_plot_path": null
   },
   "paper_path": null,
   "phases": {
@@ -151,8 +155,12 @@ Delegate based on mode:
 Always finish with `bo-report-run` and write:
 - `best_value`
 - `best_x`
+- `best_iteration`
+- `num_observations`
+- `oracle_model` when applicable
 - `oracle_rmse` when applicable
 - `report_path`
+- `convergence_plot_path`
 
 Do not delegate simulation mode to `bo-end-to-end-proxy` once Phase 3 has already run `bo-init-run` and `bo-build-proxy-oracle`; that would re-initialize the BO run and duplicate setup.
 

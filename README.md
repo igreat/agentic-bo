@@ -1,16 +1,20 @@
-# Bayesian Optimisation Workflow
+# Research Agent Workflow
 
-A practical BO workflow for scientific discovery in chemistry.
+This repo is evolving toward a **research-agent-first** workflow for chemistry and materials discovery.
 
-This repository is intended to be an **agent-operable optimization engine**:
+The top-level goal is:
 
-- define an optimization problem,
-- build or plug in an objective evaluator (real experiment or proxy oracle),
-- run iterative BO suggestions,
-- track state and results for human-in-the-loop workflows.
+- start from a research problem in plain English,
+- frame the problem and optional literature context,
+- set up and execute an optimization campaign,
+- interpret the outcome,
+- draft a paper or report.
+
+Bayesian optimization is an internal execution layer inside that larger workflow, not the whole product. BO run state lives under `bo_runs/<run_id>/`. Top-level research workflow artifacts live under `research_runs/<research_id>/`.
 
 ## Scope
 
+- Top-level research workflow orchestration via agent skills.
 - Single-objective BO from tabular datasets with persisted run state and JSON CLI.
 - **Converters** transform non-tabular inputs (e.g. reaction SMILES) into numerical features the BO engine can optimize over, and decode suggestions back to interpretable results.
 
@@ -26,7 +30,24 @@ uv pip install --no-deps "hebo @ git+https://github.com/huawei-noah/HEBO.git#sub
 > already declares the real runtime dependencies, so skipping HEBO's own
 > dependency resolution is safe.
 
-## Quick start
+## Quick Start
+
+### Full Research Workflow
+
+Use `research-agent` when the user wants:
+
+- problem framing
+- optional literature review
+- experiment setup
+- BO execution
+- interpretation
+- paper drafting
+
+`research-agent` v1 has two modes:
+- `simulation`: retrospective dataset-backed workflow using the proxy oracle and `run-proxy`
+- `warm_start_human`: initialize from a dataset and/or prior observations, then continue through `suggest` / `observe` with user-provided results
+
+### BO-Only Quick Start
 
 ```bash
 uv run python -m bo_workflow.cli init \
@@ -39,7 +60,7 @@ uv run python -m bo_workflow.cli run-proxy --run-id <RUN_ID> --iterations 20
 uv run python -m bo_workflow.cli report --run-id <RUN_ID>
 ```
 
-## CLI commands
+## BO CLI Commands
 
 ```bash
 uv run python -m bo_workflow.cli --help
@@ -54,15 +75,12 @@ uv run python -m bo_workflow.cli --help
 | `run-proxy` | Run an end-to-end simulated BO loop |
 | `status` | Show best-so-far and run metadata |
 | `report` | Generate JSON report and convergence plot |
-| `encode` | Encode reaction SMILES into DRFP fingerprint features |
-| `decode` | Decode fingerprint suggestions back to nearest real reactions |
-
-Converter commands use a separate entrypoint: `uv run python -m bo_workflow.converters.reaction_drfp <encode|decode> [flags]`
 
 Converter commands use separate module entrypoints:
 
 - `uv run python -m bo_workflow.converters.reaction_drfp <encode|decode> [flags]`
 - `uv run python -m bo_workflow.converters.molecule_descriptors <encode|decode> [flags]`
+- `uv run python -m bo_workflow.converters.column_transform <profile|transform> [flags]`
 
 Examples:
 
@@ -109,8 +127,15 @@ Each run writes to `bo_runs/<RUN_ID>/`:
 
 `state.json`, `oracle.pkl`, `oracle_meta.json`, `suggestions.jsonl`, `observations.jsonl`, `convergence.pdf`, `report.json`
 
+## Research Artifacts
+
+Each top-level research workflow writes to `research_runs/<RESEARCH_ID>/`:
+
+`research_state.json`, `research_plan.md`, `paper.md`
+
 ## Design notes
 
+- `research-agent` is the top-level orchestration layer. Use BO skills directly only when the user wants the optimization subsystem without the surrounding research workflow.
 - The engine is replay-first: it rebuilds optimizer state from logged observations. This makes runs easy to resume and audit.
 - Proxy mode is a simulation workflow. Always present results as simulated outcomes and include oracle CV RMSE.
 - `data/HER_virtual_data.csv` is included as an example dataset only. In real usage, users should provide problem-specific context (target meaning, constraints, objective direction, and valid operating domain).
@@ -146,13 +171,27 @@ data/
   buchwald_hartwig_rxns.csv  # Buchwald-Hartwig reaction SMILES dataset
   egfr_ic50.csv              # EGFR IC50 dataset (~10k molecules)
   egfr_seed50_mixed.csv      # EGFR seed set (50 labeled molecules)
+  OER_catalyst_data.csv      # OER catalyst dataset (multi-metal, synthesis conditions)
+  caltech_oer/
+    plate_3496.csv           # Mn-Fe-Co-Ni-La-Ce oxides, 2121 compositions
+    plate_3851.csv           # Mn-Fe-Co-Ni-Cu-Ta oxides, 2119 compositions
+    plate_3860.csv           # Mn-Fe-Co-Cu-Sn-Ta oxides, 2121 compositions
+    plate_4098.csv           # Ca-Mn-Co-Ni-Sn-Sb oxides, 2121 compositions
+.agents/
+  skills/         # mirrored agent skill tree
 .claude/
-  skills/         # Claude Code skills mapping to CLI commands
+  skills/         # mirrored Claude skill tree
+research_runs/
+  <research_id>/  # research workflow state, notebook, and paper draft
 ```
 
-## Claude Skills
+## Skills
 
-Skills in `.claude/skills/` provide the agent interface:
+Skills in `.agents/skills/` and `.claude/skills/` provide the agent interface:
+
+- `research-agent` — top-level research workflow orchestration
+- `literature-review` — lightweight literature support for research-agent
+- `scientific-writing` — IMRAD-style drafting from workflow artifacts
 
 - `bo-init-run` — initialize a run
 - `bo-build-proxy-oracle` — train proxy oracle
@@ -164,7 +203,3 @@ Skills in `.claude/skills/` provide the agent interface:
 - `bo-decode-drfp` — decode suggestions back to real reactions
 - `bo-encode-molecule-descriptors` — encode molecule SMILES to descriptor features
 - `bo-decode-molecule-descriptors` — decode descriptor suggestions to real molecules
-
-## Credits
-
-Much of the underlying HEBO and problem specific part of the code is taken from/inspired from [BO-Tutorial-for-Sci](https://github.com/zwyu-ai/BO-Tutorial-for-Sci).

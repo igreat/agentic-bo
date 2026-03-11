@@ -7,6 +7,10 @@ description: Record observed objective values and update run history.
 
 Use this skill when outcomes for suggested experiments are available.
 
+## Before recording
+
+Read `bo_runs/<RUN_ID>/state.json` to get `active_features` and `target_column`. If the human's result is informal (e.g. "got 312 mV with 60% Ru, 40% Ir"), map it to the correct feature names. For any feature not mentioned, use the value from the original suggestion. Confirm ambiguous mappings with the user before recording.
+
 ## Command
 
 ```bash
