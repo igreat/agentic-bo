@@ -92,8 +92,6 @@ If the execution config specifies compositional constraints (columns whose value
 
 Format: `'col1,col2,...:total'` — comma-separated column names, colon, then the required sum.
 
-> **Do NOT use `bo-transform-columns` for simplex.** That skill handles scale transforms (log, sqrt, standardize) only. Simplex is a search-space constraint enforced at suggest time, not a column transform.
-
 Constraints are stored in `state.json["constraints"]` at `init` time and enforced automatically at every `suggest` call by renormalizing group columns to sum to `total`. No action is needed after `init`.
 
 If no simplex constraints apply, skip to Step 4.
