@@ -13,7 +13,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--runs-root",
         type=Path,
-        default=Path("runs"),
+        default=Path("bo_runs"),
         help="Directory where run state and artifacts are stored",
     )
     sub = parser.add_subparsers(dest="command", required=True)

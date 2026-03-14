@@ -88,7 +88,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--max-features", type=int, default=None)
     parser.add_argument("--repeats", type=int, default=1)
     parser.add_argument("--seed", type=int, default=7)
-    parser.add_argument("--runs-root", type=Path, default=Path("runs"))
+    parser.add_argument("--runs-root", type=Path, default=Path("bo_runs"))
     parser.add_argument(
         "--drop-cols",
         type=str,

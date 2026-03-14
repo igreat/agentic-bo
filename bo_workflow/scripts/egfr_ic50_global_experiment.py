@@ -323,7 +323,7 @@ def main(argv=None) -> int:
         "rounds": round_results,
     }
 
-    out_path = Path(f"runs/{run_id}/egfr_global_results.json")
+    out_path = run_dir / "egfr_global_results.json"
     out_path.write_text(json.dumps(output, indent=2))
 
     print(f"\nBest in full dataset:  {best_in_dataset:.3f}")
