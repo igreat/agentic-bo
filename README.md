@@ -145,47 +145,29 @@ Each top-level research workflow writes to `research_runs/<RESEARCH_ID>/`:
 ## Layout
 
 ```text
-bo_workflow/
-  engine.py       # BOEngine — suggest/observe loop, no oracle knowledge
-  engine_cli.py   # CLI subcommands: init, suggest, observe, status, report
-  oracle.py       # standalone proxy oracle — train, load, predict on run_dir
-  oracle_cli.py   # CLI subcommands: build-oracle, run-proxy
-  cli.py          # top-level entrypoint — composes subparsers from each module
-  plotting.py     # convergence plot generation
-  utils.py        # RunPaths, JSON I/O, shared types
-  constraints/
-    base.py       # Constraint ABC — enforce search-space constraints at suggest time
-    simplex.py    # SimplexConstraint — composition variables summing to a fixed total
-  observers/
-    base.py       # Observer ABC — evaluate(suggestions) interface
-    proxy.py      # ProxyObserver — self-contained, captures run_dir at init
-    callback.py   # CallbackObserver — delegates to user callback
-  converters/
-    molecule_descriptors.py  # RDKit descriptor encode/decode for molecule SMILES
-    reaction_drfp.py  # DRFP fingerprint encode/decode for reaction SMILES
-  scripts/
-    compare_optimizers.py           # benchmark hebo/bo_lcb/random
-    compare_representations.py      # benchmark descriptor/DRFP/combined representations
-    egfr_ic50_global_experiment.py  # EGFR global simulation experiment
-    egfr_utils.py                   # shared data loading helpers for EGFR scripts
-data/
-  HER_virtual_data.csv       # example dataset (HER virtual screen)
-  buchwald_hartwig_rxns.csv  # Buchwald-Hartwig reaction SMILES dataset
-  egfr_ic50.csv              # EGFR IC50 dataset (~10k molecules)
-  egfr_seed50_mixed.csv      # EGFR seed set (50 labeled molecules)
-  OER_catalyst_data.csv      # OER catalyst dataset (multi-metal, synthesis conditions)
-  caltech_oer/
-    plate_3496.csv           # Mn-Fe-Co-Ni-La-Ce oxides, 2121 compositions
-    plate_3851.csv           # Mn-Fe-Co-Ni-Cu-Ta oxides, 2119 compositions
-    plate_3860.csv           # Mn-Fe-Co-Cu-Sn-Ta oxides, 2121 compositions
-    plate_4098.csv           # Ca-Mn-Co-Ni-Sn-Sb oxides, 2121 compositions
-.agents/
-  skills/         # mirrored agent skill tree
-.claude/
-  skills/         # mirrored Claude skill tree
-research_runs/
-  <research_id>/  # research workflow state, notebook, and paper draft
+.
+|-- bo_workflow/
+|   |-- constraints/
+|   |-- converters/
+|   |-- observers/
+|   `-- scripts/
+|-- data/
+|   `-- caltech_oer/
+|-- .agents/
+|   `-- skills/
+|-- .claude/
+|   `-- skills/
+|-- bo_runs/
+|   `-- <run_id>/
+`-- research_runs/
+    `-- <research_id>/
 ```
+
+- `bo_workflow/` contains the BO engine, CLI wiring, oracle layer, converters, constraints, and reusable scripts.
+- `data/` contains example and benchmark datasets used by the BO and research workflows.
+- `.agents/skills/` and `.claude/skills/` contain the mirrored agent skill trees.
+- `bo_runs/` stores BO run state and report artifacts.
+- `research_runs/` stores top-level research workflow state, notes, and paper drafts.
 
 ## Skills
 
