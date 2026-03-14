@@ -591,6 +591,7 @@ def encode_reactions_dft(
     verbose: bool = False,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Legacy wrapper — calls encode_dataset_dft and returns (features, catalog)."""
+    input_df = pd.read_csv(input_path)
     result = encode_dataset_dft(
         input_path, output_dir,
         target_col=yield_col,
@@ -600,12 +601,18 @@ def encode_reactions_dft(
     )
     # Split into features (no SMILES) and catalog (with SMILES)
     if components is None:
-        smiles_cols = detect_smiles_columns(pd.read_csv(input_path))
+        smiles_cols = detect_smiles_columns(input_df)
     else:
-        smiles_cols = [s.csv_column for s in components]
+        smiles_cols = [s.csv_column for s in components if s.csv_column in input_df.columns]
     features_df = result.drop(columns=[c for c in smiles_cols if c in result.columns],
                               errors="ignore")
-    return features_df, result
+
+    catalog_df = input_df.copy()
+    for col in result.columns:
+        if col not in catalog_df.columns:
+            catalog_df[col] = result[col]
+
+    return features_df, catalog_df
 
 
 # ---------------------------------------------------------------------------

@@ -53,13 +53,24 @@ class DescriptorCache:
 
     @staticmethod
     def _canonical(smiles: str) -> str:
-        """Canonicalize SMILES for cache key consistency."""
+        """Canonicalize SMILES for cache key consistency.
+
+        Supports either plain SMILES or ``prefix::SMILES`` keys so the same
+        molecule can be cached separately for different component roles while
+        still canonicalizing the molecular part.
+        """
+        prefix = ""
+        smiles_part = smiles
+        if "::" in smiles:
+            prefix, smiles_part = smiles.split("::", 1)
+            prefix = f"{prefix}::"
+
         try:
             from rdkit import Chem
 
-            mol = Chem.MolFromSmiles(smiles)
+            mol = Chem.MolFromSmiles(smiles_part)
             if mol is not None:
-                return Chem.MolToSmiles(mol)
+                return prefix + Chem.MolToSmiles(mol)
         except Exception:
             pass
-        return smiles
+        return prefix + smiles_part
