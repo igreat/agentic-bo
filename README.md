@@ -47,7 +47,7 @@ Use `research-agent` when the user wants:
 
 `research-agent` v1 has two modes:
 - `simulation`: retrospective dataset-backed workflow using the proxy oracle and `run-proxy`
-- `warm_start_human`: initialize from a dataset and/or prior observations, then continue through `suggest` / `observe` with user-provided results
+- `human_in_the_loop`: initialize from a dataset or search-space template, optionally seed prior observations, then continue through `suggest` / `observe` with user-provided results
 
 ### BO-Only Quick Start
 
@@ -195,6 +195,7 @@ Skills in `.agents/skills/` and `.claude/skills/` provide the agent interface:
 - `literature-review` — lightweight literature support for research-agent
 - `scientific-writing` — IMRAD-style drafting from workflow artifacts
 
+- `bo-execution-workflow` — BO-layer execution helper once problem framing is already resolved
 - `bo-init-run` — initialize a run
 - `bo-build-proxy-oracle` — train proxy oracle
 - `bo-next-batch` — suggest candidates

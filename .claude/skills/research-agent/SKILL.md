@@ -9,7 +9,7 @@ Use this skill when the user wants a top-level research workflow rather than a r
 
 V1 supports two modes only:
 - `simulation`: retrospective dataset-backed proxy BO
-- `warm_start_human`: user has some prior observations and then continues in a human-in-the-loop BO loop
+- `human_in_the_loop`: the user runs real experiments and reports outcomes manually, optionally starting from prior observations
 
 Do not treat proxy evaluation as the default scientific workflow. It is a simulation backend for demos and retrospective testing.
 
@@ -33,7 +33,7 @@ Use this `research_state.json` shape in v1:
 {
   "research_id": "string",
   "research_question": "string",
-  "mode": "simulation | warm_start_human",
+  "mode": "simulation | human_in_the_loop",
   "system": null,
   "objective_property": null,
   "objective_direction": null,
@@ -97,7 +97,7 @@ Resolve and write:
 
 Mode selection rules — apply exactly one:
 - Dataset provided AND user wants a fully automated retrospective run → `simulation`
-- User has prior observations OR intends to supply future observations manually → `warm_start_human`
+- User intends to supply future observations manually, with or without prior observations → `human_in_the_loop`
 - If neither fits clearly, ask before proceeding.
 
 Also decide whether to run a literature search:
@@ -138,19 +138,26 @@ Rules:
   - likely physical or chemical constraints
 - Present that draft as a recommendation for the user to confirm or edit before BO init.
 
-Delegate to BO skills:
+Delegate the BO-layer setup to `bo-execution-workflow`. That skill owns:
+- dataset validation
+- simplex and `--drop-cols` execution config
+- representation/encoding handoff to BO converters when the representation plan requires it
 - `bo-init-run`
-- `bo-build-proxy-oracle` in `simulation` mode only
-- `bo-record-observation` to seed prior observations in `warm_start_human` mode
+- `bo-build-proxy-oracle` in `simulation` mode
+- `bo-record-observation` to seed prior observations in `human_in_the_loop` mode when they exist
+
+In Phase 3, call `bo-execution-workflow` in **setup-only** mode:
+- `simulation`: stop once `init` and `build-oracle` are complete
+- `human_in_the_loop`: stop once `init` and any seed observations are complete
 
 Write the resulting BO run ID into `research_state.json.bo_run_id`.
 Keep `research_state.json.experiment_spec.constraints` structured and machine-readable. Do not collapse constraints into prose strings if they were originally represented as typed objects or explicit column groups.
 
 ### 4. BO Execution
 
-Delegate based on mode:
-- `simulation`: use the existing `bo_run_id` created in Phase 3 and continue with `uv run python -m bo_workflow.cli run-proxy --run-id <BO_RUN_ID> --iterations <N> [--batch-size <N>]`, then finish with `bo-report-run`
-- `warm_start_human`: iterative `bo-next-batch` plus `bo-record-observation`
+Delegate BO execution to `bo-execution-workflow`, using the resolved mode and execution config from Phase 3:
+- `simulation`: continue on the existing `bo_run_id` from Phase 3 with `run-proxy`, then finish with `bo-report-run`
+- `human_in_the_loop`: continue on the existing `bo_run_id` from Phase 3 through iterative `suggest` / `observe` / `report`
 
 Always finish with `bo-report-run` and write:
 - `best_value`
@@ -162,7 +169,11 @@ Always finish with `bo-report-run` and write:
 - `report_path`
 - `convergence_plot_path`
 
-Do not delegate simulation mode to `bo-end-to-end-proxy` once Phase 3 has already run `bo-init-run` and `bo-build-proxy-oracle`; that would re-initialize the BO run and duplicate setup.
+Do not re-run Phase 3 setup during Phase 4. In particular:
+- do not call `bo-end-to-end-proxy`
+- do not re-run `init`
+- do not re-run `build-oracle`
+- always continue from the existing `bo_run_id`
 
 ### 5. Interpretation
 
@@ -205,7 +216,7 @@ On resume:
 
 - Always label simulation results as proxy-oracle simulations.
 - Include oracle CV RMSE whenever reporting simulation results.
-- Never auto-record observations in `warm_start_human` mode.
-- Do not call `bo-end-to-end-proxy` in `warm_start_human` mode.
+- Never auto-record observations in `human_in_the_loop` mode.
+- Do not call `bo-end-to-end-proxy` in `human_in_the_loop` mode.
 - Keep `research_state.json` concise and structured; put narrative detail in `research_plan.md`.
 - Fully prospective no-dataset mode is out of scope for v1.
