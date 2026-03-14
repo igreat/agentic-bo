@@ -145,9 +145,23 @@ def _nn_snap_report(
     active_features = list(state["active_features"])
     ascending = state.get("objective") == "min"
 
-    feature_cols = [c for c in active_features if c in catalog_df.columns]
-    if not feature_cols:
+    present_feature_cols = [c for c in active_features if c in catalog_df.columns]
+    if not present_feature_cols:
         report["nn_snap_error"] = "No active features found in catalog"
+        return report
+
+    # Euclidean nearest-neighbor indexing requires numeric feature columns.
+    feature_cols = [
+        c for c in present_feature_cols if pd.api.types.is_numeric_dtype(catalog_df[c])
+    ]
+    dropped_non_numeric = [
+        c for c in present_feature_cols if c not in set(feature_cols)
+    ]
+    if not feature_cols:
+        report["nn_snap_error"] = (
+            "No numeric active features available for Euclidean nn-snap indexing"
+        )
+        report["nn_snap_non_numeric_features"] = dropped_non_numeric
         return report
 
     catalog_df["_orig_idx"] = range(len(catalog_df))
@@ -208,10 +222,16 @@ def _nn_snap_report(
     report["nn_snap"] = {
         "catalog": catalog_path,
         "catalog_rows": len(catalog_df),
+        "feature_columns_used": feature_cols,
         "unique_entries_visited": len(unique_entries),
         "top_k": top_k,
         "entries": top_entries,
     }
+    if dropped_non_numeric:
+        report["nn_snap_warning"] = (
+            "Dropped non-numeric active features for Euclidean nn-snap"
+        )
+        report["nn_snap_non_numeric_features"] = dropped_non_numeric
     return report
 
 
