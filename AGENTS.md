@@ -107,9 +107,10 @@ Use `research-agent` when the user wants an end-to-end study workflow:
 
 `research-agent` v1 has two modes:
 - `simulation`: retrospective dataset-backed workflow using the proxy oracle and `run-proxy`
-- `warm_start_human`: initialize from a dataset and/or prior observations, then continue through `suggest` / `observe` with user-provided results
+- `human_in_the_loop`: initialize from a dataset or search-space template, optionally seed prior observations, then continue through `suggest` / `observe` with user-provided results
 
 Use the BO skills directly when the user wants only the optimization subsystem:
+- `bo-execution-workflow` for a resolved BO-layer setup/execution handoff
 - init / suggest / observe
 - build-oracle / run-proxy
 - reporting
@@ -226,7 +227,7 @@ uv run python -m bo_workflow.cli observe --run-id <RUN_ID> --data '{"x": {...}, 
 # repeat suggest/observe
 ```
 
-Within `research-agent`, this low-level pattern maps to `warm_start_human` mode.
+Within `research-agent`, this low-level pattern maps to `human_in_the_loop` mode.
 
 In `simulation` mode, once Phase 3 has already run `init` and `build-oracle`, continue with `run-proxy --run-id <RUN_ID> ...` on the existing BO run. Do not delegate that phase to `bo-end-to-end-proxy`, because that skill re-initializes the run from scratch.
 

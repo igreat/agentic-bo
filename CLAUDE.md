@@ -107,9 +107,10 @@ Use `research-agent` when the user wants an end-to-end study workflow:
 
 `research-agent` v1 has two modes:
 - `simulation`: retrospective dataset-backed workflow using the proxy oracle and `run-proxy`
-- `warm_start_human`: initialize from a dataset and/or prior observations, then continue through `suggest` / `observe` with user-provided results
+- `human_in_the_loop`: initialize from a dataset or search-space template, optionally seed prior observations, then continue through `suggest` / `observe` with user-provided results
 
 Use the BO skills directly when the user wants only the optimization subsystem:
+- `bo-execution-workflow` for a resolved BO-layer setup/execution handoff
 - init / suggest / observe
 - build-oracle / run-proxy
 - reporting
@@ -226,7 +227,7 @@ uv run python -m bo_workflow.cli observe --run-id <RUN_ID> --data '{"x": {...}, 
 # repeat suggest/observe
 ```
 
-Within `research-agent`, this low-level pattern maps to `warm_start_human` mode.
+Within `research-agent`, this low-level pattern maps to `human_in_the_loop` mode.
 
 In `simulation` mode, once Phase 3 has already run `init` and `build-oracle`, continue with `run-proxy --run-id <RUN_ID> ...` on the existing BO run. Do not delegate that phase to `bo-end-to-end-proxy`, because that skill re-initializes the run from scratch.
 
@@ -235,23 +236,6 @@ In `simulation` mode, once Phase 3 has already run `init` and `build-oracle`, co
 `data/HER_virtual_data.csv` is provided as an example dataset.
 
 Treat dataset semantics (what the target means, valid constraints, and success thresholds) as problem-specific context from the user or project docs.
-
-## Demo Datasets
-
-### Primary demo — Use Case 1 (organic synthesis, Response 1)
-`data/bh_clean.csv` — Buchwald-Hartwig C-N coupling reaction optimization
-- Features: `aryl_halide`, `ligand`, `base`, `additive` (all categorical)
-- Target: `yield` (maximize, 0–100%)
-- No encoder, no decoder, no DFT features needed
-- Works end-to-end today with proxy mode
-- Derived from `data/buchwald_hartwig_rxns.csv` (drop `rxn_smiles` column only)
-
-### Secondary demo — OER electrocatalysis
-`data/oer_clean.csv` — OER electrocatalyst optimization
-- Features: Metal_1/2/3 (categorical) + proportion + process conditions (numeric)
-- Target: `Overpotential mV @10 mA cm-2` (minimize)
-- Uses simplex constraint (`--simplex-groups`) to keep metal proportions summing to 100
-- Cleanup: drop 3 rows where Metal_1 is NaN, fill Metal_2/Metal_3 NaN → "None"
 
 ## Resuming a completed run
 
