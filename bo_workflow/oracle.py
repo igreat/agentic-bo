@@ -273,3 +273,36 @@ def predict_original_scale(
     y_internal = np.asarray(model.predict(x_df), dtype=float)
     target_max = float(state["oracle"]["target_max_for_restore"])
     return _restore_objective_values(y_internal, state["objective"], target_max)
+
+
+def predict_with_uncertainty(
+    run_dir: str | Path,
+    state: dict[str, Any],
+    x_df: pd.DataFrame,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Run oracle prediction and return mean and inter-tree std.
+
+    Returns (y_mean, y_std) both in the user's objective scale.
+
+    y_std is the standard deviation of individual tree predictions — a
+    measure of how much the ensemble disagrees. High values indicate
+    regions where the oracle has little support from training data.
+
+    The std is invariant to the internal objective transform (negating
+    values for max objectives shifts the mean but not the spread), so
+    y_std needs no separate conversion.
+    """
+    model = load_oracle(run_dir)
+    regressor = model.named_steps["model"]
+    x_preprocessed = model.named_steps["preprocessor"].transform(x_df)
+
+    # shape: (n_estimators, n_samples)
+    tree_preds = np.array(
+        [tree.predict(x_preprocessed) for tree in regressor.estimators_]
+    )
+    y_internal_mean = tree_preds.mean(axis=0)
+    y_std = tree_preds.std(axis=0)
+
+    target_max = float(state["oracle"]["target_max_for_restore"])
+    y_mean = _restore_objective_values(y_internal_mean, state["objective"], target_max)
+    return y_mean, y_std
