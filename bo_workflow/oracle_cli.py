@@ -23,7 +23,76 @@ def register_commands(sub: argparse._SubParsersAction) -> None:
     run_cmd.add_argument("--run-id", type=str, required=True)
     run_cmd.add_argument("--iterations", type=int, required=True)
     run_cmd.add_argument("--batch-size", type=int, default=1)
+    run_cmd.add_argument(
+        "--seed-pool",
+        type=str,
+        default=None,
+        help=(
+            "Path to pool CSV. Injects all rows as initial observations so "
+            "HEBO starts with real data instead of random sampling."
+        ),
+    )
     run_cmd.add_argument("--verbose", action="store_true")
+
+
+def _validate_run_proxy_preconditions(
+    engine: BOEngine, run_id: str, batch_size: int
+) -> None:
+    """Validate run-proxy preconditions before any state mutation happens."""
+    state = engine._load_state(run_id)
+    if state["status"] not in {"initialized", "oracle_ready", "running"}:
+        raise ValueError(
+            f"Run '{run_id}' is not ready for suggestions. "
+            f"Current status: {state['status']}"
+        )
+
+    engine_name = str(state.get("default_engine", "hebo"))
+    if engine_name == "bo_lcb" and int(batch_size) != 1:
+        raise ValueError("bo_lcb currently supports batch-size=1 only.")
+
+
+def _seed_pool_observations(
+    engine: BOEngine, run_id: str, pool_path: str, verbose: bool
+) -> int:
+    """Inject all pool rows as initial observations so HEBO starts informed.
+
+    Reads the pool CSV and feeds every (x, y) pair to the engine as
+    source="pool-seed".  Returns the number of observations injected.
+    """
+    import sys
+
+    import pandas as pd
+
+    from .utils import read_json, to_python_scalar
+
+    state = read_json(engine.get_run_dir(run_id) / "state.json")
+    pool_df = pd.read_csv(pool_path)
+    target_col = state["target_column"]
+    active = list(state["active_features"])
+
+    obs_list: list[dict] = []
+    for _, row in pool_df.iterrows():
+        y_val = row.get(target_col)
+        if pd.isna(y_val):
+            continue
+        x = {}
+        for f in active:
+            if f in row.index and not pd.isna(row[f]):
+                # Preserve original feature types (e.g., categorical labels)
+                # and let engine.observe validate required schema.
+                x[f] = to_python_scalar(row[f])
+        obs_list.append({"x": x, "y": float(y_val)})
+
+    if not obs_list:
+        return 0
+
+    engine.observe(run_id, obs_list, source="pool-seed", verbose=verbose)
+    if verbose:
+        print(
+            f"[seed-pool] injected {len(obs_list)} pool observations",
+            file=sys.stderr,
+        )
+    return len(obs_list)
 
 
 def handle(args: argparse.Namespace, engine: BOEngine) -> int | None:
@@ -45,7 +114,16 @@ def handle(args: argparse.Namespace, engine: BOEngine) -> int | None:
         from .observers.proxy import ProxyObserver
 
         run_dir = engine.get_run_dir(args.run_id)
+
+        # Validate failure-prone preconditions before any seed writes happen.
         observer = ProxyObserver(run_dir)
+        _validate_run_proxy_preconditions(engine, args.run_id, args.batch_size)
+
+        # Optionally seed HEBO with real pool observations
+        seed_pool = getattr(args, "seed_pool", None)
+        if seed_pool:
+            _seed_pool_observations(engine, args.run_id, seed_pool, args.verbose)
+
         payload = engine.run_optimization(
             args.run_id,
             observer=observer,

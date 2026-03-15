@@ -13,21 +13,18 @@ import sys
 import numpy as np
 from tqdm import tqdm
 
-ENGINE_CHOICES = ("hebo", "bo_lcb", "random")
+from bo_workflow.engine import BOEngine
+from bo_workflow.observers.proxy import ProxyObserver
+from bo_workflow.oracle import build_proxy_oracle
+from bo_workflow.plotting import plot_optimization_convergence
+
+ENGINE_CHOICES = ("hebo", "bo_lcb", "random", "botorch")
 ENGINE_LABELS = {
     "hebo": "HEBO",
     "bo_lcb": "BO (LCB)",
     "random": "Random Search",
+    "botorch": "BoTorch",
 }
-
-REPO_ROOT = Path(__file__).resolve().parents[1]
-if str(REPO_ROOT) not in sys.path:
-    sys.path.insert(0, str(REPO_ROOT))
-
-from bo_workflow.engine import BOEngine  # noqa: E402
-from bo_workflow.observers.proxy import ProxyObserver  # noqa: E402
-from bo_workflow.oracle import build_proxy_oracle  # noqa: E402
-from bo_workflow.plotting import plot_optimization_convergence  # noqa: E402
 
 
 def _read_observation_values(path: Path) -> list[float]:
@@ -91,7 +88,13 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--max-features", type=int, default=None)
     parser.add_argument("--repeats", type=int, default=1)
     parser.add_argument("--seed", type=int, default=7)
-    parser.add_argument("--runs-root", type=Path, default=Path("runs"))
+    parser.add_argument("--runs-root", type=Path, default=Path("bo_runs"))
+    parser.add_argument(
+        "--drop-cols",
+        type=str,
+        default=None,
+        help="Comma-separated column names to exclude from the feature space",
+    )
     parser.add_argument(
         "--engines",
         nargs="+",
@@ -124,6 +127,8 @@ def main(argv: list[str] | None = None) -> int:
     if "bo_lcb" in args.engines and args.batch_size != 1:
         raise ValueError("bo_lcb currently supports batch-size=1 only")
 
+    drop_cols = [c.strip() for c in args.drop_cols.split(",") if c.strip()] if args.drop_cols else []
+
     engine = BOEngine(runs_root=args.runs_root)
     methods_data: dict[str, np.ndarray] = {}
     summary_runs: list[dict[str, object]] = []
@@ -155,6 +160,7 @@ def main(argv: list[str] | None = None) -> int:
                 seed=run_seed,
                 num_initial_random_samples=args.init_random,
                 default_batch_size=args.batch_size,
+                drop_cols=drop_cols,
             )
             run_id = str(state["run_id"])
             if args.verbose:

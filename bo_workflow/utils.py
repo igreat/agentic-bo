@@ -11,7 +11,7 @@ import numpy as np
 import pandas as pd
 
 type Objective = Literal["min", "max"]
-type OptimizerName = Literal["hebo", "bo_lcb", "random"]
+type OptimizerName = Literal["hebo", "bo_lcb", "random", "botorch"]
 
 _RUN_ADJECTIVES = (
     "amber",
@@ -103,7 +103,7 @@ def row_to_python_dict(row: pd.Series) -> dict[str, Any]:
 
 @dataclass(frozen=True)
 class RunPaths:
-    """Canonical file locations under `runs/<run_id>/`."""
+    """Canonical file locations under a BO run directory (`<runs_root>/<run_id>/`)."""
 
     run_dir: Path
 

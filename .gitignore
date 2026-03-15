@@ -5,6 +5,7 @@ __pycache__/
 .pytest_cache/
 .ipynb_checkpoints/
 .mypy_cache/
+.DS_Store
 
 build/
 dist/
@@ -15,9 +16,14 @@ wheels/
 # Virtual environments
 .venv
 runs/
+bo_runs/
+research_runs/
 results/
 data/*_drfp/
 data/*_drfp*/
+data/*egfr_*/
+data/egfr_global_features*
+data/bh_*
 
 papers
 BO-Tutorial-for-Sci

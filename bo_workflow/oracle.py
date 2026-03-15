@@ -101,13 +101,23 @@ def build_proxy_oracle(
                 codes, _ = pd.factorize(x_for_importance[col].astype(str), sort=True)
                 x_for_importance[col] = codes
 
+        # Columns referenced by constraints must never be dropped — they are
+        # required at suggest time for constraint enforcement.
+        pinned: set[str] = set()
+        for spec in state.get("constraints", []):
+            if spec.get("type") == "simplex":
+                pinned.update(spec.get("cols", []))
+        pinned = pinned & set(active_features)
+
         selector = RandomForestRegressor(
             n_estimators=200, random_state=state["seed"], n_jobs=1
         )
         selector.fit(x_for_importance, y_internal)
         ranked = np.argsort(selector.feature_importances_)[::-1]
-        keep_idx = ranked[:max_features]
-        keep_features = [x_for_importance.columns[i] for i in keep_idx]
+        # Fill remaining slots with top-ranked free columns (pinned cols always kept).
+        free_ranked = [x_for_importance.columns[i] for i in ranked if x_for_importance.columns[i] not in pinned]
+        remaining_slots = max(0, max_features - len(pinned))
+        keep_features = list(pinned) + free_ranked[:remaining_slots]
         ignored = [name for name in active_features if name not in keep_features]
 
         state["active_features"] = keep_features
