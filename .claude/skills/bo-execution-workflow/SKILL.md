@@ -176,6 +176,8 @@ If this skill is being used for a **Phase 3 setup-only handoff** from `research-
 
 If this skill is being used for a **Phase 4 continuation** from `research-agent`, reuse the existing `bo_run_id` and continue directly with `suggest` / `observe` / `report` instead of re-initializing.
 
+If the user or operator explicitly provides a `backend_id` for an external evaluator, it is acceptable to automate this phase with `bo-run-evaluator` instead of manually alternating `suggest` and `observe`.
+
 Then repeat this loop until the user or external controller is satisfied:
 
 ```bash
@@ -201,7 +203,7 @@ After sufficient iterations, generate the report:
 uv run python -m bo_workflow.cli report --run-id <RUN_ID>
 ```
 
-Do **not** invoke `build-oracle` or `run-proxy` from this skill.
+Do **not** invoke `build-oracle` or `run-proxy` from this skill. Use `bo-run-evaluator` only when a backend id is explicitly provided for external evaluation.
 
 ---
 

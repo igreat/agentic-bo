@@ -726,10 +726,12 @@ def test_build_oracle_supports_custom_backend_id(
     assert exit_code == 0
     payload = json.loads(capsys.readouterr().out)
     backend_paths = EvaluationBackendPaths(backends_root / backend_id)
+    backend_meta = read_json(backend_paths.oracle_meta)
     assert payload["backend_id"] == backend_id
     assert payload["backend_dir"] == str(backend_paths.backend_dir)
     assert backend_paths.oracle_model.exists()
     assert backend_paths.oracle_meta.exists()
+    assert "dataset_path" not in backend_meta
     assert list(engine.runs_root.glob("*/state.json")) == []
 
 

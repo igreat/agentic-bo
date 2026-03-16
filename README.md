@@ -200,6 +200,7 @@ Skills in `.agents/skills/` and `.claude/skills/` provide the agent interface:
 - `bo-execution-workflow` — BO-layer execution helper once problem framing is already resolved
 - `bo-init-run` — initialize a run
 - `bo-next-batch` — suggest candidates
+- `bo-run-evaluator` — automate external evaluator observations for an existing run
 - `bo-record-observation` — record results
 - `bo-report-run` — status and reports
 - `bo-encode-drfp` — encode reaction SMILES to DRFP features

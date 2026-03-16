@@ -217,7 +217,6 @@ def build_proxy_oracle(
     oracle_meta = {
         "backend_id": backend_paths.backend_dir.name,
         "built_at": utc_now_iso(),
-        "dataset_path": str(resolved_dataset),
         "target_column": target_column,
         "objective": objective,
         "default_engine": default_engine,

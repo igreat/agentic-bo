@@ -182,6 +182,8 @@ Do not re-run Phase 3 setup during Phase 4. In particular:
 - do not re-run `init`
 - always continue from the existing `bo_run_id`
 
+If the user or operator explicitly provides a `backend_id` for external evaluation, `bo-run-evaluator` is an acceptable way to automate the suggest/observe loop. It is still not acceptable to build the backend from inside `research-agent`.
+
 ### 5. Interpretation
 
 Summarize:
