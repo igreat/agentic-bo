@@ -1,6 +1,6 @@
 ---
 name: bo-init-run
-description: Initialize a BO run from a dataset.
+description: Initialize a BO run from a dataset or explicit search-space JSON.
 ---
 
 # BO Init Run
@@ -9,9 +9,18 @@ Use this skill when the user asks to start an optimization campaign.
 
 ## Command
 
+Dataset-backed init:
+
 ```bash
 uv run python -m bo_workflow.cli init \
   --dataset <CSV_PATH> --target <TARGET_COL> --objective <min|max>
+```
+
+Search-space init:
+
+```bash
+uv run python -m bo_workflow.cli init \
+  --search-space-json '<JSON_OR_PATH>' --target <TARGET_COL> --objective <min|max>
 ```
 
 Optional flags: `--engine <hebo|bo_lcb|random|botorch>` (default hebo), `--hebo-model <gp|rf>` (HEBO only, default gp), `--seed <N>` (default 7), `--init-random <N>` (default 10), `--batch-size <N>` (default 1), `--run-id <ID>`, `--intent-json <JSON_OR_PATH>`, `--drop-cols <col1,col2>`, `--simplex-groups <cols:total>` (repeatable).
@@ -43,10 +52,12 @@ Constraints are stored in `state.json` under `"constraints"` and enforced at eve
 - `run_id`
 - inferred `active_features`
 - `constraints` list (empty if none specified)
+- `input_spec.json` persisted under the run directory
 - state stored at `bo_runs/<run_id>/state.json`
 
 ## Notes
 
 - Always use explicit `--target` and `--objective`.
 - Pass `--intent-json` to preserve the user's original prompt for provenance.
+- Prefer `--search-space-json` when an upstream agent has already resolved `design_parameters` and `fixed_features`.
 - Infer simplex groups from the user's problem description. Common signals: "proportion", "fraction", "composition", "sum to 1/100%".

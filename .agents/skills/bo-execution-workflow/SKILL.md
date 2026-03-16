@@ -1,6 +1,6 @@
 ---
 name: bo-execution-workflow
-description: BO execution layer — runs the BO setup and execution phases given a resolved execution config. Invoked by an upstream research agent (e.g. research-agent) once problem framing, dataset acquisition, and representation decisions are complete.
+description: BO execution layer — initializes a run from a resolved experiment spec, records observations, and continues through suggest/observe/report.
 ---
 
 # BO Execution Workflow
@@ -11,37 +11,38 @@ This skill is the **BO execution layer**. It assumes the problem has already bee
 
 **Expects (resolved before this skill is invoked):**
 
-| Input | Simulation | Human-in-the-loop |
-|---|---|---|
-| Dataset path (full labeled CSV with target values) | ✅ Required | ❌ Not required |
-| Search-space CSV (feature columns, types, ranges/categories — no target values needed) | Optional | ✅ Required if no prior observations |
-| Target column name | ✅ | ✅ |
-| Objective direction (`min` / `max`) | ✅ | ✅ |
-| Simplex groups (if applicable) | If applicable | If applicable |
-| Representation plan (encoding needed?) | If applicable | If applicable |
+- target column name
+- objective direction (`min` / `max`)
+- resolved `design_parameters`
+- optional `fixed_features`
+- structured constraints if applicable
+- optional dataset path for validation/context
+- optional prior observations
+- representation plan if encoding is needed
 
-> **Note on `--dataset` in `human_in_the_loop` mode:** The `init` CLI always requires `--dataset`, but the CSV does not need to contain existing target values. A template CSV with only feature column headers is sufficient to define the search space.
+When invoked by `research-agent`, the canonical init path is explicit search-space JSON derived from `experiment_spec`.
 
 **Produces (run artifacts under `bo_runs/<RUN_ID>/`):**
 
 | File | Created by |
 |---|---|
 | `state.json` | `init` |
+| `input_spec.json` | `init` |
 | `intent.json` | `init` (when `--intent-json` is provided) |
-| `oracle.pkl` + `oracle_meta.json` | `build-oracle` (simulation mode only) |
-| `suggestions.jsonl` | `suggest` / `run-proxy` |
-| `observations.jsonl` | `observe` / `run-proxy` |
-| `convergence.pdf` | `report` / `run-proxy` |
-| `report.json` | `report` / `run-proxy` |
+| `suggestions.jsonl` | `suggest` |
+| `observations.jsonl` | `observe` |
+| `convergence.pdf` | `report` |
+| `report.json` | `report` |
 
 When this skill is invoked by `research-agent`, it supports two handoff points:
 
 - **Setup-only handoff (Phase 3):**
-  - `simulation`: run through `init` and `build-oracle`, then stop once the BO run is ready and `bo_run_id` is known
-  - `human_in_the_loop`: run through `init`, seed prior observations if any, then stop once the BO run is ready and `bo_run_id` is known
+  - run through `init`
+  - record any seed observations
+  - stop once the BO run is ready and `bo_run_id` is known
 - **Execution continuation (Phase 4):**
   - continue from the existing `bo_run_id`
-  - do **not** repeat `init` or `build-oracle` if Phase 3 already completed them
+  - do **not** repeat `init`
 
 ---
 
@@ -49,15 +50,20 @@ When this skill is invoked by `research-agent`, it supports two handoff points:
 
 Verify all required inputs are resolved before running anything. If any are missing, surface them to the layer above — do not attempt problem discovery here.
 
+The resolved execution config should include a structured search space:
+- `design_parameters`
+- optional `fixed_features`
+- target column
+- objective
+- constraints if any
+
 If everything is resolved, proceed to Step 2.
 
 ---
 
-## Step 2 — Validate the Dataset
+## Step 2 — Validate the Dataset (if present)
 
-> **Skip this step entirely in `human_in_the_loop` mode with no prior data.**
-
-Inspect the dataset before running anything:
+If a dataset path is part of the execution config, inspect it before running anything:
 
 ```bash
 uv run python -c "
@@ -67,20 +73,24 @@ print('Shape:', df.shape)
 print('Columns:', list(df.columns))
 print('Missing values:'); print(df.isnull().sum()[df.isnull().sum() > 0])
 print('Dtypes:'); print(df.dtypes)
-print('Target stats:'); print(df['<TARGET_COL>'].describe())
+if '<TARGET_COL>' in df.columns:
+    print('Target stats:'); print(df['<TARGET_COL>'].describe())
 "
 ```
 
 **🔴 Blocking — must fix before `init`:**
-- Missing values in the target column → drop rows or abort; `init` will fail or corrupt state if target has NaNs
+- If the dataset includes the target column, target rows used for dataset-backed init or oracle training must not contain missing values
 - Categorical column with >64 unique values → engine will error; flag this to the user before proceeding
+- The dataset clearly does not match the resolved experiment spec → stop and clarify rather than drifting the search space
 
 **🟡 Action required — configure explicitly at `init` time:**
-- Columns whose values appear to sum to ~100% (proportions, fractions) → declare `--simplex-groups` (see Step 3)
-- Non-feature columns present in the CSV (e.g. `rxn_smiles`, IDs) → pass `--drop-cols col1,col2` at `init`
+- Columns whose values appear to sum to a fixed total (proportions, fractions) → declare `--simplex-groups` (see Step 3)
+- Non-feature columns present in a dataset-backed init CSV (e.g. `rxn_smiles`, IDs) → pass `--drop-cols col1,col2` when dataset inference is intentionally used
 
 **🟢 Auto-handled — informational only:**
-- Constant/zero-variance columns → engine drops them silently; no action needed
+- Constant/zero-variance columns → engine drops them silently in dataset-backed inference mode
+
+If no dataset is present, skip to Step 3.
 
 ---
 
@@ -101,7 +111,7 @@ If the execution config specifies compositional constraints (columns whose value
 
 Format: `'col1,col2,...:total'` — comma-separated column names, colon, then the required sum.
 
-Constraints are stored in `state.json["constraints"]` at `init` time and enforced automatically at every `suggest` call by renormalizing group columns to sum to `total`. No action is needed after `init`.
+Constraints are stored in `state.json["constraints"]` at `init` time and enforced automatically at every `suggest` call.
 
 If no simplex constraints apply, skip to Step 4.
 
@@ -113,18 +123,30 @@ If the representation plan specifies encoding:
 
 - **Reaction SMILES columns:** use `bo-encode-drfp` skill before `init`; use `bo-decode-drfp` after BO to map suggestions back to reactions
 - **Molecule SMILES columns:** use `bo-encode-molecule-descriptors` skill before `init`; use `bo-decode-molecule-descriptors` after BO
-- **No encoding needed (categorical/numeric features already in the CSV):** skip to Step 5
+- **No encoding needed:** skip to Step 5
 
 The choice of representation belongs to the layer above. If the representation plan is not specified, surface this question upstream — do not auto-decide here.
 
 ---
 
-## Step 5 — Simulation Workflow (automated proxy run)
+## Step 5 — Initialize the Run
 
-Use when the operating mode is `simulation`. The oracle is trained on the existing dataset and evaluates BO suggestions automatically. Do not use this mode for real lab experiments.
+Prefer explicit search-space init when the experiment spec is already resolved:
 
 ```bash
-# 1. Initialize run
+uv run python -m bo_workflow.cli init \
+  --search-space-json '<JSON_OR_PATH>' \
+  --target <TARGET_COL> \
+  --objective <min|max> \
+  [--simplex-groups 'col1,col2:total'] \
+  [--engine <hebo|bo_lcb|random|botorch>] \
+  [--intent-json '<JSON_OR_PATH>'] \
+  --seed 42
+```
+
+Use dataset-backed init only when a labeled CSV is intentionally the chosen BO input source:
+
+```bash
 uv run python -m bo_workflow.cli init \
   --dataset <CSV_PATH> \
   --target <TARGET_COL> \
@@ -134,77 +156,40 @@ uv run python -m bo_workflow.cli init \
   [--engine <hebo|bo_lcb|random|botorch>] \
   [--intent-json '<JSON_OR_PATH>'] \
   --seed 42
-
-# Extract run_id from the JSON output
-
-# 2. Train proxy oracle
-uv run python -m bo_workflow.cli build-oracle --run-id <RUN_ID>
-
-# 3. Run full proxy loop
-uv run python -m bo_workflow.cli run-proxy \
-  --run-id <RUN_ID> \
-  --iterations <N>
-
-# 4. Generate report
-uv run python -m bo_workflow.cli report --run-id <RUN_ID>
 ```
 
-Recommended iterations: 20 for a quick demo, 50+ for thorough optimization.
+When this skill is used under `research-agent`, serialize `experiment_spec` into the `--search-space-json` input rather than relying on a labeled dataset.
 
-If this skill is being used for a **Phase 3 setup-only handoff** from `research-agent`, stop after `build-oracle`, return the existing `bo_run_id`, and do not run `run-proxy` yet.
-
-If this skill is being used for a **Phase 4 continuation** from `research-agent`, reuse the existing `bo_run_id` created earlier and continue directly with:
-
-```bash
-uv run python -m bo_workflow.cli run-proxy --run-id <RUN_ID> --iterations <N>
-uv run python -m bo_workflow.cli report --run-id <RUN_ID>
-```
-
-Do not re-run `init` or `build-oracle` in that continuation path.
-
-After running, present to the user:
-- Best value found and at which iteration
-- Best experiment conditions (exact feature values)
-- Oracle CV RMSE (surrogate quality indicator)
-- **Always label results as proxy-oracle simulation, not real experimental results**
+Extract `run_id` from the JSON output.
 
 ---
 
-## Step 6 — Human-in-the-Loop Workflow (real experiments)
-
-Use when the operating mode is `human_in_the_loop`. The chemist runs real experiments and reports results. **Do NOT invoke the proxy oracle in this mode.** Prior observations are optional: this path supports both zero-start and warm-start workflows.
-
-```bash
-# 1. Initialize run
-uv run python -m bo_workflow.cli init \
-  --dataset <CSV_PATH> \
-  --target <TARGET_COL> \
-  --objective <min|max> \
-  [--simplex-groups 'col1,col2:total'] \
-  [--drop-cols col1,col2] \
-  [--intent-json '<JSON_OR_PATH>'] \
-  --seed 42
-```
+## Step 6 — Seed Prior Observations (if any)
 
 If prior observations are already part of the resolved execution config, record them immediately after `init` with `bo-record-observation` before the first `suggest` call.
 
 If this skill is being used for a **Phase 3 setup-only handoff** from `research-agent`, stop after `init` plus any seed observations, return the existing `bo_run_id`, and do not start the iterative loop yet.
 
+---
+
+## Step 7 — Continue Through Suggest / Observe / Report
+
 If this skill is being used for a **Phase 4 continuation** from `research-agent`, reuse the existing `bo_run_id` and continue directly with `suggest` / `observe` / `report` instead of re-initializing.
 
-Then repeat this loop until the user is satisfied:
+If the user or operator explicitly provides a `backend_id` for an external evaluator, it is acceptable to automate this phase with `bo-run-evaluator` instead of manually alternating `suggest` and `observe`.
+
+Then repeat this loop until the user or external controller is satisfied:
 
 ```bash
-# Get next suggestion
 uv run python -m bo_workflow.cli suggest --run-id <RUN_ID> --batch-size <N>
 ```
 
-Present the suggestion clearly to the chemist:
-- Show feature values in plain language (e.g. "Try ligand=BrettPhos, base=MTBD, additive=None")
-- If representations were decoded, show reagent names not SMILES strings
-- Explain what the BO engine expects from them next (run the experiment, report the result)
+Present the suggestion clearly:
+- show feature values in plain language
+- if representations were decoded, show reagent names rather than raw encodings
+- explain what the BO engine expects next
 
-Wait for the chemist to report the result, then record it:
+Record observations only when values are supplied by the user or another external observer:
 
 ```bash
 uv run python -m bo_workflow.cli observe \
@@ -218,36 +203,26 @@ After sufficient iterations, generate the report:
 uv run python -m bo_workflow.cli report --run-id <RUN_ID>
 ```
 
+Do **not** invoke `build-oracle` or `run-proxy` from this skill. Use `bo-run-evaluator` only when a backend id is explicitly provided for external evaluation.
+
 ---
 
-## Step 7 — Present Results
+## Step 8 — Present Results
 
 Always include in your final summary:
 
 1. **Best result found** — the value and which experiment produced it
 2. **Best conditions** — the exact feature values to replicate it
 3. **Convergence trajectory** — how the best value improved over iterations (from `convergence.pdf`)
-4. **Oracle quality** (simulation mode only) — CV RMSE, so the user knows surrogate reliability
-5. **Simulation label** (simulation mode only) — remind the user this is a surrogate, not real experimental data
+4. **Oracle quality** — only if the run artifacts explicitly report oracle metadata
+5. **Simulation label** — only if the run artifacts explicitly indicate proxy-backed evaluation
 
 ---
 
 ## Guardrails
 
-- Never run proxy oracle evaluation in `human_in_the_loop` mode
-- Always include oracle CV RMSE when presenting proxy results
-- If a categorical column has >64 unique values, flag this before `init` — the engine will error
-- Never auto-commit observations without the user confirming the result value
-- Pass `--intent-json` when the upstream agent has captured the original user intent — this preserves provenance in `bo_runs/<RUN_ID>/intent.json`
-
----
-
-## Quick Reference — Which Workflow?
-
-| Situation | Workflow |
-|---|---|
-| Have a full labeled dataset, want automated benchmark | Simulation mode (Step 5) |
-| Running real lab experiments | Human-in-the-loop mode (Step 6) |
-| Buchwald dataset, maximize yield | Simulation mode, no encoding, no simplex |
-| OER dataset, minimize overpotential | Simulation mode + `--simplex-groups` for metal proportions |
-| SMILES columns in dataset | Encode first (Step 4), then simulation or human-in-the-loop |
+- Never invent observation values.
+- Never auto-commit observations without the user or external observer providing the result value.
+- If a categorical column has >64 unique values, flag this before `init` — the engine will error.
+- Prefer `--search-space-json` when an upstream agent has already resolved the search space.
+- Pass `--intent-json` when the upstream agent has captured the original user intent — this preserves provenance in `bo_runs/<RUN_ID>/intent.json`.

@@ -26,6 +26,11 @@ def _parse_json_object(value: str) -> dict[str, Any]:
     return dict(payload)
 
 
+def _parse_search_space_spec(value: str) -> dict[str, Any]:
+    payload = _parse_json_object(value)
+    return payload
+
+
 def _parse_observation_records(value: str) -> list[dict[str, Any]]:
     path = Path(value)
     if path.exists():
@@ -83,8 +88,16 @@ def _parse_simplex_groups(raw: list[str] | None) -> list[dict[str, Any]]:
 
 def register_commands(sub: argparse._SubParsersAction) -> None:
     """Register engine subcommands on an existing subparsers group."""
-    init_cmd = sub.add_parser("init", help="Initialize run from a dataset")
-    init_cmd.add_argument("--dataset", type=Path, required=True)
+    init_cmd = sub.add_parser(
+        "init", help="Initialize run from a dataset or explicit search-space spec"
+    )
+    init_input = init_cmd.add_mutually_exclusive_group(required=True)
+    init_input.add_argument("--dataset", type=Path)
+    init_input.add_argument(
+        "--search-space-json",
+        type=str,
+        help="JSON object or path to JSON file describing design_parameters and fixed_features",
+    )
     init_cmd.add_argument("--target", type=str, required=True)
     init_cmd.add_argument(
         "--objective", type=str, choices=["min", "max"], required=True
@@ -107,7 +120,7 @@ def register_commands(sub: argparse._SubParsersAction) -> None:
     )
     init_cmd.add_argument("--init-random", type=int, default=10)
     init_cmd.add_argument("--batch-size", type=int, default=1)
-    init_cmd.add_argument("--max-categories", type=int, default=64)
+    init_cmd.add_argument("--max-categories", type=int, default=None)
     init_cmd.add_argument(
         "--drop-cols",
         type=str,
@@ -293,10 +306,21 @@ def handle(args: argparse.Namespace, engine: BOEngine) -> int | None:
         intent_payload = None
         if args.intent_json is not None:
             intent_payload = _parse_json_object(args.intent_json)
+        search_space_spec = None
+        if args.search_space_json is not None:
+            search_space_spec = _parse_search_space_spec(args.search_space_json)
         drop_cols = [c.strip() for c in args.drop_cols.split(",") if c.strip()] if args.drop_cols else []
+        if search_space_spec is not None:
+            if drop_cols:
+                raise ValueError("--drop-cols is only supported with --dataset init.")
+            if args.max_categories is not None:
+                raise ValueError(
+                    "--max-categories is only supported with dataset-backed init."
+                )
         constraints = _parse_simplex_groups(args.simplex_groups)
         payload = engine.init_run(
             dataset_path=args.dataset,
+            search_space_spec=search_space_spec,
             target_column=args.target,
             objective=args.objective,
             default_engine=args.engine,
@@ -305,7 +329,7 @@ def handle(args: argparse.Namespace, engine: BOEngine) -> int | None:
             seed=args.seed,
             num_initial_random_samples=args.init_random,
             default_batch_size=args.batch_size,
-            max_categories=args.max_categories,
+            max_categories=args.max_categories if args.max_categories is not None else 64,
             drop_cols=drop_cols,
             constraints=constraints or None,
             intent=intent_payload,

@@ -7,17 +7,21 @@ description: Orchestrate an end-to-end chemistry or materials optimization study
 
 Use this skill when the user wants a top-level research workflow rather than a raw BO command sequence.
 
-V1 supports two modes only:
-- `simulation`: retrospective dataset-backed proxy BO
-- `human_in_the_loop`: the user runs real experiments and reports outcomes manually, optionally starting from prior observations
+V1 is **observer-agnostic**. The agent frames the problem, defines a structured experiment spec, initializes a BO run, continues through `suggest` / `observe` / `report`, interprets the outcome, and drafts a paper.
 
-Do not treat proxy evaluation as the default scientific workflow. It is a simulation backend for demos and retrospective testing.
+The agent does **not** choose a mode like `simulation` vs `human_in_the_loop`. Observation values may come from:
+- manual user reports
+- prior observations supplied up front
+- an external benchmark harness or other observer owned by the operator
+
+Do not tell the agent to build its own proxy oracle as part of this workflow.
 
 ## Inputs
 
 - Research question in plain English
 - Optional dataset path
 - Optional prior observations path or inline observations
+- Optional search-space context already supplied by the user
 
 ## State Files
 
@@ -33,7 +37,6 @@ Use this `research_state.json` shape in v1:
 {
   "research_id": "string",
   "research_question": "string",
-  "mode": "simulation | human_in_the_loop",
   "system": null,
   "objective_property": null,
   "objective_direction": null,
@@ -48,7 +51,8 @@ Use this `research_state.json` shape in v1:
   },
   "experiment_spec": {
     "target_column": null,
-    "design_variables": [],
+    "design_parameters": [],
+    "fixed_features": {},
     "constraints": [],
     "seed_observations_count": 0
   },
@@ -91,14 +95,8 @@ Resolve and write:
 - `system`
 - `objective_property`
 - `objective_direction`
-- `mode`
 - `dataset_path`
 - `prior_observations_path`
-
-Mode selection rules — apply exactly one:
-- Dataset provided AND user wants a fully automated retrospective run → `simulation`
-- User intends to supply future observations manually, with or without prior observations → `human_in_the_loop`
-- If neither fits clearly, ask before proceeding.
 
 Also decide whether to run a literature search:
 - If the user does not mention literature or asks to skip it, set `phases.literature_search` to `skipped` and proceed.
@@ -128,52 +126,63 @@ Use the framed problem plus literature findings to define the experiment.
 Rules:
 - Treat the dataset as supporting evidence, not the canonical source of semantics.
 - Use dataset columns to map or confirm an already-decided setup, not to invent the objective or constraints from scratch.
+- `experiment_spec` is the canonical BO search-space object for the agent. Populate:
+  - `target_column`
+  - `design_parameters`
+  - `fixed_features`
+  - `constraints`
 - Infer domain constraints from the problem description and literature.
-- If composition variables must sum to a fixed total, pass `--simplex-groups` during BO init.
-- If there is no dataset and no prior observations, explicitly ask the user for the search space: design variables, bounds or categories, target measurement, and known constraints. Do not start BO until that is resolved.
-- In that fallback, do not ask an empty question. Propose a draft BO spec first, based on the research question plus any literature findings:
-  - candidate design variables
+- If composition variables must sum to a fixed total, keep those constraints structured and machine-readable.
+- If there is no resolved search space yet, do not ask an empty question. Propose a draft experiment spec first, based on the research question plus any literature findings:
+  - candidate design parameters
   - tentative bounds or categorical options
+  - fixed features if any
   - target measurement to optimize
   - likely physical or chemical constraints
 - Present that draft as a recommendation for the user to confirm or edit before BO init.
 
 Delegate the BO-layer setup to `bo-execution-workflow`. That skill owns:
-- dataset validation
-- simplex and `--drop-cols` execution config
+- dataset validation when a dataset is present
+- simplex and `--drop-cols` execution config when relevant
 - representation/encoding handoff to BO converters when the representation plan requires it
 - `bo-init-run`
-- `bo-build-proxy-oracle` in `simulation` mode
-- `bo-record-observation` to seed prior observations in `human_in_the_loop` mode when they exist
+- `bo-record-observation` to seed prior observations when they exist
 
 In Phase 3, call `bo-execution-workflow` in **setup-only** mode:
-- `simulation`: stop once `init` and `build-oracle` are complete
-- `human_in_the_loop`: stop once `init` and any seed observations are complete
+- stop once `init` and any seed observations are complete
 
 Write the resulting BO run ID into `research_state.json.bo_run_id`.
-Keep `research_state.json.experiment_spec.constraints` structured and machine-readable. Do not collapse constraints into prose strings if they were originally represented as typed objects or explicit column groups.
+Keep `research_state.json.experiment_spec.constraints` structured and machine-readable. Do not collapse constraints into prose strings.
 
 ### 4. BO Execution
 
-Delegate BO execution to `bo-execution-workflow`, using the resolved mode and execution config from Phase 3:
-- `simulation`: continue on the existing `bo_run_id` from Phase 3 with `run-proxy`, then finish with `bo-report-run`
-- `human_in_the_loop`: continue on the existing `bo_run_id` from Phase 3 through iterative `suggest` / `observe` / `report`
+Delegate BO execution to `bo-execution-workflow`, continuing from the existing `bo_run_id` from Phase 3 through iterative `suggest` / `observe` / `report`.
+
+The observation source may be:
+- the user
+- a real experimental loop
+- an external benchmark harness
+- another operator-owned observer
+
+The agent does not need to model those as separate modes.
 
 Always finish with `bo-report-run` and write:
 - `best_value`
 - `best_x`
 - `best_iteration`
 - `num_observations`
-- `oracle_model` when applicable
-- `oracle_rmse` when applicable
+- `oracle_model` when the BO artifacts report one
+- `oracle_rmse` when the BO artifacts report one
 - `report_path`
 - `convergence_plot_path`
 
 Do not re-run Phase 3 setup during Phase 4. In particular:
-- do not call `bo-end-to-end-proxy`
+- do not call `build-oracle`
+- do not call `run-proxy`
 - do not re-run `init`
-- do not re-run `build-oracle`
 - always continue from the existing `bo_run_id`
+
+If the user or operator explicitly provides a `backend_id` for external evaluation, `bo-run-evaluator` is an acceptable way to automate the suggest/observe loop. It is still not acceptable to build the backend from inside `research-agent`.
 
 ### 5. Interpretation
 
@@ -181,15 +190,16 @@ Summarize:
 - best result found
 - comparison to literature baselines if available
 - brief chemical or materials reasoning for why the best condition may work
-- whether the evidence is simulated or real
+- whether the evidence comes from recorded observations or a proxy/evaluator backend, if that is clear from the BO artifacts
 - important caveats such as oracle error or sparse evidence
 
 Write this into the Interpretation section of `research_plan.md`.
 
-If literature was skipped, keep interpretation artifact-grounded:
+If literature was skipped or the BO artifacts indicate proxy-backed evaluation:
+- keep interpretation artifact-grounded
 - describe patterns visible in the BO trajectory, best candidate, oracle quality, and convergence
 - do not introduce external literature or mechanism claims
-- any hypothesis must be explicitly labeled as a tentative interpretation from this simulation run only
+- any hypothesis must be explicitly labeled as tentative and artifact-derived
 
 ### 6. Paper Writing
 
@@ -198,7 +208,7 @@ Delegate drafting to `scientific-writing`. Pass all of the following so the skil
 - `research_runs/<research_id>/research_plan.md`
 - `bo_runs/<bo_run_id>/report.json`
 - `bo_runs/<bo_run_id>/convergence.pdf` (reference path; skill will mention it in Methods)
-- Any literature sources from Phase 2
+- any literature sources from Phase 2
 
 Output:
 - `research_runs/<research_id>/paper.md`
@@ -210,13 +220,13 @@ On resume:
 1. Read `research_state.json`.
 2. Find the first phase not marked `completed` or `skipped`.
 3. Continue from that phase.
-4. Do not re-run completed BO setup or rebuild an oracle unless the user explicitly asks.
+4. Do not re-run completed BO setup unless the user explicitly asks.
 
 ## Guardrails
 
-- Always label simulation results as proxy-oracle simulations.
-- Include oracle CV RMSE whenever reporting simulation results.
-- Never auto-record observations in `human_in_the_loop` mode.
-- Do not call `bo-end-to-end-proxy` in `human_in_the_loop` mode.
+- Never invent observation values.
+- Only record results provided by the user or an external observer/harness.
+- If BO artifacts include oracle metadata, label results as simulations and include oracle CV RMSE.
 - Keep `research_state.json` concise and structured; put narrative detail in `research_plan.md`.
-- Fully prospective no-dataset mode is out of scope for v1.
+- Do not call `build-oracle` or `run-proxy` as part of `research-agent`.
+- A fully unresolved search space is out of scope for execution; resolve `experiment_spec` first.
