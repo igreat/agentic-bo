@@ -576,7 +576,7 @@ class BOEngine:
         verbose: bool = False,
     ) -> dict[str, Any]:
         state = self._load_state(run_id)
-        if state["status"] not in {"initialized", "oracle_ready", "running"}:
+        if state["status"] not in {"initialized", "running"}:
             raise ValueError(
                 f"Run '{run_id}' is not ready for suggestions. Current status: {state['status']}"
             )

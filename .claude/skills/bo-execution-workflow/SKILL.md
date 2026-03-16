@@ -201,7 +201,7 @@ After sufficient iterations, generate the report:
 uv run python -m bo_workflow.cli report --run-id <RUN_ID>
 ```
 
-Do **not** invoke `build-oracle`, `run-proxy`, or `bo-end-to-end-proxy` from this skill.
+Do **not** invoke `build-oracle` or `run-proxy` from this skill.
 
 ---
 

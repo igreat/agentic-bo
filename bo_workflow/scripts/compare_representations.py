@@ -156,10 +156,16 @@ def main(argv: list[str] | None = None) -> int:
                 default_batch_size=args.batch_size,
             )
             run_id = str(state["run_id"])
-            run_dir = engine.get_run_dir(run_id)
             backend_dir = args.runs_root.parent / "evaluation_backends" / run_id
 
-            oracle_info = build_proxy_oracle(run_dir, backend_dir=backend_dir)
+            oracle_info = build_proxy_oracle(
+                dataset_path=features_path,
+                target_column=args.target,
+                objective=args.objective,
+                backend_dir=backend_dir,
+                seed=run_seed,
+                default_engine="hebo",
+            )
             if args.verbose:
                 print(
                     f"    Oracle: {oracle_info.get('selected_model')} "

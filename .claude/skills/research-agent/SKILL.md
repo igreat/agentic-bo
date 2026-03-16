@@ -177,8 +177,6 @@ Always finish with `bo-report-run` and write:
 - `convergence_plot_path`
 
 Do not re-run Phase 3 setup during Phase 4. In particular:
-- do not call `bo-end-to-end-proxy`
-- do not call `bo-build-proxy-oracle`
 - do not call `build-oracle`
 - do not call `run-proxy`
 - do not re-run `init`
@@ -228,5 +226,5 @@ On resume:
 - Only record results provided by the user or an external observer/harness.
 - If BO artifacts include oracle metadata, label results as simulations and include oracle CV RMSE.
 - Keep `research_state.json` concise and structured; put narrative detail in `research_plan.md`.
-- Do not call `bo-end-to-end-proxy`, `build-oracle`, or `run-proxy` as part of `research-agent`.
+- Do not call `build-oracle` or `run-proxy` as part of `research-agent`.
 - A fully unresolved search space is out of scope for execution; resolve `experiment_spec` first.

@@ -1,8 +1,4 @@
-"""Oracle training, loading, and prediction.
-
-Training reads a source BO run for dataset/config context, but persisted oracle
-artifacts live under a separate evaluation backend directory.
-"""
+"""Oracle training, loading, and prediction."""
 
 import pickle
 import sys
@@ -18,7 +14,8 @@ from sklearn.model_selection import KFold, cross_val_score
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OrdinalEncoder
 
-from ..utils import EvaluationBackendPaths, RunPaths, read_json, utc_now_iso, write_json
+from ..engine import _infer_design_parameters
+from ..utils import EvaluationBackendPaths, read_json, utc_now_iso, write_json
 
 
 # ------------------------------------------------------------------
@@ -55,49 +52,64 @@ def _log(verbose: bool, message: str) -> None:
 
 
 def build_proxy_oracle(
-    run_dir: str | Path,
     *,
+    dataset_path: str | Path,
+    target_column: str,
+    objective: str,
     backend_dir: str | Path,
+    drop_cols: list[str] | None = None,
+    seed: int = 7,
+    default_engine: str = "hebo",
     model_candidates: tuple[str, ...] = ("random_forest", "extra_trees"),
     cv_folds: int = 5,
     max_features: int | None = None,
     verbose: bool = False,
 ) -> dict[str, Any]:
     """Train/select a proxy oracle and persist model + metadata."""
-    run_dir = Path(run_dir)
-    run_paths = RunPaths(run_dir=run_dir)
+    resolved_dataset = Path(dataset_path).resolve()
+    if not resolved_dataset.exists():
+        raise FileNotFoundError(f"Dataset not found: {resolved_dataset}")
+    if objective not in {"min", "max"}:
+        raise ValueError("objective must be either 'min' or 'max'")
+    if default_engine not in {"hebo", "bo_lcb", "random", "botorch"}:
+        raise ValueError("default_engine must be one of: hebo, bo_lcb, random, botorch")
+
     backend_paths = EvaluationBackendPaths(backend_dir=Path(backend_dir))
-    state = read_json(run_paths.state)
-    if state.get("dataset_path") is None:
+    dataset = pd.read_csv(resolved_dataset)
+    if target_column not in dataset.columns:
         raise ValueError(
-            "Proxy oracle training requires a labeled dataset. "
-            "This run was initialized from a search-space spec only. "
-            "Reinitialize with --dataset if you want to build an oracle."
+            f"Target column '{target_column}' is not in dataset columns: {list(dataset.columns)}"
         )
 
-    dataset = pd.read_csv(state["dataset_path"])
+    feature_frame = dataset.drop(columns=[target_column])
+    if drop_cols:
+        unknown = [c for c in drop_cols if c not in feature_frame.columns]
+        if unknown:
+            raise ValueError(f"--drop-cols contains unknown columns: {unknown}")
+        feature_frame = feature_frame.drop(columns=drop_cols)
+
+    design_params, fixed_features, dropped_features = _infer_design_parameters(
+        feature_frame, max_categories=64
+    )
+    active_features = [p["name"] for p in design_params]
+    ignored_features = [*list(drop_cols or []), *list(fixed_features.keys()), *dropped_features]
+
     _log(
         verbose,
-        f"[oracle] run_dir={run_dir.name} rows={len(dataset)} cv_folds={cv_folds}",
+        f"[oracle] dataset={resolved_dataset.name} rows={len(dataset)} cv_folds={cv_folds}",
     )
 
-    target_column = state["target_column"]
     y_raw = pd.to_numeric(dataset[target_column], errors="coerce")
     valid_mask = y_raw.notna()
     if valid_mask.sum() < 5:
         raise ValueError("Need at least 5 non-null target rows to train an oracle.")
 
-    active_features = list(state["active_features"])
     x_full = dataset.loc[valid_mask, active_features].copy()
     y_full = y_raw.loc[valid_mask].to_numpy(dtype=float)
 
-    y_internal = _normalize_objective_values(y_full, state["objective"])
+    y_internal = _normalize_objective_values(y_full, objective)
 
-    if (
-        max_features is not None
-        and max_features > 0
-        and len(active_features) > max_features
-    ):
+    if max_features is not None and max_features > 0 and len(active_features) > max_features:
         x_for_importance = x_full.copy()
         for col in x_for_importance.columns:
             if pd.api.types.is_numeric_dtype(x_for_importance[col]):
@@ -108,33 +120,16 @@ def build_proxy_oracle(
                 codes, _ = pd.factorize(x_for_importance[col].astype(str), sort=True)
                 x_for_importance[col] = codes
 
-        # Columns referenced by constraints must never be dropped — they are
-        # required at suggest time for constraint enforcement.
-        pinned: set[str] = set()
-        for spec in state.get("constraints", []):
-            if spec.get("type") == "simplex":
-                pinned.update(spec.get("cols", []))
-        pinned = pinned & set(active_features)
-
         selector = RandomForestRegressor(
-            n_estimators=200, random_state=state["seed"], n_jobs=1
+            n_estimators=200, random_state=seed, n_jobs=1
         )
         selector.fit(x_for_importance, y_internal)
         ranked = np.argsort(selector.feature_importances_)[::-1]
-        # Fill remaining slots with top-ranked free columns (pinned cols always kept).
-        free_ranked = [x_for_importance.columns[i] for i in ranked if x_for_importance.columns[i] not in pinned]
-        remaining_slots = max(0, max_features - len(pinned))
-        keep_features = list(pinned) + free_ranked[:remaining_slots]
+        keep_features = [x_for_importance.columns[i] for i in ranked[:max_features]]
         ignored = [name for name in active_features if name not in keep_features]
 
-        state["active_features"] = keep_features
-        state["ignored_features"] = ignored
-        if "original_design_parameters" not in state:
-            state["original_design_parameters"] = list(state["design_parameters"])
-        state["design_parameters"] = [
-            p for p in state["design_parameters"] if p["name"] in set(keep_features)
-        ]
         active_features = keep_features
+        ignored_features.extend(ignored)
         x_full = x_full[active_features]
 
     numeric_cols = [
@@ -173,13 +168,13 @@ def build_proxy_oracle(
     if "random_forest" in model_candidates:
         model_pool["random_forest"] = RandomForestRegressor(
             n_estimators=200,
-            random_state=state["seed"],
+            random_state=seed,
             n_jobs=1,
         )
     if "extra_trees" in model_candidates:
         model_pool["extra_trees"] = ExtraTreesRegressor(
             n_estimators=240,
-            random_state=state["seed"],
+            random_state=seed,
             n_jobs=1,
         )
     if not model_pool:
@@ -187,7 +182,7 @@ def build_proxy_oracle(
 
     n_rows = len(x_full)
     n_splits = min(max(2, cv_folds), n_rows)
-    cv = KFold(n_splits=n_splits, shuffle=True, random_state=state["seed"])
+    cv = KFold(n_splits=n_splits, shuffle=True, random_state=seed)
 
     scores: dict[str, float] = {}
     trained_pipelines: dict[str, Pipeline] = {}
@@ -222,42 +217,34 @@ def build_proxy_oracle(
     oracle_meta = {
         "backend_id": backend_paths.backend_dir.name,
         "built_at": utc_now_iso(),
-        "source_run_id": state["run_id"],
-        "source_dataset_path": state["dataset_path"],
-        "target_column": state["target_column"],
-        "objective": state["objective"],
-        "default_engine": state.get("default_engine", "hebo"),
+        "dataset_path": str(resolved_dataset),
+        "target_column": target_column,
+        "objective": objective,
+        "default_engine": default_engine,
+        "seed": int(seed),
         "model_candidates": list(model_pool.keys()),
         "cv_rmse": scores,
         "selected_model": best_model_name,
         "selected_rmse": scores[best_model_name],
         "rows_used": int(n_rows),
         "active_features": list(active_features),
+        "ignored_features": list(dict.fromkeys(ignored_features)),
         "objective_internal": "min",
     }
     write_json(backend_paths.oracle_meta, oracle_meta)
-
-    state["oracle"] = {
-        "selected_model": oracle_meta["selected_model"],
-        "selected_rmse": oracle_meta["selected_rmse"],
-        "cv_rmse": oracle_meta["cv_rmse"],
-        "active_features": oracle_meta["active_features"],
-    }
-    state["status"] = "oracle_ready"
-    state["updated_at"] = utc_now_iso()
-    write_json(run_paths.state, state)
     _log(
         verbose,
         f"[oracle] selected={best_model_name} rmse={scores[best_model_name]:.4f}",
     )
 
     return {
-        "run_id": state["run_id"],
         "backend_id": backend_paths.backend_dir.name,
         "backend_dir": str(backend_paths.backend_dir),
-        "status": state["status"],
-        "active_features": state["active_features"],
-        "ignored_features": state["ignored_features"],
+        "dataset_path": str(resolved_dataset),
+        "target_column": target_column,
+        "objective": objective,
+        "active_features": list(active_features),
+        "ignored_features": list(dict.fromkeys(ignored_features)),
         "selected_model": best_model_name,
         "selected_rmse": scores[best_model_name],
         "cv_rmse": scores,

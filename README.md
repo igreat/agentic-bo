@@ -54,17 +54,22 @@ Use `research-agent` when the user wants:
 ### BO-Only Quick Start
 
 ```bash
+uv run python -m bo_workflow.cli build-oracle \
+  --dataset data/HER_virtual_data.csv \
+  --target Target --objective max \
+  --backend-id her-demo
+
 uv run python -m bo_workflow.cli init \
   --dataset data/HER_virtual_data.csv \
   --target Target --objective max --seed 42
 
 # grab the run_id from the JSON output, then:
-uv run python -m bo_workflow.cli build-oracle --run-id <RUN_ID>
-uv run python -m bo_workflow.cli run-proxy --run-id <RUN_ID> --iterations 20
+uv run python -m bo_workflow.cli run-proxy \
+  --run-id <RUN_ID> --backend-id her-demo --iterations 20
 uv run python -m bo_workflow.cli report --run-id <RUN_ID>
 ```
 
-`build-oracle` writes proxy assets under `evaluation_backends/<RUN_ID>/` by default. Pass `--backend-id <ID>` if you want to reuse the same backend across multiple runs.
+`build-oracle` writes proxy assets under `evaluation_backends/<BACKEND_ID>/`. Reuse the same backend across multiple runs when the run features/objective match the backend.
 
 ## BO CLI Commands
 
@@ -75,7 +80,7 @@ uv run python -m bo_workflow.cli --help
 | Command | Purpose |
 |---------|---------|
 | `init` | Create a run from a CSV dataset or explicit search-space JSON |
-| `build-oracle` | Train a proxy backend from a labeled dataset-backed run |
+| `build-oracle` | Train a proxy backend directly from a labeled dataset |
 | `suggest` | Propose next candidate experiments |
 | `observe` | Record objective values (real or simulated) |
 | `run-proxy` | Run an end-to-end simulated BO loop against a backend |
@@ -194,11 +199,9 @@ Skills in `.agents/skills/` and `.claude/skills/` provide the agent interface:
 
 - `bo-execution-workflow` — BO-layer execution helper once problem framing is already resolved
 - `bo-init-run` — initialize a run
-- `bo-build-proxy-oracle` — train proxy oracle
 - `bo-next-batch` — suggest candidates
 - `bo-record-observation` — record results
 - `bo-report-run` — status and reports
-- `bo-end-to-end-proxy` — full automated loop
 - `bo-encode-drfp` — encode reaction SMILES to DRFP features
 - `bo-decode-drfp` — decode suggestions back to real reactions
 - `bo-encode-molecule-descriptors` — encode molecule SMILES to descriptor features

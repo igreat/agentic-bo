@@ -11,7 +11,6 @@ import pandas as pd
 from ..engine import BOEngine
 from ..utils import (
     EvaluationBackendPaths,
-    read_json,
     read_jsonl,
     to_python_scalar,
     utc_now_iso,
@@ -27,15 +26,34 @@ def _json_print(payload: Any) -> None:
 def register_commands(sub: argparse._SubParsersAction) -> None:
     """Register evaluation subcommands on an existing subparsers group."""
     oracle_cmd = sub.add_parser("build-oracle", help="Train and persist proxy oracle")
-    oracle_cmd.add_argument("--run-id", type=str, required=True)
+    oracle_cmd.add_argument("--dataset", type=Path, required=True)
+    oracle_cmd.add_argument("--target", type=str, required=True)
+    oracle_cmd.add_argument("--objective", choices=["min", "max"], required=True)
+    oracle_cmd.add_argument("--backend-id", type=str, required=True)
     oracle_cmd.add_argument(
-        "--backend-id",
-        type=str,
+        "--drop-cols",
+        nargs="*",
         default=None,
-        help="Backend id under <backends-root>; defaults to the source run id.",
+        help="Columns to exclude from backend training before inferring features.",
+    )
+    oracle_cmd.add_argument("--seed", type=int, default=7)
+    oracle_cmd.add_argument(
+        "--engine",
+        choices=["hebo", "bo_lcb", "random", "botorch"],
+        default="hebo",
+        help="Default engine metadata attached to the backend.",
     )
     oracle_cmd.add_argument("--cv-folds", type=int, default=5)
-    oracle_cmd.add_argument("--max-features", type=int, default=None)
+    oracle_cmd.add_argument(
+        "--max-features",
+        type=int,
+        default=None,
+        help=(
+            "Limit backend features for high-dimensional datasets. Avoid this "
+            "for simplex-constrained composition runs unless you are sure the "
+            "reduced backend still covers every constrained column."
+        ),
+    )
     oracle_cmd.add_argument("--verbose", action="store_true")
 
     run_proxy_cmd = sub.add_parser(
@@ -84,12 +102,42 @@ def _resolve_backend_dir(
     return backends_root / resolved_id
 
 
+def _validate_backend_compatibility(
+    state: dict[str, Any], backend_meta: dict[str, Any]
+) -> None:
+    oracle_features = list(backend_meta.get("active_features", []))
+    run_features = set(state.get("active_features", []))
+    run_features.update(str(name) for name in state.get("fixed_features", {}).keys())
+    missing = [name for name in oracle_features if name not in run_features]
+    if missing:
+        raise ValueError(
+            f"Current run is missing oracle-required features: {missing}"
+        )
+
+    constrained_missing: list[str] = []
+    for constraint in state.get("constraints", []):
+        if constraint.get("type") != "simplex":
+            continue
+        for col in constraint.get("cols", []):
+            if col not in oracle_features and col not in constrained_missing:
+                constrained_missing.append(str(col))
+    if constrained_missing:
+        raise ValueError(
+            "Backend is incompatible with the current run's simplex constraints. "
+            f"Backend is missing constrained columns: {constrained_missing}. "
+            "Rebuild the backend without dropping those columns."
+        )
+
+
 def _validate_run_proxy_preconditions(
-    engine: BOEngine, run_id: str, batch_size: int
+    engine: BOEngine,
+    run_id: str,
+    batch_size: int,
+    backend_meta: dict[str, Any],
 ) -> None:
     """Validate run-proxy preconditions before any state mutation happens."""
     state = engine._load_state(run_id)
-    if state["status"] not in {"initialized", "oracle_ready", "running"}:
+    if state["status"] not in {"initialized", "running"}:
         raise ValueError(
             f"Run '{run_id}' is not ready for suggestions. "
             f"Current status: {state['status']}"
@@ -99,12 +147,14 @@ def _validate_run_proxy_preconditions(
     if engine_name == "bo_lcb" and int(batch_size) != 1:
         raise ValueError("bo_lcb currently supports batch-size=1 only.")
 
+    _validate_backend_compatibility(state, backend_meta)
+
 
 def _seed_pool_observations(
     engine: BOEngine, run_id: str, pool_path: str, verbose: bool
 ) -> int:
     """Inject all pool rows as initial observations so HEBO starts informed."""
-    state = read_json(engine.get_run_dir(run_id) / "state.json")
+    state = engine._load_state(run_id)
     pool_df = pd.read_csv(pool_path)
     target_col = state["target_column"]
     active = list(state["active_features"])
@@ -156,7 +206,7 @@ def _validate_evaluator_preconditions(
     batch_size: int,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     state = engine._load_state(run_id)
-    if state["status"] not in {"initialized", "oracle_ready", "running"}:
+    if state["status"] not in {"initialized", "running"}:
         raise ValueError(
             f"Run '{run_id}' is not ready for suggestions. Current status: {state['status']}"
         )
@@ -180,13 +230,7 @@ def _validate_evaluator_preconditions(
             "Evaluator oracle objective does not match the current run objective."
         )
 
-    oracle_features = list(backend_meta.get("active_features", []))
-    run_features = set(state.get("active_features", []))
-    missing = [name for name in oracle_features if name not in run_features]
-    if missing:
-        raise ValueError(
-            f"Current run is missing oracle-required features: {missing}"
-        )
+    _validate_backend_compatibility(state, backend_meta)
 
     return state, backend_meta
 
@@ -315,15 +359,15 @@ def run_hidden_oracle_evaluator(
 def handle(args: argparse.Namespace, engine: BOEngine) -> int | None:
     """Handle an evaluation subcommand. Returns exit code, or None if not ours."""
     if args.command == "build-oracle":
-        run_dir = engine.get_run_dir(args.run_id)
-        backend_dir = _resolve_backend_dir(
-            args.backends_root,
-            run_id=args.run_id,
-            backend_id=getattr(args, "backend_id", None),
-        )
+        backend_dir = args.backends_root / args.backend_id
         payload = build_proxy_oracle(
-            run_dir,
+            dataset_path=args.dataset,
+            target_column=args.target,
+            objective=args.objective,
             backend_dir=backend_dir,
+            drop_cols=getattr(args, "drop_cols", None),
+            seed=int(getattr(args, "seed", 7)),
+            default_engine=str(getattr(args, "engine", "hebo")),
             cv_folds=args.cv_folds,
             max_features=args.max_features,
             verbose=args.verbose,
@@ -332,7 +376,6 @@ def handle(args: argparse.Namespace, engine: BOEngine) -> int | None:
         return 0
 
     if args.command == "run-proxy":
-        run_dir = engine.get_run_dir(args.run_id)
         backend_dir = _resolve_backend_dir(
             args.backends_root,
             run_id=args.run_id,
@@ -341,7 +384,12 @@ def handle(args: argparse.Namespace, engine: BOEngine) -> int | None:
         backend_meta = read_backend_meta(backend_dir)
 
         observer = ProxyObserver(backend_dir)
-        _validate_run_proxy_preconditions(engine, args.run_id, args.batch_size)
+        _validate_run_proxy_preconditions(
+            engine,
+            args.run_id,
+            args.batch_size,
+            backend_meta,
+        )
         _attach_backend_summary(engine, args.run_id, backend_meta)
 
         seed_pool = getattr(args, "seed_pool", None)

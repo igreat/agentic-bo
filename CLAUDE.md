@@ -88,7 +88,7 @@ research_runs/
 ### Key design boundaries
 
 - **Engine has zero oracle awareness.** It only knows the `Observer` ABC and calls `observer.evaluate(suggestions)`. No oracle imports in `engine.py`.
-- **Oracle is standalone.** `evaluation/oracle.py` reads a source run for dataset/config context, but persists oracle assets under `evaluation_backends/<backend_id>/`.
+- **Oracle is standalone.** `evaluation/oracle.py` trains directly from labeled dataset inputs and persists oracle assets under `evaluation_backends/<backend_id>/`.
 - **Observers are self-contained.** `evaluation/proxy.py` defines `ProxyObserver(backend_dir)`, which captures all context at construction. `evaluate(suggestions)` takes no engine or run_id.
 - **CLI is the wiring layer.** `build-oracle` trains a backend from a run and writes it under `evaluation_backends/`. `run-proxy` constructs `evaluation.proxy.ProxyObserver(backend_dir)` and passes it to `engine.run_optimization()`.
 - **Each module owns its CLI surface.** `engine_cli.py` and `evaluation/cli.py` each define `register_commands()` + `handle()`. `cli.py` composes them.
@@ -188,7 +188,7 @@ All commands: `uv run python -m bo_workflow.cli <command> [flags]`
 | Command | Key flags | Purpose |
 |---------|-----------|---------|
 | `init` | `--dataset` or `--search-space-json` (req), `--target --objective` (req), `--engine --seed --init-random --batch-size --simplex-groups --drop-cols` (opt) | Init run from dataset inference or explicit search-space spec |
-| `build-oracle` | `--run-id` (req), `--backend-id --cv-folds --max-features` (opt) | Train proxy backend from a labeled dataset-backed run |
+| `build-oracle` | `--dataset --target --objective --backend-id` (req), `--drop-cols --cv-folds --max-features --seed --engine` (opt) | Train proxy backend directly from a labeled dataset |
 | `suggest` | `--run-id` (req), `--batch-size` (opt) | Propose next candidates |
 | `observe` | `--run-id --data` (req) | Record real/simulated results |
 | `run-proxy` | `--run-id --iterations` (req), `--backend-id --batch-size` (opt) | Full proxy BO loop |
@@ -218,13 +218,18 @@ Constraints are domain knowledge, not something the engine can reliably infer fr
 ## MVP demo (copy-paste)
 
 ```bash
+uv run python -m bo_workflow.cli build-oracle \
+  --dataset data/HER_virtual_data.csv \
+  --target Target --objective max \
+  --backend-id her-demo
+
 uv run python -m bo_workflow.cli init \
   --dataset data/HER_virtual_data.csv \
   --target Target --objective max --seed 42
 
 # grab the run_id from the JSON output, then:
-uv run python -m bo_workflow.cli build-oracle --run-id <RUN_ID>
-uv run python -m bo_workflow.cli run-proxy --run-id <RUN_ID> --iterations 20
+uv run python -m bo_workflow.cli run-proxy \
+  --run-id <RUN_ID> --backend-id her-demo --iterations 20
 ```
 
 Expected artifacts in `bo_runs/<RUN_ID>/`: `state.json`, `input_spec.json`, `suggestions.jsonl`, `observations.jsonl`, `convergence.pdf`, `report.json`.
@@ -233,7 +238,7 @@ Expected backend artifacts in `evaluation_backends/<RUN_ID>/`: `oracle.pkl`, `or
 
 ## BO Suggest/Observe Workflow
 
-The engine supports step-by-step usage without a proxy oracle. `suggest` accepts status `initialized`, `oracle_ready`, or `running` — no oracle needed for HEBO/BO/random.
+The engine supports step-by-step usage without a proxy oracle. `suggest` accepts status `initialized` or `running` — no oracle needed for HEBO/BO/random.
 
 ```bash
 uv run python -m bo_workflow.cli init --dataset ... --target ... --objective max
@@ -245,7 +250,7 @@ uv run python -m bo_workflow.cli observe --run-id <RUN_ID> --data '{"x": {...}, 
 
 Within `research-agent`, this low-level pattern is the canonical execution flow. A human, hidden evaluator, or other external observer may supply the values that later get recorded with `observe`.
 
-Low-level proxy tools (`build-oracle`, `run-proxy`, `bo-end-to-end-proxy`) remain available for BO-only demos and retrospective benchmarking, but they are not the default research-agent path.
+Low-level proxy commands (`build-oracle`, `run-proxy`) remain available for BO-only demos and retrospective benchmarking, but they are not the default research-agent path.
 
 For hidden benchmark runs, prefer `run-evaluator` over `run-proxy`. The evaluator owns the oracle side externally and records observations back into the run without telling the agent to build or invoke its own proxy.
 
@@ -269,7 +274,7 @@ p.write_text(json.dumps(state, indent=2))
 
 Then call `run-proxy` with the additional iterations desired. The engine naturally loads all existing observations, so the optimizer continues from the current best — no work is repeated.
 
-This also applies to `suggest`: it accepts status `initialized`, `oracle_ready`, or `running`.
+This also applies to `suggest`: it accepts status `initialized` or `running`.
 
 ## Guardrails
 

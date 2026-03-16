@@ -166,11 +166,15 @@ def main(argv: list[str] | None = None) -> int:
             if args.verbose:
                 print(f"  init: run_id={run_id}")
 
-            run_dir = engine.get_run_dir(run_id)
             backend_dir = args.runs_root.parent / "evaluation_backends" / run_id
             oracle_info = build_proxy_oracle(
-                run_dir,
+                dataset_path=args.dataset,
+                target_column=args.target,
+                objective=args.objective,
                 backend_dir=backend_dir,
+                drop_cols=drop_cols,
+                seed=run_seed,
+                default_engine=engine_name,
                 cv_folds=args.cv_folds,
                 max_features=args.max_features,
             )

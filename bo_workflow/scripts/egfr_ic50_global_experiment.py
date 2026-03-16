@@ -309,8 +309,12 @@ def main(argv=None) -> int:
     # 6. Final oracle build for surrogate quality report
     backend_dir = run_dir.parent.parent / "evaluation_backends" / run_id
     final_oracle = build_proxy_oracle(
-        run_dir,
+        dataset_path=features_csv,
+        target_column="pIC50",
+        objective="max",
         backend_dir=backend_dir,
+        seed=args.seed,
+        default_engine=args.engine,
         cv_folds=args.cv_folds,
         verbose=False,
     )
