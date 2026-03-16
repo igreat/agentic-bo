@@ -18,7 +18,7 @@ from sklearn.model_selection import KFold, cross_val_score
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OrdinalEncoder
 
-from .utils import Objective, RunPaths, read_json, utc_now_iso, write_json
+from .utils import RunPaths, read_json, utc_now_iso, write_json
 
 
 # ------------------------------------------------------------------
@@ -26,23 +26,22 @@ from .utils import Objective, RunPaths, read_json, utc_now_iso, write_json
 # ------------------------------------------------------------------
 
 
-def _normalize_objective_values(
-    values: np.ndarray, objective: Objective
-) -> tuple[np.ndarray, float]:
-    """Map objective values to internal minimization scale."""
+def _normalize_objective_values(values: np.ndarray, objective: str) -> np.ndarray:
+    """Map objective values to the engine's internal minimization scale."""
     if objective == "min":
-        return values.astype(float), float("nan")
-    target_max = float(np.max(values))
-    return (target_max - values).astype(float), target_max
+        return values.astype(float)
+    if objective == "max":
+        return (-values).astype(float)
+    raise ValueError(f"Unknown objective: '{objective}'")
 
 
-def _restore_objective_values(
-    values: np.ndarray, objective: Objective, target_max: float
-) -> np.ndarray:
-    """Restore internal minimization values back to user objective scale."""
+def _restore_objective_values(values: np.ndarray, objective: str) -> np.ndarray:
+    """Restore internal minimization values back to the user objective scale."""
     if objective == "min":
         return values
-    return target_max - values
+    if objective == "max":
+        return -values
+    raise ValueError(f"Unknown objective: '{objective}'")
 
 
 def _log(verbose: bool, message: str) -> None:
@@ -67,6 +66,12 @@ def build_proxy_oracle(
     run_dir = Path(run_dir)
     paths = RunPaths(run_dir=run_dir)
     state = read_json(paths.state)
+    if state.get("dataset_path") is None:
+        raise ValueError(
+            "Proxy oracle training requires a labeled dataset. "
+            "This run was initialized from a search-space spec only. "
+            "Reinitialize with --dataset if you want to build an oracle."
+        )
 
     dataset = pd.read_csv(state["dataset_path"])
     _log(
@@ -84,7 +89,7 @@ def build_proxy_oracle(
     x_full = dataset.loc[valid_mask, active_features].copy()
     y_full = y_raw.loc[valid_mask].to_numpy(dtype=float)
 
-    y_internal, target_max = _normalize_objective_values(y_full, state["objective"])
+    y_internal = _normalize_objective_values(y_full, state["objective"])
 
     if (
         max_features is not None
@@ -221,14 +226,8 @@ def build_proxy_oracle(
         "rows_used": int(n_rows),
         "active_features": list(active_features),
         "objective_internal": "min",
-        "target_max_for_restore": target_max,
     }
     write_json(paths.oracle_meta, oracle_meta)
-
-    state["objective_transform"] = {
-        "internal_objective": "min",
-        "target_max_for_restore": target_max,
-    }
 
     state["oracle"] = oracle_meta
     state["status"] = "oracle_ready"
@@ -271,5 +270,4 @@ def predict_original_scale(
     """Run oracle prediction and map back to the user's objective scale."""
     model = load_oracle(run_dir)
     y_internal = np.asarray(model.predict(x_df), dtype=float)
-    target_max = float(state["oracle"]["target_max_for_restore"])
-    return _restore_objective_values(y_internal, state["objective"], target_max)
+    return _restore_objective_values(y_internal, state["objective"])

@@ -56,8 +56,9 @@ def _run_full_proxy_loop(
 
 
 def _assert_standard_artifacts(paths: RunPaths, iterations: int = ITERATIONS) -> None:
-    """Assert the 7 standard run artifacts exist and have expected content."""
+    """Assert standard run artifacts exist and have expected content."""
     assert paths.state.exists()
+    assert paths.input_spec.exists()
     assert paths.oracle_model.exists()
     assert paths.oracle_meta.exists()
     assert paths.suggestions.exists()
@@ -301,6 +302,96 @@ def test_human_loop_suggest_observe(engine: BOEngine, her_csv: Path) -> None:
 
     final_state = read_json(paths.state)
     assert final_state["status"] == "running"
+
+
+def test_search_space_init_suggest_observe_report_min(engine: BOEngine) -> None:
+    """Runs initialized from explicit search-space JSON should work without a dataset."""
+    state = engine.init_run(
+        search_space_spec={
+            "design_parameters": [
+                {"name": "temperature_c", "type": "num", "lb": 20.0, "ub": 100.0},
+                {"name": "solvent", "type": "cat", "categories": ["A", "B", "C"]},
+            ],
+            "fixed_features": {"pressure_bar": 1.0},
+        },
+        target_column="yield_pct",
+        objective="min",
+        seed=42,
+    )
+    run_id = state["run_id"]
+    paths = RunPaths(run_dir=engine.get_run_dir(run_id))
+
+    result = engine.suggest(run_id, batch_size=2)
+    assert len(result["suggestions"]) == 2
+    for suggestion in result["suggestions"]:
+        assert 20.0 <= float(suggestion["x"]["temperature_c"]) <= 100.0
+        assert suggestion["x"]["solvent"] in {"A", "B", "C"}
+        assert suggestion["x"]["pressure_bar"] == 1.0
+
+    engine.observe(
+        run_id,
+        [
+            {"x": result["suggestions"][0]["x"], "y": 5.0},
+            {"x": result["suggestions"][1]["x"], "y": 3.0},
+        ],
+    )
+    report = engine.report(run_id)
+
+    assert report["best_value"] == pytest.approx(3.0)
+    input_spec = read_json(paths.input_spec)
+    assert input_spec["input_source"] == "search_space_json"
+    assert input_spec["dataset_path"] is None
+
+
+def test_search_space_init_supports_max_objective(engine: BOEngine) -> None:
+    """Max-objective runs initialized from search-space JSON should optimize correctly."""
+    state = engine.init_run(
+        search_space_spec={
+            "design_parameters": [
+                {"name": "temperature_c", "type": "num", "lb": 20.0, "ub": 100.0},
+                {"name": "solvent", "type": "cat", "categories": ["A", "B"]},
+            ]
+        },
+        target_column="yield_pct",
+        objective="max",
+        seed=42,
+        default_engine="botorch",
+        num_initial_random_samples=1,
+    )
+    run_id = state["run_id"]
+
+    first = engine.suggest(run_id)["suggestions"][0]
+    engine.observe(run_id, [{"x": first["x"], "y": 1.0}])
+
+    second_batch = engine.suggest(run_id, batch_size=2)
+    engine.observe(
+        run_id,
+        [
+            {"x": second_batch["suggestions"][0]["x"], "y": 5.0},
+            {"x": second_batch["suggestions"][1]["x"], "y": 3.0},
+        ],
+    )
+
+    status = engine.status(run_id)
+    report = engine.report(run_id)
+    assert status["best_value"] == pytest.approx(5.0)
+    assert report["best_value"] == pytest.approx(5.0)
+
+
+def test_build_proxy_oracle_requires_labeled_dataset(engine: BOEngine) -> None:
+    """Search-space-only runs cannot build a proxy oracle without labeled data."""
+    state = engine.init_run(
+        search_space_spec={
+            "design_parameters": [
+                {"name": "temperature_c", "type": "num", "lb": 20.0, "ub": 100.0}
+            ]
+        },
+        target_column="yield_pct",
+        objective="max",
+    )
+
+    with pytest.raises(ValueError, match="requires a labeled dataset"):
+        build_proxy_oracle(engine.get_run_dir(state["run_id"]))
 
 
 def test_init_hebo_rf_persists_in_status(engine: BOEngine, her_csv: Path) -> None:
