@@ -4,6 +4,8 @@ Each test exercises the Python API end-to-end (no subprocess CLI calls),
 using tmp_path for full isolation between tests.
 """
 
+import argparse
+import json
 import math
 from pathlib import Path
 
@@ -11,6 +13,7 @@ import pandas as pd
 import pytest
 
 from bo_workflow.engine import BOEngine
+from bo_workflow.evaluation.cli import handle as handle_evaluation
 from bo_workflow.evaluation.cli import run_hidden_oracle_evaluator
 from bo_workflow.evaluation.oracle import build_proxy_oracle
 from bo_workflow.evaluation.proxy import ProxyObserver
@@ -539,6 +542,124 @@ def test_hidden_oracle_evaluator_resolves_pending_suggestions(
     assert len(suggestions) == 1
     assert len(observations) == 1
     assert observations[0]["suggestion_id"] == suggestions[0]["suggestion_id"]
+
+
+def test_build_oracle_supports_custom_backend_id(
+    engine: BOEngine, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """CLI build-oracle should write to the requested backend id."""
+    dataset = tmp_path / "custom_backend_dataset.csv"
+    pd.DataFrame(
+        [
+            {"temperature_c": 20.0, "solvent": "A", "yield_pct": 1.0},
+            {"temperature_c": 40.0, "solvent": "A", "yield_pct": 2.5},
+            {"temperature_c": 60.0, "solvent": "B", "yield_pct": 4.0},
+            {"temperature_c": 80.0, "solvent": "B", "yield_pct": 5.0},
+            {"temperature_c": 100.0, "solvent": "A", "yield_pct": 3.5},
+        ]
+    ).to_csv(dataset, index=False)
+
+    state = engine.init_run(
+        dataset_path=dataset,
+        target_column="yield_pct",
+        objective="max",
+        seed=42,
+    )
+    backend_id = "shared-yield-backend"
+    backends_root = engine.runs_root.parent / "evaluation_backends"
+
+    exit_code = handle_evaluation(
+        argparse.Namespace(
+            command="build-oracle",
+            run_id=state["run_id"],
+            backend_id=backend_id,
+            backends_root=backends_root,
+            cv_folds=3,
+            max_features=None,
+            verbose=False,
+        ),
+        engine,
+    )
+
+    assert exit_code == 0
+    payload = json.loads(capsys.readouterr().out)
+    backend_paths = EvaluationBackendPaths(backends_root / backend_id)
+    assert payload["backend_id"] == backend_id
+    assert payload["backend_dir"] == str(backend_paths.backend_dir)
+    assert backend_paths.oracle_model.exists()
+    assert backend_paths.oracle_meta.exists()
+
+
+def test_run_proxy_reuses_backend_across_runs(
+    engine: BOEngine, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """CLI run-proxy should accept a backend id built from a different source run."""
+    dataset = tmp_path / "shared_backend_dataset.csv"
+    pd.DataFrame(
+        [
+            {"temperature_c": 20.0, "solvent": "A", "yield_pct": 1.0},
+            {"temperature_c": 40.0, "solvent": "A", "yield_pct": 2.5},
+            {"temperature_c": 60.0, "solvent": "B", "yield_pct": 4.0},
+            {"temperature_c": 80.0, "solvent": "B", "yield_pct": 5.0},
+            {"temperature_c": 100.0, "solvent": "A", "yield_pct": 3.5},
+        ]
+    ).to_csv(dataset, index=False)
+
+    source_state = engine.init_run(
+        dataset_path=dataset,
+        target_column="yield_pct",
+        objective="max",
+        seed=42,
+    )
+    backend_id = "shared-yield-backend"
+    backends_root = engine.runs_root.parent / "evaluation_backends"
+    source_backend_paths = EvaluationBackendPaths(backends_root / backend_id)
+    build_proxy_oracle(
+        engine.get_run_dir(source_state["run_id"]),
+        backend_dir=source_backend_paths.backend_dir,
+    )
+
+    target_state = engine.init_run(
+        search_space_spec={
+            "design_parameters": [
+                {"name": "temperature_c", "type": "num", "lb": 20.0, "ub": 100.0},
+                {"name": "solvent", "type": "cat", "categories": ["A", "B"]},
+            ]
+        },
+        target_column="yield_pct",
+        objective="max",
+        seed=7,
+    )
+    target_run_id = target_state["run_id"]
+    target_paths = RunPaths(run_dir=engine.get_run_dir(target_run_id))
+
+    exit_code = handle_evaluation(
+        argparse.Namespace(
+            command="run-proxy",
+            run_id=target_run_id,
+            backend_id=backend_id,
+            backends_root=backends_root,
+            iterations=2,
+            batch_size=1,
+            seed_pool=None,
+            verbose=False,
+        ),
+        engine,
+    )
+
+    assert exit_code == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["run_id"] == target_run_id
+    assert source_backend_paths.oracle_model.exists()
+    assert source_backend_paths.oracle_meta.exists()
+
+    observations = read_jsonl(target_paths.observations)
+    assert len(observations) == 2
+    assert {row["source"] for row in observations} == {"proxy-oracle"}
+
+    target_state_after = read_json(target_paths.state)
+    assert target_state_after["status"] == "completed"
+    assert target_state_after["oracle"]["selected_model"] is not None
 
 
 def test_init_hebo_rf_persists_in_status(engine: BOEngine, her_csv: Path) -> None:
