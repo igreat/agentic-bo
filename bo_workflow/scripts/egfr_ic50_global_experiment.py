@@ -37,7 +37,7 @@ import numpy as np
 import pandas as pd
 
 from bo_workflow.engine import BOEngine
-from bo_workflow.oracle import build_proxy_oracle
+from bo_workflow.evaluation.oracle import build_proxy_oracle
 from bo_workflow.converters.molecule_descriptors import (
     canonicalize_smiles,
     decode_nearest,

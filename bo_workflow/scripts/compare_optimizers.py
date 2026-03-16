@@ -14,8 +14,8 @@ import numpy as np
 from tqdm import tqdm
 
 from bo_workflow.engine import BOEngine
-from bo_workflow.observers.proxy import ProxyObserver
-from bo_workflow.oracle import build_proxy_oracle
+from bo_workflow.evaluation.proxy import ProxyObserver
+from bo_workflow.evaluation.oracle import build_proxy_oracle
 from bo_workflow.plotting import plot_optimization_convergence
 
 ENGINE_CHOICES = ("hebo", "bo_lcb", "random", "botorch")

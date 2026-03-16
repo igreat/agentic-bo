@@ -32,15 +32,17 @@ Two layers matter:
 bo_workflow/
   engine.py       # BOEngine class — suggest/observe loop, no oracle knowledge
   engine_cli.py   # CLI subcommands: init, suggest, observe, status, report
-  oracle.py       # standalone proxy oracle — train, load, predict on run_dir
-  oracle_cli.py   # CLI subcommands: build-oracle, run-proxy
   cli.py          # top-level entrypoint — composes subparsers from each module
   plotting.py     # convergence plot generation
   utils.py        # RunPaths, JSON I/O, shared types
+  evaluation/
+    cli.py        # CLI subcommands: build-oracle, run-proxy, run-evaluator
+    oracle.py     # standalone proxy oracle — train, load, predict on run_dir
+    proxy.py      # ProxyObserver — self-contained, captures run_dir at init
+    __main__.py   # optional evaluation-only module entrypoint
   observers/
     base.py       # Observer ABC — evaluate(suggestions) interface
-    proxy.py      # ProxyObserver — self-contained, captures run_dir at init
-    callback.py    # CallbackObserver — delegates to user callback
+    callback.py   # CallbackObserver — delegates to user callback
   constraints/
     base.py       # Constraint ABC — apply(suggestions) interface
     simplex.py    # SimplexConstraint — post-hoc normalization (upgradeable to bijection)
@@ -86,10 +88,10 @@ research_runs/
 ### Key design boundaries
 
 - **Engine has zero oracle awareness.** It only knows the `Observer` ABC and calls `observer.evaluate(suggestions)`. No oracle imports in `engine.py`.
-- **Oracle is standalone.** `oracle.py` operates on `run_dir: Path`, not `engine: BOEngine`. Reads/writes state.json and oracle files directly.
-- **Observers are self-contained.** `ProxyObserver(run_dir)` captures all context at construction. `evaluate(suggestions)` takes no engine or run_id.
-- **CLI is the wiring layer.** `build-oracle` calls `oracle.build_proxy_oracle(run_dir)` directly. `run-proxy` constructs `ProxyObserver(run_dir)` and passes it to `engine.run_optimization()`.
-- **Each module owns its CLI surface.** `engine_cli.py` and `oracle_cli.py` each define `register_commands()` + `handle()`. `cli.py` composes them.
+- **Oracle is standalone.** `evaluation/oracle.py` operates on `run_dir: Path`, not `engine: BOEngine`. Reads/writes state.json and oracle files directly.
+- **Observers are self-contained.** `evaluation/proxy.py` defines `ProxyObserver(run_dir)`, which captures all context at construction. `evaluate(suggestions)` takes no engine or run_id.
+- **CLI is the wiring layer.** `build-oracle` calls `evaluation.oracle.build_proxy_oracle(run_dir)` directly. `run-proxy` constructs `evaluation.proxy.ProxyObserver(run_dir)` and passes it to `engine.run_optimization()`.
+- **Each module owns its CLI surface.** `engine_cli.py` and `evaluation/cli.py` each define `register_commands()` + `handle()`. `cli.py` composes them.
 - **Converters are standalone.** Each converter has its own `__main__`-style CLI (`python -m bo_workflow.converters.reaction_drfp`). They transform data before/after the BO loop but do not depend on the engine or oracle.
 - **Constraints are search-space properties.** `constraints/` is the enforcement layer — each `Constraint` subclass receives raw suggestions from the optimizer and projects them into the feasible region via `apply()`. Constraints are stored in `state.json["constraints"]` and enforced at every `suggest` call. The agent is responsible for inferring constraints from the user's problem description (e.g. "proportions sum to 100%") and passing them via `--simplex-groups`; the engine never auto-detects them.
 

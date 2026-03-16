@@ -154,6 +154,7 @@ Each top-level research workflow writes to `research_runs/<RESEARCH_ID>/`:
 |-- bo_workflow/
 |   |-- constraints/
 |   |-- converters/
+|   |-- evaluation/
 |   |-- observers/
 |   `-- scripts/
 |-- data/
@@ -168,7 +169,7 @@ Each top-level research workflow writes to `research_runs/<RESEARCH_ID>/`:
     `-- <research_id>/
 ```
 
-- `bo_workflow/` contains the BO engine, CLI wiring, oracle layer, converters, constraints, and reusable scripts.
+- `bo_workflow/` contains the BO engine, evaluation/oracle layer, converters, constraints, and reusable scripts.
 - `data/` contains example and benchmark datasets used by the BO and research workflows.
 - `.agents/skills/` and `.claude/skills/` contain the mirrored agent skill trees.
 - `bo_runs/` stores BO run state and report artifacts.

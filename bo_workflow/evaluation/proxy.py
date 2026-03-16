@@ -5,9 +5,9 @@ from typing import Any
 
 import pandas as pd
 
-from ..oracle import predict_original_scale
+from .oracle import predict_original_scale
 from ..utils import RunPaths, read_json
-from .base import Observer
+from ..observers.base import Observer
 
 
 class ProxyObserver(Observer):

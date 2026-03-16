@@ -11,9 +11,9 @@ import pandas as pd
 import pytest
 
 from bo_workflow.engine import BOEngine
-from bo_workflow.evaluator_cli import run_hidden_oracle_evaluator
-from bo_workflow.oracle import build_proxy_oracle
-from bo_workflow.observers.proxy import ProxyObserver
+from bo_workflow.evaluation.cli import run_hidden_oracle_evaluator
+from bo_workflow.evaluation.oracle import build_proxy_oracle
+from bo_workflow.evaluation.proxy import ProxyObserver
 from bo_workflow.utils import RunPaths, read_json, read_jsonl
 
 ITERATIONS = 5
@@ -259,7 +259,7 @@ def test_simplex_constrained_columns_pinned_during_feature_selection(
     paths = RunPaths(run_dir=engine.get_run_dir(run_id))
 
     # Request far fewer features than the dataset has — constrained cols must survive.
-    from bo_workflow.oracle import build_proxy_oracle
+    from bo_workflow.evaluation.oracle import build_proxy_oracle
     build_proxy_oracle(paths.run_dir, max_features=3)
 
     updated_state = read_json(paths.state)

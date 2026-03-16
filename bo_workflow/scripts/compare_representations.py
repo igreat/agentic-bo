@@ -17,8 +17,8 @@ from bo_workflow.converters.reaction_drfp import encode_reactions
 from bo_workflow.converters.molecule_descriptors import encode_molecules
 from bo_workflow.converters.combined import encode_combined
 from bo_workflow.engine import BOEngine
-from bo_workflow.observers.proxy import ProxyObserver
-from bo_workflow.oracle import build_proxy_oracle
+from bo_workflow.evaluation.proxy import ProxyObserver
+from bo_workflow.evaluation.oracle import build_proxy_oracle
 from bo_workflow.plotting import plot_optimization_convergence
 
 

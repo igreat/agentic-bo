@@ -18,7 +18,7 @@ from sklearn.model_selection import KFold, cross_val_score
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OrdinalEncoder
 
-from .utils import RunPaths, read_json, utc_now_iso, write_json
+from ..utils import RunPaths, read_json, utc_now_iso, write_json
 
 
 # ------------------------------------------------------------------
