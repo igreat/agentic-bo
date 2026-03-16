@@ -5,7 +5,7 @@ from pathlib import Path
 import sys
 
 from .engine import BOEngine
-from . import engine_cli, oracle_cli
+from . import engine_cli, evaluator_cli, oracle_cli
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -19,6 +19,7 @@ def build_parser() -> argparse.ArgumentParser:
     sub = parser.add_subparsers(dest="command", required=True)
     engine_cli.register_commands(sub)
     oracle_cli.register_commands(sub)
+    evaluator_cli.register_commands(sub)
     return parser
 
 
@@ -27,7 +28,7 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     engine = BOEngine(runs_root=args.runs_root)
 
-    for handler in (engine_cli.handle, oracle_cli.handle):
+    for handler in (engine_cli.handle, oracle_cli.handle, evaluator_cli.handle):
         result = handler(args, engine)
         if result is not None:
             return result

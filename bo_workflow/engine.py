@@ -747,6 +747,9 @@ class BOEngine:
             "ignored_features": state["ignored_features"],
             "constraints": state.get("constraints", []),
             "num_observations": len(observations),
+            "observation_sources": sorted(
+                {str(row.get("source", "unknown")) for row in observations}
+            ),
         }
         if observations:
             y_values = np.asarray(
@@ -819,6 +822,7 @@ class BOEngine:
             "best_iteration": status.get("best_iteration"),
             "best_x": status.get("best_x"),
             "oracle": status.get("oracle"),
+            "observation_sources": status.get("observation_sources", []),
             "artifacts": {
                 "plot": str(self._paths(run_id).convergence_plot),
                 "state": str(self._paths(run_id).state),

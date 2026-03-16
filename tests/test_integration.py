@@ -11,6 +11,7 @@ import pandas as pd
 import pytest
 
 from bo_workflow.engine import BOEngine
+from bo_workflow.evaluator_cli import run_hidden_oracle_evaluator
 from bo_workflow.oracle import build_proxy_oracle
 from bo_workflow.observers.proxy import ProxyObserver
 from bo_workflow.utils import RunPaths, read_json, read_jsonl
@@ -392,6 +393,119 @@ def test_build_proxy_oracle_requires_labeled_dataset(engine: BOEngine) -> None:
 
     with pytest.raises(ValueError, match="requires a labeled dataset"):
         build_proxy_oracle(engine.get_run_dir(state["run_id"]))
+
+
+def test_hidden_oracle_evaluator_runs_search_space_loop(engine: BOEngine, tmp_path: Path) -> None:
+    """Hidden evaluator should drive a search-space-only run from an external oracle dir."""
+    dataset = tmp_path / "evaluator_dataset.csv"
+    pd.DataFrame(
+        [
+            {"temperature_c": 20.0, "solvent": "A", "yield_pct": 1.0},
+            {"temperature_c": 40.0, "solvent": "A", "yield_pct": 2.5},
+            {"temperature_c": 60.0, "solvent": "B", "yield_pct": 4.0},
+            {"temperature_c": 80.0, "solvent": "B", "yield_pct": 5.0},
+            {"temperature_c": 100.0, "solvent": "A", "yield_pct": 3.5},
+        ]
+    ).to_csv(dataset, index=False)
+
+    backend_state = engine.init_run(
+        dataset_path=dataset,
+        target_column="yield_pct",
+        objective="max",
+        seed=42,
+    )
+    backend_run_dir = engine.get_run_dir(backend_state["run_id"])
+    build_proxy_oracle(backend_run_dir)
+
+    search_state = engine.init_run(
+        search_space_spec={
+            "design_parameters": [
+                {"name": "temperature_c", "type": "num", "lb": 20.0, "ub": 100.0},
+                {"name": "solvent", "type": "cat", "categories": ["A", "B"]},
+            ]
+        },
+        target_column="yield_pct",
+        objective="max",
+        seed=7,
+    )
+    run_id = search_state["run_id"]
+    paths = RunPaths(run_dir=engine.get_run_dir(run_id))
+
+    payload = run_hidden_oracle_evaluator(
+        engine,
+        run_id=run_id,
+        oracle_dir=backend_run_dir,
+        num_iterations=2,
+        batch_size=2,
+    )
+
+    assert payload["recorded"] == 4
+    assert paths.observations.exists()
+    observations = read_jsonl(paths.observations)
+    assert len(observations) == 4
+    assert {row["source"] for row in observations} == {"benchmark-evaluator"}
+
+    report = read_json(paths.report)
+    assert report["observation_sources"] == ["benchmark-evaluator"]
+    assert report["best_value"] is not None
+
+
+def test_hidden_oracle_evaluator_resolves_pending_suggestions(
+    engine: BOEngine, tmp_path: Path
+) -> None:
+    """Evaluator resume should observe already-pending suggestions before new rounds."""
+    dataset = tmp_path / "resume_dataset.csv"
+    pd.DataFrame(
+        [
+            {"temperature_c": 20.0, "solvent": "A", "yield_pct": 1.0},
+            {"temperature_c": 40.0, "solvent": "A", "yield_pct": 2.5},
+            {"temperature_c": 60.0, "solvent": "B", "yield_pct": 4.0},
+            {"temperature_c": 80.0, "solvent": "B", "yield_pct": 5.0},
+            {"temperature_c": 100.0, "solvent": "A", "yield_pct": 3.5},
+        ]
+    ).to_csv(dataset, index=False)
+
+    backend_state = engine.init_run(
+        dataset_path=dataset,
+        target_column="yield_pct",
+        objective="max",
+        seed=42,
+    )
+    backend_run_dir = engine.get_run_dir(backend_state["run_id"])
+    build_proxy_oracle(backend_run_dir)
+
+    search_state = engine.init_run(
+        search_space_spec={
+            "design_parameters": [
+                {"name": "temperature_c", "type": "num", "lb": 20.0, "ub": 100.0},
+                {"name": "solvent", "type": "cat", "categories": ["A", "B"]},
+            ]
+        },
+        target_column="yield_pct",
+        objective="max",
+        seed=7,
+    )
+    run_id = search_state["run_id"]
+    paths = RunPaths(run_dir=engine.get_run_dir(run_id))
+
+    engine.suggest(run_id, batch_size=1)
+
+    payload = run_hidden_oracle_evaluator(
+        engine,
+        run_id=run_id,
+        oracle_dir=backend_run_dir,
+        num_iterations=0,
+        batch_size=1,
+    )
+
+    assert payload["resolved_pending"] == 1
+    assert payload["recorded"] == 1
+
+    suggestions = read_jsonl(paths.suggestions)
+    observations = read_jsonl(paths.observations)
+    assert len(suggestions) == 1
+    assert len(observations) == 1
+    assert observations[0]["suggestion_id"] == suggestions[0]["suggestion_id"]
 
 
 def test_init_hebo_rf_persists_in_status(engine: BOEngine, her_csv: Path) -> None:

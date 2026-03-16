@@ -109,7 +109,7 @@ Use `research-agent` when the user wants an end-to-end study workflow:
 - it resolves a structured experiment spec
 - initializes a run
 - continues through `suggest` / `observe` / `report`
-- does not need to know whether observations come from a user, a real experiment loop, or an external benchmark harness
+- does not need to know whether observations come from a user, a real experiment loop, or an external benchmark evaluator
 
 Use the BO skills directly when the user wants only the optimization subsystem:
 - `bo-execution-workflow` for a resolved BO-layer setup/execution handoff
@@ -182,6 +182,7 @@ All commands: `uv run python -m bo_workflow.cli <command> [flags]`
 | `suggest` | `--run-id` (req), `--batch-size` (opt) | Propose next candidates |
 | `observe` | `--run-id --data` (req) | Record real/simulated results |
 | `run-proxy` | `--run-id --iterations` (req), `--batch-size` (opt) | Full proxy BO loop |
+| `run-evaluator` | `--run-id --oracle-dir --iterations` (req), `--batch-size` (opt) | Operator-owned hidden evaluation loop over `suggest` / `observe` |
 | `status` | `--run-id` (req) | Quick run summary |
 | `report` | `--run-id` (req) | Full report + convergence plot |
 
@@ -230,9 +231,11 @@ uv run python -m bo_workflow.cli observe --run-id <RUN_ID> --data '{"x": {...}, 
 # repeat suggest/observe
 ```
 
-Within `research-agent`, this low-level pattern is the canonical execution flow. A human, hidden harness, or other external observer may supply the values that later get recorded with `observe`.
+Within `research-agent`, this low-level pattern is the canonical execution flow. A human, hidden evaluator, or other external observer may supply the values that later get recorded with `observe`.
 
 Low-level proxy tools (`build-oracle`, `run-proxy`, `bo-end-to-end-proxy`) remain available for BO-only demos and retrospective benchmarking, but they are not the default research-agent path.
+
+For hidden benchmark runs, prefer `run-evaluator` over `run-proxy`. The evaluator owns the oracle side externally and records observations back into the run without telling the agent to build or invoke its own proxy.
 
 ## Default dataset
 

@@ -49,7 +49,7 @@ Use `research-agent` when the user wants:
 - it resolves a structured experiment spec
 - initializes a run
 - continues through `suggest` / `observe` / `report`
-- does not need to know whether observations come from a user, a real experiment loop, or an external benchmark harness
+- does not need to know whether observations come from a user, a real experiment loop, or an external benchmark evaluator
 
 ### BO-Only Quick Start
 
@@ -77,6 +77,7 @@ uv run python -m bo_workflow.cli --help
 | `suggest` | Propose next candidate experiments |
 | `observe` | Record objective values (real or simulated) |
 | `run-proxy` | Run an end-to-end simulated BO loop |
+| `run-evaluator` | Run a hidden evaluation loop with an operator-owned oracle/backend |
 | `status` | Show best-so-far and run metadata |
 | `report` | Generate JSON report and convergence plot |
 
@@ -140,9 +141,10 @@ Each top-level research workflow writes to `research_runs/<RESEARCH_ID>/`:
 ## Design notes
 
 - `research-agent` is the top-level orchestration layer. Use BO skills directly only when the user wants the optimization subsystem without the surrounding research workflow.
-- `research-agent` uses the `suggest` / `observe` / `report` loop and is agnostic to whether observations come from a person or an external harness.
+- `research-agent` uses the `suggest` / `observe` / `report` loop and is agnostic to whether observations come from a person or an external evaluator.
 - The engine is replay-first: it rebuilds optimizer state from logged observations. This makes runs easy to resume and audit.
 - Proxy mode is a simulation workflow. Always present results as simulated outcomes and include oracle CV RMSE.
+- For hidden benchmark runs, prefer `run-evaluator` over `run-proxy`.
 - `data/HER_virtual_data.csv` is included as an example dataset only. In real usage, users should provide problem-specific context (target meaning, constraints, objective direction, and valid operating domain).
 
 ## Layout
