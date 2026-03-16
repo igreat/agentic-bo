@@ -105,14 +105,16 @@ Use `research-agent` when the user wants an end-to-end study workflow:
 - interpretation
 - paper drafting
 
-`research-agent` v1 has two modes:
-- `simulation`: retrospective dataset-backed workflow using the proxy oracle and `run-proxy`
-- `human_in_the_loop`: initialize from a dataset or search-space template, optionally seed prior observations, then continue through `suggest` / `observe` with user-provided results
+`research-agent` v1 is observer-agnostic:
+- it resolves a structured experiment spec
+- initializes a run
+- continues through `suggest` / `observe` / `report`
+- does not need to know whether observations come from a user, a real experiment loop, or an external benchmark harness
 
 Use the BO skills directly when the user wants only the optimization subsystem:
 - `bo-execution-workflow` for a resolved BO-layer setup/execution handoff
-- init / suggest / observe
-- build-oracle / run-proxy
+- init / suggest / observe / report
+- build-oracle / run-proxy for low-level proxy demos or BO-only benchmarking
 - reporting
 
 ## Script-first policy
@@ -150,6 +152,7 @@ Each BO run produces files under `bo_runs/<run_id>/`:
 | File | Created by |
 |------|-----------|
 | `state.json` | `init` |
+| `input_spec.json` | `init` |
 | `intent.json` | `init` (when `--intent-json` is provided) |
 | `oracle.pkl` | `build-oracle` |
 | `oracle_meta.json` | `build-oracle` |
@@ -174,8 +177,8 @@ All commands: `uv run python -m bo_workflow.cli <command> [flags]`
 
 | Command | Key flags | Purpose |
 |---------|-----------|---------|
-| `init` | `--dataset --target --objective` (req), `--engine --seed --init-random --batch-size --simplex-groups --drop-cols` (opt) | Init run from CSV |
-| `build-oracle` | `--run-id` (req), `--cv-folds --max-features` (opt) | Train proxy oracle |
+| `init` | `--dataset` or `--search-space-json` (req), `--target --objective` (req), `--engine --seed --init-random --batch-size --simplex-groups --drop-cols` (opt) | Init run from dataset inference or explicit search-space spec |
+| `build-oracle` | `--run-id` (req), `--cv-folds --max-features` (opt) | Train proxy oracle from a labeled dataset-backed run |
 | `suggest` | `--run-id` (req), `--batch-size` (opt) | Propose next candidates |
 | `observe` | `--run-id --data` (req) | Record real/simulated results |
 | `run-proxy` | `--run-id --iterations` (req), `--batch-size` (opt) | Full proxy BO loop |
@@ -213,9 +216,9 @@ uv run python -m bo_workflow.cli build-oracle --run-id <RUN_ID>
 uv run python -m bo_workflow.cli run-proxy --run-id <RUN_ID> --iterations 20
 ```
 
-Expected artifacts in `bo_runs/<RUN_ID>/`: `state.json`, `oracle.pkl`, `oracle_meta.json`, `suggestions.jsonl`, `observations.jsonl`, `convergence.pdf`, `report.json`.
+Expected artifacts in `bo_runs/<RUN_ID>/`: `state.json`, `input_spec.json`, `oracle.pkl`, `oracle_meta.json`, `suggestions.jsonl`, `observations.jsonl`, `convergence.pdf`, `report.json`.
 
-## BO Human-in-the-loop Workflow
+## BO Suggest/Observe Workflow
 
 The engine supports step-by-step usage without a proxy oracle. `suggest` accepts status `initialized`, `oracle_ready`, or `running` — no oracle needed for HEBO/BO/random.
 
@@ -227,9 +230,9 @@ uv run python -m bo_workflow.cli observe --run-id <RUN_ID> --data '{"x": {...}, 
 # repeat suggest/observe
 ```
 
-Within `research-agent`, this low-level pattern maps to `human_in_the_loop` mode.
+Within `research-agent`, this low-level pattern is the canonical execution flow. A human, hidden harness, or other external observer may supply the values that later get recorded with `observe`.
 
-In `simulation` mode, once Phase 3 has already run `init` and `build-oracle`, continue with `run-proxy --run-id <RUN_ID> ...` on the existing BO run. Do not delegate that phase to `bo-end-to-end-proxy`, because that skill re-initializes the run from scratch.
+Low-level proxy tools (`build-oracle`, `run-proxy`, `bo-end-to-end-proxy`) remain available for BO-only demos and retrospective benchmarking, but they are not the default research-agent path.
 
 ## Default dataset
 
@@ -258,7 +261,7 @@ This also applies to `suggest`: it accepts status `initialized`, `oracle_ready`,
 - **Always label proxy results as simulations.** The proxy oracle is a surrogate trained from data, not a real experiment.
 - **Include oracle CV RMSE** when presenting optimization results so the user knows surrogate quality.
 - **Prefer explicit `--target` and `--objective`.**
-- **Never auto-evaluate with proxy oracle in human-in-the-loop mode.** If the user is recording real observations, do not call `run-proxy` or otherwise invoke the proxy oracle.
+- **Never auto-evaluate with proxy oracle when observations are meant to come from outside the BO engine.** If the user or an external observer is providing real values, do not call `run-proxy` or otherwise invoke the proxy oracle.
 
 ## Observation format
 

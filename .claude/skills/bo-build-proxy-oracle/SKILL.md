@@ -5,7 +5,9 @@ description: Train and persist a proxy oracle for an initialized BO run.
 
 # BO Build Proxy Oracle
 
-Use this skill to train a surrogate model from the run dataset. This is only needed for proxy-mode workflows (`run-proxy`). Human-in-the-loop workflows (manual `suggest`/`observe`) do not require an oracle.
+Use this skill to train a surrogate model from the run dataset. This is only needed for proxy-mode workflows (`run-proxy`). Suggest/observe workflows do not require an oracle.
+
+This only works for runs initialized from a labeled dataset. Search-space-only runs do not have training labels and cannot build a proxy oracle.
 
 ## Command
 

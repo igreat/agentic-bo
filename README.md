@@ -45,9 +45,11 @@ Use `research-agent` when the user wants:
 - interpretation
 - paper drafting
 
-`research-agent` v1 has two modes:
-- `simulation`: retrospective dataset-backed workflow using the proxy oracle and `run-proxy`
-- `human_in_the_loop`: initialize from a dataset or search-space template, optionally seed prior observations, then continue through `suggest` / `observe` with user-provided results
+`research-agent` v1 is observer-agnostic:
+- it resolves a structured experiment spec
+- initializes a run
+- continues through `suggest` / `observe` / `report`
+- does not need to know whether observations come from a user, a real experiment loop, or an external benchmark harness
 
 ### BO-Only Quick Start
 
@@ -70,8 +72,8 @@ uv run python -m bo_workflow.cli --help
 
 | Command | Purpose |
 |---------|---------|
-| `init` | Create a run from a CSV dataset |
-| `build-oracle` | Train a proxy oracle from dataset rows |
+| `init` | Create a run from a CSV dataset or explicit search-space JSON |
+| `build-oracle` | Train a proxy oracle from a labeled dataset-backed run |
 | `suggest` | Propose next candidate experiments |
 | `observe` | Record objective values (real or simulated) |
 | `run-proxy` | Run an end-to-end simulated BO loop |
@@ -127,7 +129,7 @@ Each round suggests molecules in descriptor space, maps them to the nearest real
 
 Each run writes to `bo_runs/<RUN_ID>/`:
 
-`state.json`, `oracle.pkl`, `oracle_meta.json`, `suggestions.jsonl`, `observations.jsonl`, `convergence.pdf`, `report.json`
+`state.json`, `input_spec.json`, `oracle.pkl`, `oracle_meta.json`, `suggestions.jsonl`, `observations.jsonl`, `convergence.pdf`, `report.json`
 
 ## Research Artifacts
 
@@ -138,6 +140,7 @@ Each top-level research workflow writes to `research_runs/<RESEARCH_ID>/`:
 ## Design notes
 
 - `research-agent` is the top-level orchestration layer. Use BO skills directly only when the user wants the optimization subsystem without the surrounding research workflow.
+- `research-agent` uses the `suggest` / `observe` / `report` loop and is agnostic to whether observations come from a person or an external harness.
 - The engine is replay-first: it rebuilds optimizer state from logged observations. This makes runs easy to resume and audit.
 - Proxy mode is a simulation workflow. Always present results as simulated outcomes and include oracle CV RMSE.
 - `data/HER_virtual_data.csv` is included as an example dataset only. In real usage, users should provide problem-specific context (target meaning, constraints, objective direction, and valid operating domain).

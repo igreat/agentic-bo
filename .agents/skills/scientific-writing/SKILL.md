@@ -33,7 +33,7 @@ Write an IMRAD-style paper with these sections:
 ### Abstract
 - 150–200 words.
 - One sentence each on: motivation, what was done, best result found, key takeaway.
-- If results are from a proxy simulation, say so explicitly in the abstract.
+- If the BO artifacts indicate proxy-backed or oracle-backed evaluation, say so explicitly in the abstract.
 
 ### Introduction
 - State the research problem and why it matters.
@@ -48,19 +48,19 @@ If literature review was skipped:
 ### Methods
 - Describe the search space actually used (design variables, bounds, any simplex constraints).
 - Describe the BO engine and relevant configuration (surrogate model, acquisition function, batch size).
-- State whether the workflow was simulation-backed or human-in-the-loop.
-- If simulation: report the proxy oracle CV RMSE and note that outcomes reflect surrogate predictions, not direct measurements.
+- State how observations were obtained based on the available artifacts.
+- If the BO artifacts indicate proxy-backed evaluation: report the proxy oracle CV RMSE and note that outcomes reflect surrogate predictions, not direct measurements.
 - Reference the convergence plot at `bo_runs/<bo_run_id>/convergence.pdf`.
 
 ### Results
 - Report the best value found and the corresponding candidate (composition, conditions, etc.).
 - Mention convergence behavior — did the search plateau, was it still improving at the end?
-- If simulation: do not present outcomes as measured values. Use phrasing like "the proxy oracle predicted…" or "the surrogate model identified…".
+- If the BO artifacts indicate proxy-backed evaluation: do not present outcomes as measured values. Use phrasing like "the proxy oracle predicted…" or "the surrogate model identified…".
 
 ### Discussion
 - Interpret the result chemically or materially — why might this composition or condition work?
 - Compare against the literature baselines from `literature_findings.baselines` if available.
-- State important caveats: oracle error, dataset coverage, gap between simulation and real experiments.
+- State important caveats: oracle error when applicable, dataset coverage when applicable, and any gap between simulated/externally observed evidence and real experiments.
 
 If literature review was skipped:
 - keep the Discussion grounded in the BO trajectory, candidate composition, oracle uncertainty, and simulation limitations
