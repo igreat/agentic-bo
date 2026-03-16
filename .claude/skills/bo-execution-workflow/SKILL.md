@@ -79,6 +79,7 @@ if '<TARGET_COL>' in df.columns:
 ```
 
 **🔴 Blocking — must fix before `init`:**
+- If the dataset includes the target column, target rows used for dataset-backed init or oracle training must not contain missing values
 - Categorical column with >64 unique values → engine will error; flag this to the user before proceeding
 - The dataset clearly does not match the resolved experiment spec → stop and clarify rather than drifting the search space
 

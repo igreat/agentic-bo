@@ -152,6 +152,7 @@ In Phase 3, call `bo-execution-workflow` in **setup-only** mode:
 - stop once `init` and any seed observations are complete
 
 Write the resulting BO run ID into `research_state.json.bo_run_id`.
+Keep `research_state.json.experiment_spec.constraints` structured and machine-readable. Do not collapse constraints into prose strings.
 
 ### 4. BO Execution
 
