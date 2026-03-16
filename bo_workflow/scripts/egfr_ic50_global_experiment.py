@@ -307,7 +307,13 @@ def main(argv=None) -> int:
         )
 
     # 6. Final oracle build for surrogate quality report
-    final_oracle = build_proxy_oracle(run_dir, cv_folds=args.cv_folds, verbose=False)
+    backend_dir = run_dir.parent.parent / "evaluation_backends" / run_id
+    final_oracle = build_proxy_oracle(
+        run_dir,
+        backend_dir=backend_dir,
+        cv_folds=args.cv_folds,
+        verbose=False,
+    )
 
     output = {
         "run_id": run_id,

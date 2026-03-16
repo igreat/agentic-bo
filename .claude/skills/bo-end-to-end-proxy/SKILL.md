@@ -31,7 +31,8 @@ Extract `<RUN_ID>` from the `init` output's `run_id` field.
 
 ## How it works
 
-The CLI constructs a `ProxyObserver(run_dir)` and passes it to `engine.run_optimization()`. The engine runs suggest/observe loops without any oracle awareness — the observer is self-contained.
+The CLI constructs a `ProxyObserver(backend_dir)` and passes it to `engine.run_optimization()`. The engine runs suggest/observe loops without any oracle awareness — the observer is self-contained.
+`build-oracle` writes a reusable backend under `evaluation_backends/<backend_id>/` (default `<backend_id> = <RUN_ID>`), and `run-proxy` uses that backend for evaluation.
 
 ## Resuming a completed run
 

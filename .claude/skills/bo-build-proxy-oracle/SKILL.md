@@ -15,11 +15,11 @@ This only works for runs initialized from a labeled dataset. Search-space-only r
 uv run python -m bo_workflow.cli build-oracle --run-id <RUN_ID>
 ```
 
-Optional flags: `--cv-folds <N>` (default 5), `--max-features <K>` (limit active features for high-dimensional datasets).
+Optional flags: `--backend-id <ID>` (defaults to `<RUN_ID>`), `--cv-folds <N>` (default 5), `--max-features <K>` (limit active features for high-dimensional datasets).
 
 ## Return
 
 - selected model name (`random_forest` or `extra_trees`)
 - CV RMSE for each candidate model
 - active features used by the oracle
-- artifacts: `bo_runs/<run_id>/oracle.pkl`, `bo_runs/<run_id>/oracle_meta.json`
+- artifacts: `evaluation_backends/<backend_id>/oracle.pkl`, `evaluation_backends/<backend_id>/oracle_meta.json`

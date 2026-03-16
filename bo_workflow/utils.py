@@ -128,17 +128,24 @@ class RunPaths:
         return self.run_dir / "observations.jsonl"
 
     @property
-    def oracle_model(self) -> Path:
-        return self.run_dir / "oracle.pkl"
-
-    @property
-    def oracle_meta(self) -> Path:
-        return self.run_dir / "oracle_meta.json"
-
-    @property
     def report(self) -> Path:
         return self.run_dir / "report.json"
 
     @property
     def convergence_plot(self) -> Path:
         return self.run_dir / "convergence.pdf"
+
+
+@dataclass(frozen=True)
+class EvaluationBackendPaths:
+    """Canonical file locations under an evaluation backend directory."""
+
+    backend_dir: Path
+
+    @property
+    def oracle_model(self) -> Path:
+        return self.backend_dir / "oracle.pkl"
+
+    @property
+    def oracle_meta(self) -> Path:
+        return self.backend_dir / "oracle_meta.json"

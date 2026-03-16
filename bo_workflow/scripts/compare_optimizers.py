@@ -167,8 +167,10 @@ def main(argv: list[str] | None = None) -> int:
                 print(f"  init: run_id={run_id}")
 
             run_dir = engine.get_run_dir(run_id)
+            backend_dir = args.runs_root.parent / "evaluation_backends" / run_id
             oracle_info = build_proxy_oracle(
                 run_dir,
+                backend_dir=backend_dir,
                 cv_folds=args.cv_folds,
                 max_features=args.max_features,
             )
@@ -179,7 +181,7 @@ def main(argv: list[str] | None = None) -> int:
                     f"(cv_rmse={oracle_info.get('selected_rmse'):.4f})"
                 )
 
-            observer = ProxyObserver(run_dir)
+            observer = ProxyObserver(backend_dir)
             engine.run_optimization(
                 run_id,
                 observer=observer,

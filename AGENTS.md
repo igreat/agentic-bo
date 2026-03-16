@@ -37,8 +37,8 @@ bo_workflow/
   utils.py        # RunPaths, JSON I/O, shared types
   evaluation/
     cli.py        # CLI subcommands: build-oracle, run-proxy, run-evaluator
-    oracle.py     # standalone proxy oracle — train, load, predict on run_dir
-    proxy.py      # ProxyObserver — self-contained, captures run_dir at init
+    oracle.py     # standalone proxy backend — train from run config, persist under evaluation_backends/
+    proxy.py      # ProxyObserver — self-contained, captures backend_dir at init
     __main__.py   # optional evaluation-only module entrypoint
   observers/
     base.py       # Observer ABC — evaluate(suggestions) interface
@@ -88,9 +88,9 @@ research_runs/
 ### Key design boundaries
 
 - **Engine has zero oracle awareness.** It only knows the `Observer` ABC and calls `observer.evaluate(suggestions)`. No oracle imports in `engine.py`.
-- **Oracle is standalone.** `evaluation/oracle.py` operates on `run_dir: Path`, not `engine: BOEngine`. Reads/writes state.json and oracle files directly.
-- **Observers are self-contained.** `evaluation/proxy.py` defines `ProxyObserver(run_dir)`, which captures all context at construction. `evaluate(suggestions)` takes no engine or run_id.
-- **CLI is the wiring layer.** `build-oracle` calls `evaluation.oracle.build_proxy_oracle(run_dir)` directly. `run-proxy` constructs `evaluation.proxy.ProxyObserver(run_dir)` and passes it to `engine.run_optimization()`.
+- **Oracle is standalone.** `evaluation/oracle.py` reads a source run for dataset/config context, but persists oracle assets under `evaluation_backends/<backend_id>/`.
+- **Observers are self-contained.** `evaluation/proxy.py` defines `ProxyObserver(backend_dir)`, which captures all context at construction. `evaluate(suggestions)` takes no engine or run_id.
+- **CLI is the wiring layer.** `build-oracle` trains a backend from a run and writes it under `evaluation_backends/`. `run-proxy` constructs `evaluation.proxy.ProxyObserver(backend_dir)` and passes it to `engine.run_optimization()`.
 - **Each module owns its CLI surface.** `engine_cli.py` and `evaluation/cli.py` each define `register_commands()` + `handle()`. `cli.py` composes them.
 - **Converters are standalone.** Each converter has its own `__main__`-style CLI (`python -m bo_workflow.converters.reaction_drfp`). They transform data before/after the BO loop but do not depend on the engine or oracle.
 - **Constraints are search-space properties.** `constraints/` is the enforcement layer — each `Constraint` subclass receives raw suggestions from the optimizer and projects them into the feasible region via `apply()`. Constraints are stored in `state.json["constraints"]` and enforced at every `suggest` call. The agent is responsible for inferring constraints from the user's problem description (e.g. "proportions sum to 100%") and passing them via `--simplex-groups`; the engine never auto-detects them.
@@ -145,7 +145,8 @@ uv run python -m bo_workflow.scripts.egfr_ic50_global_experiment \
 ## Artifact Roots
 
 - `research_runs/<research_id>/`: top-level research workflow state and writing artifacts
-- `bo_runs/<run_id>/`: BO engine state, oracle artifacts, suggestions, observations, and reports
+- `bo_runs/<run_id>/`: BO engine state, suggestions, observations, and reports
+- `evaluation_backends/<backend_id>/`: reusable oracle/backend artifacts
 
 ## BO Run Artifacts
 
@@ -156,12 +157,19 @@ Each BO run produces files under `bo_runs/<run_id>/`:
 | `state.json` | `init` |
 | `input_spec.json` | `init` |
 | `intent.json` | `init` (when `--intent-json` is provided) |
-| `oracle.pkl` | `build-oracle` |
-| `oracle_meta.json` | `build-oracle` |
 | `suggestions.jsonl` | `suggest` / `run-proxy` |
 | `observations.jsonl` | `observe` / `run-proxy` |
 | `convergence.pdf` | `report` / `run-proxy` |
 | `report.json` | `report` / `run-proxy` |
+
+## Evaluation Backend Artifacts
+
+Each evaluation backend produces files under `evaluation_backends/<backend_id>/`:
+
+| File | Created by |
+|------|-----------|
+| `oracle.pkl` | `build-oracle` |
+| `oracle_meta.json` | `build-oracle` |
 
 ## Research Run Artifacts
 
@@ -180,11 +188,11 @@ All commands: `uv run python -m bo_workflow.cli <command> [flags]`
 | Command | Key flags | Purpose |
 |---------|-----------|---------|
 | `init` | `--dataset` or `--search-space-json` (req), `--target --objective` (req), `--engine --seed --init-random --batch-size --simplex-groups --drop-cols` (opt) | Init run from dataset inference or explicit search-space spec |
-| `build-oracle` | `--run-id` (req), `--cv-folds --max-features` (opt) | Train proxy oracle from a labeled dataset-backed run |
+| `build-oracle` | `--run-id` (req), `--backend-id --cv-folds --max-features` (opt) | Train proxy backend from a labeled dataset-backed run |
 | `suggest` | `--run-id` (req), `--batch-size` (opt) | Propose next candidates |
 | `observe` | `--run-id --data` (req) | Record real/simulated results |
-| `run-proxy` | `--run-id --iterations` (req), `--batch-size` (opt) | Full proxy BO loop |
-| `run-evaluator` | `--run-id --oracle-dir --iterations` (req), `--batch-size` (opt) | Operator-owned hidden evaluation loop over `suggest` / `observe` |
+| `run-proxy` | `--run-id --iterations` (req), `--backend-id --batch-size` (opt) | Full proxy BO loop |
+| `run-evaluator` | `--run-id --backend-id --iterations` (req), `--batch-size` (opt) | Operator-owned hidden evaluation loop over `suggest` / `observe` |
 | `status` | `--run-id` (req) | Quick run summary |
 | `report` | `--run-id` (req) | Full report + convergence plot |
 
@@ -219,7 +227,9 @@ uv run python -m bo_workflow.cli build-oracle --run-id <RUN_ID>
 uv run python -m bo_workflow.cli run-proxy --run-id <RUN_ID> --iterations 20
 ```
 
-Expected artifacts in `bo_runs/<RUN_ID>/`: `state.json`, `input_spec.json`, `oracle.pkl`, `oracle_meta.json`, `suggestions.jsonl`, `observations.jsonl`, `convergence.pdf`, `report.json`.
+Expected artifacts in `bo_runs/<RUN_ID>/`: `state.json`, `input_spec.json`, `suggestions.jsonl`, `observations.jsonl`, `convergence.pdf`, `report.json`.
+
+Expected backend artifacts in `evaluation_backends/<RUN_ID>/`: `oracle.pkl`, `oracle_meta.json`.
 
 ## BO Suggest/Observe Workflow
 

@@ -9,8 +9,14 @@ from typing import Any
 import pandas as pd
 
 from ..engine import BOEngine
-from ..utils import RunPaths, read_json, read_jsonl, to_python_scalar, utc_now_iso
-from .oracle import predict_original_scale
+from ..utils import (
+    EvaluationBackendPaths,
+    read_json,
+    read_jsonl,
+    to_python_scalar,
+    utc_now_iso,
+)
+from .oracle import build_proxy_oracle, predict_original_scale, read_backend_meta
 from .proxy import ProxyObserver
 
 
@@ -22,6 +28,12 @@ def register_commands(sub: argparse._SubParsersAction) -> None:
     """Register evaluation subcommands on an existing subparsers group."""
     oracle_cmd = sub.add_parser("build-oracle", help="Train and persist proxy oracle")
     oracle_cmd.add_argument("--run-id", type=str, required=True)
+    oracle_cmd.add_argument(
+        "--backend-id",
+        type=str,
+        default=None,
+        help="Backend id under <backends-root>; defaults to the source run id.",
+    )
     oracle_cmd.add_argument("--cv-folds", type=int, default=5)
     oracle_cmd.add_argument("--max-features", type=int, default=None)
     oracle_cmd.add_argument("--verbose", action="store_true")
@@ -30,6 +42,12 @@ def register_commands(sub: argparse._SubParsersAction) -> None:
         "run-proxy", help="Run iterative proxy optimization loop"
     )
     run_proxy_cmd.add_argument("--run-id", type=str, required=True)
+    run_proxy_cmd.add_argument(
+        "--backend-id",
+        type=str,
+        default=None,
+        help="Backend id under <backends-root>; defaults to the run id.",
+    )
     run_proxy_cmd.add_argument("--iterations", type=int, required=True)
     run_proxy_cmd.add_argument("--batch-size", type=int, default=1)
     run_proxy_cmd.add_argument(
@@ -49,14 +67,21 @@ def register_commands(sub: argparse._SubParsersAction) -> None:
     )
     run_cmd.add_argument("--run-id", type=str, required=True)
     run_cmd.add_argument(
-        "--oracle-dir",
-        type=Path,
+        "--backend-id",
+        type=str,
         required=True,
-        help="Directory containing oracle.pkl, oracle_meta.json, and matching state.json",
+        help="Backend id under <backends-root> to use for hidden evaluation.",
     )
     run_cmd.add_argument("--iterations", type=int, required=True)
     run_cmd.add_argument("--batch-size", type=int, default=1)
     run_cmd.add_argument("--verbose", action="store_true")
+
+
+def _resolve_backend_dir(
+    backends_root: Path, *, run_id: str, backend_id: str | None
+) -> Path:
+    resolved_id = backend_id or run_id
+    return backends_root / resolved_id
 
 
 def _validate_run_proxy_preconditions(
@@ -107,12 +132,29 @@ def _seed_pool_observations(
     return len(obs_list)
 
 
+def _attach_backend_summary(
+    engine: BOEngine,
+    run_id: str,
+    backend_meta: dict[str, Any],
+) -> None:
+    """Copy non-pointer backend summary into run state for reporting."""
+    state = engine._load_state(run_id)
+    state["oracle"] = {
+        "selected_model": backend_meta["selected_model"],
+        "selected_rmse": backend_meta["selected_rmse"],
+        "cv_rmse": backend_meta.get("cv_rmse", {}),
+        "active_features": backend_meta.get("active_features", []),
+    }
+    state["updated_at"] = utc_now_iso()
+    engine._save_state(run_id, state)
+
+
 def _validate_evaluator_preconditions(
     engine: BOEngine,
     run_id: str,
-    oracle_dir: Path,
+    backend_dir: Path,
     batch_size: int,
-) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
+) -> tuple[dict[str, Any], dict[str, Any]]:
     state = engine._load_state(run_id)
     if state["status"] not in {"initialized", "oracle_ready", "running"}:
         raise ValueError(
@@ -123,23 +165,22 @@ def _validate_evaluator_preconditions(
     if engine_name == "bo_lcb" and int(batch_size) != 1:
         raise ValueError("bo_lcb currently supports batch-size=1 only.")
 
-    paths = RunPaths(run_dir=oracle_dir)
-    if not paths.state.exists():
-        raise FileNotFoundError(f"Oracle state not found at {paths.state}")
-    if not paths.oracle_model.exists():
-        raise FileNotFoundError(f"Oracle model not found at {paths.oracle_model}")
-    if not paths.oracle_meta.exists():
-        raise FileNotFoundError(f"Oracle metadata not found at {paths.oracle_meta}")
+    backend_paths = EvaluationBackendPaths(backend_dir=backend_dir)
+    if not backend_paths.oracle_model.exists():
+        raise FileNotFoundError(f"Oracle model not found at {backend_paths.oracle_model}")
+    if not backend_paths.oracle_meta.exists():
+        raise FileNotFoundError(
+            f"Oracle metadata not found at {backend_paths.oracle_meta}"
+        )
 
-    oracle_state = read_json(paths.state)
-    oracle_meta = read_json(paths.oracle_meta)
+    backend_meta = read_backend_meta(backend_dir)
 
-    if oracle_state.get("objective") != state.get("objective"):
+    if backend_meta.get("objective") != state.get("objective"):
         raise ValueError(
             "Evaluator oracle objective does not match the current run objective."
         )
 
-    oracle_features = list(oracle_meta.get("active_features", []))
+    oracle_features = list(backend_meta.get("active_features", []))
     run_features = set(state.get("active_features", []))
     missing = [name for name in oracle_features if name not in run_features]
     if missing:
@@ -147,7 +188,7 @@ def _validate_evaluator_preconditions(
             f"Current run is missing oracle-required features: {missing}"
         )
 
-    return state, oracle_state, oracle_meta
+    return state, backend_meta
 
 
 def _pending_suggestions(engine: BOEngine, run_id: str) -> list[dict[str, Any]]:
@@ -170,14 +211,14 @@ def _pending_suggestions(engine: BOEngine, run_id: str) -> list[dict[str, Any]]:
 
 def _evaluate_suggestions(
     *,
-    oracle_dir: Path,
-    oracle_state: dict[str, Any],
-    oracle_features: list[str],
+    backend_dir: Path,
+    backend_objective: str,
+    backend_features: list[str],
     suggestions: list[dict[str, Any]],
     default_engine: str,
 ) -> list[dict[str, Any]]:
-    x_df = pd.DataFrame([row["x"] for row in suggestions])[oracle_features]
-    y_pred = predict_original_scale(oracle_dir, oracle_state, x_df)
+    x_df = pd.DataFrame([row["x"] for row in suggestions])[backend_features]
+    y_pred = predict_original_scale(backend_dir, backend_objective, x_df)
 
     observations = []
     for suggestion, y_value in zip(suggestions, y_pred, strict=True):
@@ -196,25 +237,27 @@ def run_hidden_oracle_evaluator(
     engine: BOEngine,
     *,
     run_id: str,
-    oracle_dir: str | Path,
+    backend_dir: str | Path,
     num_iterations: int,
     batch_size: int = 1,
     verbose: bool = False,
 ) -> dict[str, Any]:
-    oracle_dir = Path(oracle_dir)
-    state, oracle_state, oracle_meta = _validate_evaluator_preconditions(
-        engine, run_id, oracle_dir, batch_size
+    backend_dir = Path(backend_dir)
+    state, backend_meta = _validate_evaluator_preconditions(
+        engine, run_id, backend_dir, batch_size
     )
-    oracle_features = list(oracle_meta.get("active_features", []))
+    _attach_backend_summary(engine, run_id, backend_meta)
+    backend_features = list(backend_meta.get("active_features", []))
+    backend_objective = str(backend_meta["objective"])
     default_engine = str(state.get("default_engine", "hebo"))
 
     recorded = 0
     pending = _pending_suggestions(engine, run_id)
     if pending:
         observations = _evaluate_suggestions(
-            oracle_dir=oracle_dir,
-            oracle_state=oracle_state,
-            oracle_features=oracle_features,
+            backend_dir=backend_dir,
+            backend_objective=backend_objective,
+            backend_features=backend_features,
             suggestions=pending,
             default_engine=default_engine,
         )
@@ -232,9 +275,9 @@ def run_hidden_oracle_evaluator(
         )
         suggestions = suggestions_payload["suggestions"]
         observations = _evaluate_suggestions(
-            oracle_dir=oracle_dir,
-            oracle_state=oracle_state,
-            oracle_features=oracle_features,
+            backend_dir=backend_dir,
+            backend_objective=backend_objective,
+            backend_features=backend_features,
             suggestions=suggestions,
             default_engine=default_engine,
         )
@@ -256,7 +299,8 @@ def run_hidden_oracle_evaluator(
     report = engine.report(run_id, verbose=verbose)
     return {
         "run_id": run_id,
-        "oracle_dir": str(oracle_dir),
+        "backend_id": backend_dir.name,
+        "backend_dir": str(backend_dir),
         "iterations": int(num_iterations),
         "batch_size": int(batch_size),
         "recorded": recorded,
@@ -271,11 +315,15 @@ def run_hidden_oracle_evaluator(
 def handle(args: argparse.Namespace, engine: BOEngine) -> int | None:
     """Handle an evaluation subcommand. Returns exit code, or None if not ours."""
     if args.command == "build-oracle":
-        from .oracle import build_proxy_oracle
-
         run_dir = engine.get_run_dir(args.run_id)
+        backend_dir = _resolve_backend_dir(
+            args.backends_root,
+            run_id=args.run_id,
+            backend_id=getattr(args, "backend_id", None),
+        )
         payload = build_proxy_oracle(
             run_dir,
+            backend_dir=backend_dir,
             cv_folds=args.cv_folds,
             max_features=args.max_features,
             verbose=args.verbose,
@@ -285,9 +333,16 @@ def handle(args: argparse.Namespace, engine: BOEngine) -> int | None:
 
     if args.command == "run-proxy":
         run_dir = engine.get_run_dir(args.run_id)
+        backend_dir = _resolve_backend_dir(
+            args.backends_root,
+            run_id=args.run_id,
+            backend_id=getattr(args, "backend_id", None),
+        )
+        backend_meta = read_backend_meta(backend_dir)
 
-        observer = ProxyObserver(run_dir)
+        observer = ProxyObserver(backend_dir)
         _validate_run_proxy_preconditions(engine, args.run_id, args.batch_size)
+        _attach_backend_summary(engine, args.run_id, backend_meta)
 
         seed_pool = getattr(args, "seed_pool", None)
         if seed_pool:
@@ -304,10 +359,15 @@ def handle(args: argparse.Namespace, engine: BOEngine) -> int | None:
         return 0
 
     if args.command == "run-evaluator":
+        backend_dir = _resolve_backend_dir(
+            args.backends_root,
+            run_id=args.run_id,
+            backend_id=args.backend_id,
+        )
         payload = run_hidden_oracle_evaluator(
             engine,
             run_id=args.run_id,
-            oracle_dir=args.oracle_dir,
+            backend_dir=backend_dir,
             num_iterations=args.iterations,
             batch_size=args.batch_size,
             verbose=args.verbose,
@@ -321,6 +381,12 @@ def handle(args: argparse.Namespace, engine: BOEngine) -> int | None:
 def main(argv: list[str] | None = None) -> int:
     """Standalone entrypoint for evaluation-only commands."""
     parser = argparse.ArgumentParser(prog="python -m bo_workflow.evaluation")
+    parser.add_argument(
+        "--backends-root",
+        type=Path,
+        default=Path("evaluation_backends"),
+        help="Directory where evaluation backend artifacts are stored",
+    )
     sub = parser.add_subparsers(dest="command", required=True)
     register_commands(sub)
     args = parser.parse_args(argv)

@@ -17,6 +17,12 @@ def build_parser() -> argparse.ArgumentParser:
         default=Path("bo_runs"),
         help="Directory where run state and artifacts are stored",
     )
+    parser.add_argument(
+        "--backends-root",
+        type=Path,
+        default=Path("evaluation_backends"),
+        help="Directory where evaluation backend artifacts are stored",
+    )
     sub = parser.add_subparsers(dest="command", required=True)
     engine_cli.register_commands(sub)
     evaluation_cli.register_commands(sub)

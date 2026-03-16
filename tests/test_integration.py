@@ -14,7 +14,7 @@ from bo_workflow.engine import BOEngine
 from bo_workflow.evaluation.cli import run_hidden_oracle_evaluator
 from bo_workflow.evaluation.oracle import build_proxy_oracle
 from bo_workflow.evaluation.proxy import ProxyObserver
-from bo_workflow.utils import RunPaths, read_json, read_jsonl
+from bo_workflow.utils import EvaluationBackendPaths, RunPaths, read_json, read_jsonl
 
 ITERATIONS = 5
 
@@ -32,8 +32,8 @@ def _run_full_proxy_loop(
     *,
     iterations: int = ITERATIONS,
     max_features: int | None = None,
-) -> tuple[str, RunPaths]:
-    """Init → build-oracle → run-proxy → report. Returns (run_id, paths)."""
+) -> tuple[str, RunPaths, EvaluationBackendPaths]:
+    """Init → build-oracle → run-proxy → report. Returns run and backend paths."""
     state = engine.init_run(
         dataset_path=dataset_path,
         target_column=target,
@@ -42,10 +42,17 @@ def _run_full_proxy_loop(
     )
     run_id = state["run_id"]
     run_dir = engine.get_run_dir(run_id)
+    backend_paths = EvaluationBackendPaths(
+        engine.runs_root.parent / "evaluation_backends" / run_id
+    )
 
-    build_proxy_oracle(run_dir, max_features=max_features)
+    build_proxy_oracle(
+        run_dir,
+        backend_dir=backend_paths.backend_dir,
+        max_features=max_features,
+    )
 
-    observer = ProxyObserver(run_dir)
+    observer = ProxyObserver(backend_paths.backend_dir)
     engine.run_optimization(
         run_id,
         observer=observer,
@@ -53,24 +60,28 @@ def _run_full_proxy_loop(
     )
 
     paths = RunPaths(run_dir=run_dir)
-    return run_id, paths
+    return run_id, paths, backend_paths
 
 
-def _assert_standard_artifacts(paths: RunPaths, iterations: int = ITERATIONS) -> None:
+def _assert_standard_artifacts(
+    paths: RunPaths,
+    backend_paths: EvaluationBackendPaths,
+    iterations: int = ITERATIONS,
+) -> None:
     """Assert standard run artifacts exist and have expected content."""
     assert paths.state.exists()
     assert paths.input_spec.exists()
-    assert paths.oracle_model.exists()
-    assert paths.oracle_meta.exists()
     assert paths.suggestions.exists()
     assert paths.observations.exists()
     assert paths.convergence_plot.exists()
     assert paths.report.exists()
+    assert backend_paths.oracle_model.exists()
+    assert backend_paths.oracle_meta.exists()
 
     state = read_json(paths.state)
     assert state["status"] == "completed"
 
-    oracle_meta = read_json(paths.oracle_meta)
+    oracle_meta = read_json(backend_paths.oracle_meta)
     rmse = oracle_meta["selected_rmse"]
     assert math.isfinite(rmse) and rmse > 0
 
@@ -91,8 +102,8 @@ def _assert_standard_artifacts(paths: RunPaths, iterations: int = ITERATIONS) ->
 
 def test_her_full_proxy_loop(engine: BOEngine, her_csv: Path) -> None:
     """HER dataset, max objective, full proxy loop."""
-    _, paths = _run_full_proxy_loop(engine, her_csv, "Target", "max")
-    _assert_standard_artifacts(paths)
+    _, paths, backend_paths = _run_full_proxy_loop(engine, her_csv, "Target", "max")
+    _assert_standard_artifacts(paths, backend_paths)
 
 
 def test_her_full_proxy_loop_with_hebo_rf(engine: BOEngine, her_csv: Path) -> None:
@@ -107,13 +118,16 @@ def test_her_full_proxy_loop_with_hebo_rf(engine: BOEngine, her_csv: Path) -> No
     )
     run_id = state["run_id"]
     run_dir = engine.get_run_dir(run_id)
+    backend_paths = EvaluationBackendPaths(
+        engine.runs_root.parent / "evaluation_backends" / run_id
+    )
 
-    build_proxy_oracle(run_dir)
-    observer = ProxyObserver(run_dir)
+    build_proxy_oracle(run_dir, backend_dir=backend_paths.backend_dir)
+    observer = ProxyObserver(backend_paths.backend_dir)
     engine.run_optimization(run_id, observer=observer, num_iterations=ITERATIONS)
 
     paths = RunPaths(run_dir=run_dir)
-    _assert_standard_artifacts(paths)
+    _assert_standard_artifacts(paths, backend_paths)
 
     final_state = read_json(paths.state)
     assert final_state["hebo_model"] == "rf"
@@ -125,16 +139,16 @@ def test_her_full_proxy_loop_with_hebo_rf(engine: BOEngine, her_csv: Path) -> No
 
 def test_hea_full_proxy_loop(engine: BOEngine, hea_csv: Path) -> None:
     """HEA dataset, max objective, full proxy loop."""
-    _, paths = _run_full_proxy_loop(engine, hea_csv, "target", "max")
-    _assert_standard_artifacts(paths)
+    _, paths, backend_paths = _run_full_proxy_loop(engine, hea_csv, "target", "max")
+    _assert_standard_artifacts(paths, backend_paths)
 
 
 def test_oer_mixed_variables(engine: BOEngine, oer_csv: Path) -> None:
     """OER dataset, min objective, verifies categorical detection."""
-    _, paths = _run_full_proxy_loop(
+    _, paths, backend_paths = _run_full_proxy_loop(
         engine, oer_csv, "Overpotential mV @10 mA cm-2", "min",
     )
-    _assert_standard_artifacts(paths)
+    _assert_standard_artifacts(paths, backend_paths)
 
     state = read_json(paths.state)
     cat_params = [p for p in state["design_parameters"] if p["type"] == "cat"]
@@ -231,10 +245,10 @@ def test_oer_simplex_constraint_projects_suggestions(
 @pytest.mark.slow
 def test_bh_feature_selection(engine: BOEngine, bh_csv: Path) -> None:
     """BH dataset, max objective, feature selection with max_features=20."""
-    _, paths = _run_full_proxy_loop(
+    _, paths, backend_paths = _run_full_proxy_loop(
         engine, bh_csv, "yield", "max", max_features=20
     )
-    _assert_standard_artifacts(paths)
+    _assert_standard_artifacts(paths, backend_paths)
 
     state = read_json(paths.state)
     assert len(state["active_features"]) == 20
@@ -257,10 +271,18 @@ def test_simplex_constrained_columns_pinned_during_feature_selection(
     )
     run_id = state["run_id"]
     paths = RunPaths(run_dir=engine.get_run_dir(run_id))
+    backend_paths = EvaluationBackendPaths(
+        engine.runs_root.parent / "evaluation_backends" / run_id
+    )
 
     # Request far fewer features than the dataset has — constrained cols must survive.
     from bo_workflow.evaluation.oracle import build_proxy_oracle
-    build_proxy_oracle(paths.run_dir, max_features=3)
+
+    build_proxy_oracle(
+        paths.run_dir,
+        backend_dir=backend_paths.backend_dir,
+        max_features=3,
+    )
 
     updated_state = read_json(paths.state)
     active = set(updated_state["active_features"])
@@ -392,7 +414,10 @@ def test_build_proxy_oracle_requires_labeled_dataset(engine: BOEngine) -> None:
     )
 
     with pytest.raises(ValueError, match="requires a labeled dataset"):
-        build_proxy_oracle(engine.get_run_dir(state["run_id"]))
+        build_proxy_oracle(
+            engine.get_run_dir(state["run_id"]),
+            backend_dir=engine.runs_root.parent / "evaluation_backends" / state["run_id"],
+        )
 
 
 def test_hidden_oracle_evaluator_runs_search_space_loop(engine: BOEngine, tmp_path: Path) -> None:
@@ -414,8 +439,12 @@ def test_hidden_oracle_evaluator_runs_search_space_loop(engine: BOEngine, tmp_pa
         objective="max",
         seed=42,
     )
-    backend_run_dir = engine.get_run_dir(backend_state["run_id"])
-    build_proxy_oracle(backend_run_dir)
+    backend_run_id = backend_state["run_id"]
+    backend_run_dir = engine.get_run_dir(backend_run_id)
+    backend_paths = EvaluationBackendPaths(
+        engine.runs_root.parent / "evaluation_backends" / backend_run_id
+    )
+    build_proxy_oracle(backend_run_dir, backend_dir=backend_paths.backend_dir)
 
     search_state = engine.init_run(
         search_space_spec={
@@ -434,7 +463,7 @@ def test_hidden_oracle_evaluator_runs_search_space_loop(engine: BOEngine, tmp_pa
     payload = run_hidden_oracle_evaluator(
         engine,
         run_id=run_id,
-        oracle_dir=backend_run_dir,
+        backend_dir=backend_paths.backend_dir,
         num_iterations=2,
         batch_size=2,
     )
@@ -471,8 +500,12 @@ def test_hidden_oracle_evaluator_resolves_pending_suggestions(
         objective="max",
         seed=42,
     )
-    backend_run_dir = engine.get_run_dir(backend_state["run_id"])
-    build_proxy_oracle(backend_run_dir)
+    backend_run_id = backend_state["run_id"]
+    backend_run_dir = engine.get_run_dir(backend_run_id)
+    backend_paths = EvaluationBackendPaths(
+        engine.runs_root.parent / "evaluation_backends" / backend_run_id
+    )
+    build_proxy_oracle(backend_run_dir, backend_dir=backend_paths.backend_dir)
 
     search_state = engine.init_run(
         search_space_spec={
@@ -493,7 +526,7 @@ def test_hidden_oracle_evaluator_resolves_pending_suggestions(
     payload = run_hidden_oracle_evaluator(
         engine,
         run_id=run_id,
-        oracle_dir=backend_run_dir,
+        backend_dir=backend_paths.backend_dir,
         num_iterations=0,
         batch_size=1,
     )
@@ -538,10 +571,10 @@ def test_proxy_observer_missing_oracle(engine: BOEngine, her_csv: Path) -> None:
         target_column="Target",
         objective="max",
     )
-    run_dir = engine.get_run_dir(state["run_id"])
+    backend_dir = engine.runs_root.parent / "evaluation_backends" / state["run_id"]
 
     with pytest.raises(FileNotFoundError, match="build-oracle"):
-        ProxyObserver(run_dir)
+        ProxyObserver(backend_dir)
 
 
 def test_observe_missing_y_raises(engine: BOEngine, her_csv: Path) -> None:

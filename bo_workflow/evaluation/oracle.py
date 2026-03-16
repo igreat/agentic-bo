@@ -1,7 +1,7 @@
 """Oracle training, loading, and prediction.
 
-Standalone module — operates on run_dir: Path, not engine: BOEngine.
-Reads/writes state.json and oracle files directly using RunPaths + utils.
+Training reads a source BO run for dataset/config context, but persisted oracle
+artifacts live under a separate evaluation backend directory.
 """
 
 import pickle
@@ -18,7 +18,7 @@ from sklearn.model_selection import KFold, cross_val_score
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OrdinalEncoder
 
-from ..utils import RunPaths, read_json, utc_now_iso, write_json
+from ..utils import EvaluationBackendPaths, RunPaths, read_json, utc_now_iso, write_json
 
 
 # ------------------------------------------------------------------
@@ -57,6 +57,7 @@ def _log(verbose: bool, message: str) -> None:
 def build_proxy_oracle(
     run_dir: str | Path,
     *,
+    backend_dir: str | Path,
     model_candidates: tuple[str, ...] = ("random_forest", "extra_trees"),
     cv_folds: int = 5,
     max_features: int | None = None,
@@ -64,8 +65,9 @@ def build_proxy_oracle(
 ) -> dict[str, Any]:
     """Train/select a proxy oracle and persist model + metadata."""
     run_dir = Path(run_dir)
-    paths = RunPaths(run_dir=run_dir)
-    state = read_json(paths.state)
+    run_paths = RunPaths(run_dir=run_dir)
+    backend_paths = EvaluationBackendPaths(backend_dir=Path(backend_dir))
+    state = read_json(run_paths.state)
     if state.get("dataset_path") is None:
         raise ValueError(
             "Proxy oracle training requires a labeled dataset. "
@@ -213,12 +215,18 @@ def build_proxy_oracle(
     best_pipeline = trained_pipelines[best_model_name]
     best_pipeline.fit(x_full, y_internal)
 
-    paths.run_dir.mkdir(parents=True, exist_ok=True)
-    with paths.oracle_model.open("wb") as handle:
+    backend_paths.backend_dir.mkdir(parents=True, exist_ok=True)
+    with backend_paths.oracle_model.open("wb") as handle:
         pickle.dump(best_pipeline, handle)
 
     oracle_meta = {
+        "backend_id": backend_paths.backend_dir.name,
         "built_at": utc_now_iso(),
+        "source_run_id": state["run_id"],
+        "source_dataset_path": state["dataset_path"],
+        "target_column": state["target_column"],
+        "objective": state["objective"],
+        "default_engine": state.get("default_engine", "hebo"),
         "model_candidates": list(model_pool.keys()),
         "cv_rmse": scores,
         "selected_model": best_model_name,
@@ -227,12 +235,17 @@ def build_proxy_oracle(
         "active_features": list(active_features),
         "objective_internal": "min",
     }
-    write_json(paths.oracle_meta, oracle_meta)
+    write_json(backend_paths.oracle_meta, oracle_meta)
 
-    state["oracle"] = oracle_meta
+    state["oracle"] = {
+        "selected_model": oracle_meta["selected_model"],
+        "selected_rmse": oracle_meta["selected_rmse"],
+        "cv_rmse": oracle_meta["cv_rmse"],
+        "active_features": oracle_meta["active_features"],
+    }
     state["status"] = "oracle_ready"
     state["updated_at"] = utc_now_iso()
-    write_json(paths.state, state)
+    write_json(run_paths.state, state)
     _log(
         verbose,
         f"[oracle] selected={best_model_name} rmse={scores[best_model_name]:.4f}",
@@ -240,6 +253,8 @@ def build_proxy_oracle(
 
     return {
         "run_id": state["run_id"],
+        "backend_id": backend_paths.backend_dir.name,
+        "backend_dir": str(backend_paths.backend_dir),
         "status": state["status"],
         "active_features": state["active_features"],
         "ignored_features": state["ignored_features"],
@@ -249,25 +264,34 @@ def build_proxy_oracle(
     }
 
 
-def load_oracle(run_dir: str | Path) -> Pipeline:
-    """Load a previously persisted oracle pipeline from disk."""
-    run_dir = Path(run_dir)
-    paths = RunPaths(run_dir=run_dir)
-    if not paths.oracle_model.exists():
+def read_backend_meta(backend_dir: str | Path) -> dict[str, Any]:
+    """Load oracle backend metadata from disk."""
+    backend_paths = EvaluationBackendPaths(backend_dir=Path(backend_dir))
+    if not backend_paths.oracle_meta.exists():
         raise FileNotFoundError(
-            f"Oracle not found at {paths.oracle_model}. Build it first with build-oracle."
+            f"Oracle metadata not found at {backend_paths.oracle_meta}. Build it first with build-oracle."
         )
-    with paths.oracle_model.open("rb") as handle:
+    return read_json(backend_paths.oracle_meta)
+
+
+def load_oracle(backend_dir: str | Path) -> Pipeline:
+    """Load a previously persisted oracle pipeline from disk."""
+    backend_paths = EvaluationBackendPaths(backend_dir=Path(backend_dir))
+    if not backend_paths.oracle_model.exists():
+        raise FileNotFoundError(
+            f"Oracle not found at {backend_paths.oracle_model}. Build it first with build-oracle."
+        )
+    with backend_paths.oracle_model.open("rb") as handle:
         model = pickle.load(handle)
     return model
 
 
 def predict_original_scale(
-    run_dir: str | Path,
-    state: dict[str, Any],
+    backend_dir: str | Path,
+    objective: str,
     x_df: pd.DataFrame,
 ) -> np.ndarray:
     """Run oracle prediction and map back to the user's objective scale."""
-    model = load_oracle(run_dir)
+    model = load_oracle(backend_dir)
     y_internal = np.asarray(model.predict(x_df), dtype=float)
-    return _restore_objective_values(y_internal, state["objective"])
+    return _restore_objective_values(y_internal, objective)

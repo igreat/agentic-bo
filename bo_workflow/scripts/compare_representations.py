@@ -157,15 +157,16 @@ def main(argv: list[str] | None = None) -> int:
             )
             run_id = str(state["run_id"])
             run_dir = engine.get_run_dir(run_id)
+            backend_dir = args.runs_root.parent / "evaluation_backends" / run_id
 
-            oracle_info = build_proxy_oracle(run_dir)
+            oracle_info = build_proxy_oracle(run_dir, backend_dir=backend_dir)
             if args.verbose:
                 print(
                     f"    Oracle: {oracle_info.get('selected_model')} "
                     f"(cv_rmse={oracle_info.get('selected_rmse', 0):.4f})"
                 )
 
-            observer = ProxyObserver(run_dir)
+            observer = ProxyObserver(backend_dir)
             engine.run_optimization(
                 run_id,
                 observer=observer,

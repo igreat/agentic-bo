@@ -64,6 +64,8 @@ uv run python -m bo_workflow.cli run-proxy --run-id <RUN_ID> --iterations 20
 uv run python -m bo_workflow.cli report --run-id <RUN_ID>
 ```
 
+`build-oracle` writes proxy assets under `evaluation_backends/<RUN_ID>/` by default. Pass `--backend-id <ID>` if you want to reuse the same backend across multiple runs.
+
 ## BO CLI Commands
 
 ```bash
@@ -73,11 +75,11 @@ uv run python -m bo_workflow.cli --help
 | Command | Purpose |
 |---------|---------|
 | `init` | Create a run from a CSV dataset or explicit search-space JSON |
-| `build-oracle` | Train a proxy oracle from a labeled dataset-backed run |
+| `build-oracle` | Train a proxy backend from a labeled dataset-backed run |
 | `suggest` | Propose next candidate experiments |
 | `observe` | Record objective values (real or simulated) |
-| `run-proxy` | Run an end-to-end simulated BO loop |
-| `run-evaluator` | Run a hidden evaluation loop with an operator-owned oracle/backend |
+| `run-proxy` | Run an end-to-end simulated BO loop against a backend |
+| `run-evaluator` | Run a hidden evaluation loop with an operator-owned backend |
 | `status` | Show best-so-far and run metadata |
 | `report` | Generate JSON report and convergence plot |
 
@@ -130,7 +132,11 @@ Each round suggests molecules in descriptor space, maps them to the nearest real
 
 Each run writes to `bo_runs/<RUN_ID>/`:
 
-`state.json`, `input_spec.json`, `oracle.pkl`, `oracle_meta.json`, `suggestions.jsonl`, `observations.jsonl`, `convergence.pdf`, `report.json`
+`state.json`, `input_spec.json`, `suggestions.jsonl`, `observations.jsonl`, `convergence.pdf`, `report.json`
+
+Each evaluation backend writes to `evaluation_backends/<BACKEND_ID>/`:
+
+`oracle.pkl`, `oracle_meta.json`
 
 ## Research Artifacts
 
@@ -163,6 +169,8 @@ Each top-level research workflow writes to `research_runs/<RESEARCH_ID>/`:
 |   `-- skills/
 |-- .claude/
 |   `-- skills/
+|-- evaluation_backends/
+|   `-- <backend_id>/
 |-- bo_runs/
 |   `-- <run_id>/
 `-- research_runs/
@@ -172,6 +180,7 @@ Each top-level research workflow writes to `research_runs/<RESEARCH_ID>/`:
 - `bo_workflow/` contains the BO engine, evaluation/oracle layer, converters, constraints, and reusable scripts.
 - `data/` contains example and benchmark datasets used by the BO and research workflows.
 - `.agents/skills/` and `.claude/skills/` contain the mirrored agent skill trees.
+- `evaluation_backends/` stores reusable oracle/backend artifacts.
 - `bo_runs/` stores BO run state and report artifacts.
 - `research_runs/` stores top-level research workflow state, notes, and paper drafts.
 
