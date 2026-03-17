@@ -13,6 +13,56 @@ import pandas as pd
 type Objective = Literal["min", "max"]
 type OptimizerName = Literal["hebo", "bo_lcb", "random", "botorch"]
 
+
+@dataclass(frozen=True)
+class RunPaths:
+    """Canonical file locations under a BO run directory (`<runs_root>/<run_id>/`)."""
+
+    run_dir: Path
+
+    @property
+    def state(self) -> Path:
+        return self.run_dir / "state.json"
+
+    @property
+    def intent(self) -> Path:
+        return self.run_dir / "intent.json"
+
+    @property
+    def input_spec(self) -> Path:
+        return self.run_dir / "input_spec.json"
+
+    @property
+    def suggestions(self) -> Path:
+        return self.run_dir / "suggestions.jsonl"
+
+    @property
+    def observations(self) -> Path:
+        return self.run_dir / "observations.jsonl"
+
+    @property
+    def report(self) -> Path:
+        return self.run_dir / "report.json"
+
+    @property
+    def convergence_plot(self) -> Path:
+        return self.run_dir / "convergence.pdf"
+
+
+@dataclass(frozen=True)
+class EvaluationBackendPaths:
+    """Canonical file locations under an evaluation backend directory."""
+
+    backend_dir: Path
+
+    @property
+    def oracle_model(self) -> Path:
+        return self.backend_dir / "oracle.pkl"
+
+    @property
+    def oracle_meta(self) -> Path:
+        return self.backend_dir / "oracle_meta.json"
+
 _RUN_ADJECTIVES = (
     "amber",
     "brisk",
@@ -99,46 +149,3 @@ def to_python_scalar(value: Any) -> Any:
 
 def row_to_python_dict(row: pd.Series) -> dict[str, Any]:
     return {str(k): to_python_scalar(v) for k, v in row.to_dict().items()}
-
-
-@dataclass(frozen=True)
-class RunPaths:
-    """Canonical file locations under `runs/<run_id>/`."""
-
-    run_dir: Path
-
-    @property
-    def state(self) -> Path:
-        return self.run_dir / "state.json"
-
-    @property
-    def intent(self) -> Path:
-        return self.run_dir / "intent.json"
-
-    @property
-    def input_spec(self) -> Path:
-        return self.run_dir / "input_spec.json"
-
-    @property
-    def suggestions(self) -> Path:
-        return self.run_dir / "suggestions.jsonl"
-
-    @property
-    def observations(self) -> Path:
-        return self.run_dir / "observations.jsonl"
-
-    @property
-    def oracle_model(self) -> Path:
-        return self.run_dir / "oracle.pkl"
-
-    @property
-    def oracle_meta(self) -> Path:
-        return self.run_dir / "oracle_meta.json"
-
-    @property
-    def report(self) -> Path:
-        return self.run_dir / "report.json"
-
-    @property
-    def convergence_plot(self) -> Path:
-        return self.run_dir / "convergence.pdf"

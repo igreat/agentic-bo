@@ -1,6 +1,7 @@
 """Core BO engine.
 
-This module keeps optimization state on disk (`runs/<run_id>/`) and rebuilds
+By default, this module keeps optimization state on disk under
+`<runs_root>/<run_id>` (with `runs_root` defaulting to `bo_runs`) and rebuilds
 optimizers from logged observations when needed. That replay-first design keeps
 the workflow resumable and robust for human-in-the-loop usage.
 """
@@ -85,6 +86,98 @@ def _infer_design_parameters(
         raise ValueError("No optimizable features were inferred from the dataset.")
 
     return params, fixed_features, dropped_features
+
+
+def _validate_search_space_spec(
+    spec: dict[str, Any], *, max_categories: int = 64
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    """Validate an explicit search-space spec and normalize it for engine state."""
+    raw_params = spec.get("design_parameters")
+    if not isinstance(raw_params, list) or not raw_params:
+        raise ValueError("search_space_spec must include a non-empty design_parameters list.")
+
+    raw_fixed = spec.get("fixed_features", {})
+    if raw_fixed is None:
+        raw_fixed = {}
+    if not isinstance(raw_fixed, dict):
+        raise ValueError("search_space_spec.fixed_features must be an object if provided.")
+
+    params: list[dict[str, Any]] = []
+    seen_names: set[str] = set()
+    for raw in raw_params:
+        if not isinstance(raw, dict):
+            raise ValueError("Each design parameter must be an object.")
+        name = raw.get("name")
+        kind = raw.get("type")
+        if not isinstance(name, str) or not name.strip():
+            raise ValueError("Each design parameter must have a non-empty string name.")
+        if name in seen_names:
+            raise ValueError(f"Duplicate design parameter name: '{name}'")
+        seen_names.add(name)
+
+        if kind == "num":
+            try:
+                lb = float(raw["lb"])
+                ub = float(raw["ub"])
+            except (KeyError, TypeError, ValueError) as exc:
+                raise ValueError(
+                    f"Numeric design parameter '{name}' must include numeric lb/ub."
+                ) from exc
+            if not np.isfinite(lb) or not np.isfinite(ub) or lb >= ub:
+                raise ValueError(
+                    f"Numeric design parameter '{name}' must satisfy finite lb < ub."
+                )
+            params.append({"name": name, "type": "num", "lb": lb, "ub": ub})
+            continue
+
+        if kind == "cat":
+            raw_categories = raw.get("categories")
+            if not isinstance(raw_categories, list) or not raw_categories:
+                raise ValueError(
+                    f"Categorical design parameter '{name}' must include a non-empty categories list."
+                )
+            categories = []
+            for value in raw_categories:
+                if value is None:
+                    raise ValueError(
+                        f"Categorical design parameter '{name}' cannot include null categories."
+                    )
+                categories.append(str(value))
+            categories = list(dict.fromkeys(categories))
+            if len(categories) < 2:
+                raise ValueError(
+                    f"Categorical design parameter '{name}' must define at least 2 unique categories."
+                )
+            if len(categories) > max_categories:
+                raise ValueError(
+                    f"Feature '{name}' has {len(categories)} categories; max supported is {max_categories}."
+                )
+            params.append({"name": name, "type": "cat", "categories": categories})
+            continue
+
+        raise ValueError(
+            f"Design parameter '{name}' must have type 'num' or 'cat', got '{kind}'."
+        )
+
+    fixed_features: dict[str, Any] = {}
+    for name, value in raw_fixed.items():
+        if not isinstance(name, str) or not name.strip():
+            raise ValueError("fixed_features keys must be non-empty strings.")
+        if name in seen_names:
+            raise ValueError(
+                f"fixed_features overlaps with design_parameters for feature '{name}'."
+            )
+        fixed_features[name] = value
+
+    return params, fixed_features
+
+
+def _to_internal_objective(value: float, objective: Objective) -> float:
+    if objective == "min":
+        return value
+    if objective == "max":
+        return -value
+    raise ValueError(f"Unknown objective: '{objective}'")
 
 
 def _suggest_botorch(
@@ -226,9 +319,9 @@ def _suggest_botorch(
 
 
 class BOEngine:
-    """Dataset-driven Bayesian optimization engine with persisted run state."""
+    """Bayesian optimization engine with persisted run state."""
 
-    def __init__(self, runs_root: str | Path = "runs") -> None:
+    def __init__(self, runs_root: str | Path = "bo_runs") -> None:
         self.runs_root = Path(runs_root)
         self.runs_root.mkdir(parents=True, exist_ok=True)
 
@@ -255,9 +348,10 @@ class BOEngine:
     def init_run(
         self,
         *,
-        dataset_path: str | Path,
         target_column: str,
         objective: Objective,
+        dataset_path: str | Path | None = None,
+        search_space_spec: dict[str, Any] | None = None,
         default_engine: OptimizerName = "hebo",
         hebo_model: str = "gp",
         run_id: str | None = None,
@@ -270,7 +364,7 @@ class BOEngine:
         intent: dict[str, Any] | None = None,
         verbose: bool = False,
     ) -> dict[str, Any]:
-        """Initialize a run from a dataset and inferred design space."""
+        """Initialize a run from a dataset or explicit search-space spec."""
         if objective not in {"min", "max"}:
             raise ValueError("objective must be either 'min' or 'max'")
         if default_engine not in {"hebo", "bo_lcb", "random", "botorch"}:
@@ -279,28 +373,49 @@ class BOEngine:
             raise ValueError("hebo_model must be one of: gp, rf")
         if default_engine != "hebo" and hebo_model != "gp":
             raise ValueError("hebo_model is only supported when --engine hebo is selected.")
-
-        dataset_path = Path(dataset_path).resolve()
-        if not dataset_path.exists():
-            raise FileNotFoundError(f"Dataset not found: {dataset_path}")
-
-        data = pd.read_csv(dataset_path)
-        self._log(verbose, f"[init] dataset={dataset_path} rows={len(data)}")
-        if target_column not in data.columns:
+        if (dataset_path is None) == (search_space_spec is None):
             raise ValueError(
-                f"Target column '{target_column}' is not in dataset columns: {list(data.columns)}"
+                "Provide exactly one of dataset_path or search_space_spec."
             )
 
-        feature_frame = data.drop(columns=[target_column])
-        if drop_cols:
-            unknown = [c for c in drop_cols if c not in feature_frame.columns]
-            if unknown:
-                raise ValueError(f"--drop-cols contains unknown columns: {unknown}")
-            feature_frame = feature_frame.drop(columns=drop_cols)
-        design_params, fixed_features, dropped_features = _infer_design_parameters(
-            feature_frame,
-            max_categories=max_categories,
-        )
+        input_source: str
+        resolved_dataset_path: Path | None = None
+        dropped_features: list[str]
+        if dataset_path is not None:
+            resolved_dataset_path = Path(dataset_path).resolve()
+            if not resolved_dataset_path.exists():
+                raise FileNotFoundError(f"Dataset not found: {resolved_dataset_path}")
+
+            data = pd.read_csv(resolved_dataset_path)
+            self._log(
+                verbose,
+                f"[init] dataset={resolved_dataset_path} rows={len(data)}",
+            )
+            if target_column not in data.columns:
+                raise ValueError(
+                    f"Target column '{target_column}' is not in dataset columns: {list(data.columns)}"
+                )
+
+            feature_frame = data.drop(columns=[target_column])
+            if drop_cols:
+                unknown = [c for c in drop_cols if c not in feature_frame.columns]
+                if unknown:
+                    raise ValueError(f"--drop-cols contains unknown columns: {unknown}")
+                feature_frame = feature_frame.drop(columns=drop_cols)
+            design_params, fixed_features, dropped_features = _infer_design_parameters(
+                feature_frame,
+                max_categories=max_categories,
+            )
+            input_source = "dataset"
+        else:
+            if drop_cols:
+                raise ValueError("drop_cols is only supported for dataset-backed init.")
+            design_params, fixed_features = _validate_search_space_spec(
+                search_space_spec or {},
+                max_categories=max_categories,
+            )
+            dropped_features = []
+            input_source = "search_space_json"
 
         if run_id is None:
             for _ in range(20):
@@ -314,23 +429,15 @@ class BOEngine:
             raise ValueError(
                 f"Run '{run_id}' already exists. Provide a different --run-id or omit it."
             )
-
-        numeric_target = pd.to_numeric(data[target_column], errors="coerce")
-        if objective == "max":
-            if numeric_target.notna().sum() == 0:
-                raise ValueError(
-                    "Target column has no numeric values required for max objective transform."
-                )
-            target_max_for_restore = float(numeric_target.max())
-        else:
-            target_max_for_restore = float("nan")
-
         state = {
             "run_id": run_id,
             "created_at": utc_now_iso(),
             "updated_at": utc_now_iso(),
             "status": "initialized",
-            "dataset_path": str(dataset_path),
+            "input_source": input_source,
+            "dataset_path": (
+                str(resolved_dataset_path) if resolved_dataset_path is not None else None
+            ),
             "target_column": target_column,
             "objective": objective,
             "default_engine": default_engine,
@@ -345,10 +452,6 @@ class BOEngine:
             "drop_cols": list(drop_cols) if drop_cols else [],
             "ignored_features": [],
             "constraints": [],
-            "objective_transform": {
-                "internal_objective": "min",
-                "target_max_for_restore": target_max_for_restore,
-            },
         }
         if constraints:
             # Validate and round-trip through constraint objects to catch errors early.
@@ -378,6 +481,20 @@ class BOEngine:
             state["constraints"] = [c.to_dict() for c in loaded]
 
         self._save_state(run_id, state)
+        input_spec_payload = {
+            "run_id": run_id,
+            "created_at": utc_now_iso(),
+            "input_source": input_source,
+            "dataset_path": state["dataset_path"],
+            "target_column": target_column,
+            "objective": objective,
+            "design_parameters": state["design_parameters"],
+            "fixed_features": state["fixed_features"],
+            "dropped_features": state["dropped_features"],
+            "drop_cols": state["drop_cols"],
+            "constraints": state["constraints"],
+        }
+        write_json(self._paths(run_id).input_spec, input_spec_payload)
         self._log(
             verbose,
             f"[init] run_id={run_id} engine={default_engine} features={len(state['active_features'])}",
@@ -388,7 +505,8 @@ class BOEngine:
                 "created_at": utc_now_iso(),
                 "intent": intent,
                 "resolved": {
-                    "dataset_path": str(dataset_path),
+                    "input_source": input_source,
+                    "dataset_path": state["dataset_path"],
                     "target_column": target_column,
                     "objective": objective,
                     "default_engine": default_engine,
@@ -398,6 +516,8 @@ class BOEngine:
                     "default_batch_size": int(default_batch_size),
                     "max_categories": int(max_categories),
                     "drop_cols": list(drop_cols) if drop_cols else [],
+                    "design_parameters": state["design_parameters"],
+                    "fixed_features": state["fixed_features"],
                     "constraints": state["constraints"],
                 },
             }
@@ -456,7 +576,7 @@ class BOEngine:
         verbose: bool = False,
     ) -> dict[str, Any]:
         state = self._load_state(run_id)
-        if state["status"] not in {"initialized", "oracle_ready", "running"}:
+        if state["status"] not in {"initialized", "running"}:
             raise ValueError(
                 f"Run '{run_id}' is not ready for suggestions. Current status: {state['status']}"
             )
@@ -549,16 +669,7 @@ class BOEngine:
                 )
             y_float = float(y_value)
 
-            if state["objective"] == "min":
-                y_internal = y_float
-            else:
-                transform = state.get("objective_transform") or {}
-                target_max_for_restore = transform.get("target_max_for_restore")
-                if target_max_for_restore is None:
-                    raise ValueError(
-                        "Missing target_max_for_restore for max objective. Reinitialize run."
-                    )
-                y_internal = float(target_max_for_restore) - y_float
+            y_internal = _to_internal_objective(y_float, state["objective"])
 
             payload = {
                 "event_time": utc_now_iso(),
@@ -636,6 +747,9 @@ class BOEngine:
             "ignored_features": state["ignored_features"],
             "constraints": state.get("constraints", []),
             "num_observations": len(observations),
+            "observation_sources": sorted(
+                {str(row.get("source", "unknown")) for row in observations}
+            ),
         }
         if observations:
             y_values = np.asarray(
@@ -708,6 +822,7 @@ class BOEngine:
             "best_iteration": status.get("best_iteration"),
             "best_x": status.get("best_x"),
             "oracle": status.get("oracle"),
+            "observation_sources": status.get("observation_sources", []),
             "artifacts": {
                 "plot": str(self._paths(run_id).convergence_plot),
                 "state": str(self._paths(run_id).state),

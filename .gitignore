@@ -16,6 +16,9 @@ wheels/
 # Virtual environments
 .venv
 runs/
+bo_runs/
+research_runs/
+evaluation_backends/
 results/
 data/*_drfp/
 data/*_drfp*/
@@ -29,8 +32,3 @@ bo-proposal.docx
 
 .ruff_cache/
 .claude/settings.local.json
-
-# ignore these for the time being as they can be a maintanence burden
-# I'm just having them in my local file for testing
-AGENTS.md
-.agents/

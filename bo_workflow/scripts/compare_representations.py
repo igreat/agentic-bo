@@ -17,8 +17,8 @@ from bo_workflow.converters.reaction_drfp import encode_reactions
 from bo_workflow.converters.molecule_descriptors import encode_molecules
 from bo_workflow.converters.combined import encode_combined
 from bo_workflow.engine import BOEngine
-from bo_workflow.observers.proxy import ProxyObserver
-from bo_workflow.oracle import build_proxy_oracle
+from bo_workflow.evaluation.proxy import ProxyObserver
+from bo_workflow.evaluation.oracle import build_proxy_oracle
 from bo_workflow.plotting import plot_optimization_convergence
 
 
@@ -93,7 +93,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--n-bits", type=int, default=256, help="DRFP fingerprint length")
     parser.add_argument("--morgan-bits", type=int, default=64, help="Morgan FP bits per SMILES col")
-    parser.add_argument("--runs-root", type=Path, default=Path("runs"))
+    parser.add_argument("--runs-root", type=Path, default=Path("bo_runs"))
     parser.add_argument(
         "--reps", nargs="+",
         choices=list(REP_LABELS),
@@ -156,16 +156,23 @@ def main(argv: list[str] | None = None) -> int:
                 default_batch_size=args.batch_size,
             )
             run_id = str(state["run_id"])
-            run_dir = engine.get_run_dir(run_id)
+            backend_dir = args.runs_root.parent / "evaluation_backends" / run_id
 
-            oracle_info = build_proxy_oracle(run_dir)
+            oracle_info = build_proxy_oracle(
+                dataset_path=features_path,
+                target_column=args.target,
+                objective=args.objective,
+                backend_dir=backend_dir,
+                seed=run_seed,
+                default_engine="hebo",
+            )
             if args.verbose:
                 print(
                     f"    Oracle: {oracle_info.get('selected_model')} "
                     f"(cv_rmse={oracle_info.get('selected_rmse', 0):.4f})"
                 )
 
-            observer = ProxyObserver(run_dir)
+            observer = ProxyObserver(backend_dir)
             engine.run_optimization(
                 run_id,
                 observer=observer,

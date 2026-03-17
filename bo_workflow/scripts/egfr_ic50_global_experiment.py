@@ -37,7 +37,7 @@ import numpy as np
 import pandas as pd
 
 from bo_workflow.engine import BOEngine
-from bo_workflow.oracle import build_proxy_oracle
+from bo_workflow.evaluation.oracle import build_proxy_oracle
 from bo_workflow.converters.molecule_descriptors import (
     canonicalize_smiles,
     decode_nearest,
@@ -307,7 +307,17 @@ def main(argv=None) -> int:
         )
 
     # 6. Final oracle build for surrogate quality report
-    final_oracle = build_proxy_oracle(run_dir, cv_folds=args.cv_folds, verbose=False)
+    backend_dir = run_dir.parent.parent / "evaluation_backends" / run_id
+    final_oracle = build_proxy_oracle(
+        dataset_path=features_csv,
+        target_column="pIC50",
+        objective="max",
+        backend_dir=backend_dir,
+        seed=args.seed,
+        default_engine=args.engine,
+        cv_folds=args.cv_folds,
+        verbose=False,
+    )
 
     output = {
         "run_id": run_id,
@@ -323,7 +333,7 @@ def main(argv=None) -> int:
         "rounds": round_results,
     }
 
-    out_path = Path(f"runs/{run_id}/egfr_global_results.json")
+    out_path = run_dir / "egfr_global_results.json"
     out_path.write_text(json.dumps(output, indent=2))
 
     print(f"\nBest in full dataset:  {best_in_dataset:.3f}")

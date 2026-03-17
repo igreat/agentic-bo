@@ -54,7 +54,7 @@ import numpy as np
 import pandas as pd
 
 from bo_workflow.engine import BOEngine
-from bo_workflow.oracle import build_proxy_oracle, predict_original_scale
+from bo_workflow.evaluation.oracle import build_proxy_oracle, predict_original_scale, read_backend_meta
 from bo_workflow.utils import read_json
 
 
@@ -204,9 +204,15 @@ def _run_single_model(
         )
         run_id = init_result["run_id"]
         run_dir = engine.get_run_dir(run_id)
+        backend_dir = run_dir  # use run dir as backend dir
 
         build_proxy_oracle(
-            run_dir,
+            dataset_path=tmp_path,
+            target_column=target_col,
+            objective=objective,
+            backend_dir=backend_dir,
+            drop_cols=drop_cols or None,
+            seed=repeat_seed,
             model_candidates=(model_name,),
             cv_folds=cv_folds,
             max_features=max_features,
@@ -214,13 +220,13 @@ def _run_single_model(
             verbose=verbose,
         )
 
-        # Re-read state after oracle build — active_features may have been pruned
-        state = read_json(run_dir / "state.json")
-        active_features: list[str] = list(state["active_features"])
-
-        # CV scores are already computed and stored by build_proxy_oracle
-        oracle_meta = read_json(run_dir / "oracle_meta.json")
+        oracle_meta = read_backend_meta(backend_dir)
+        active_features: list[str] = list(oracle_meta["active_features"])
         model_scores = oracle_meta["scores"][model_name]
+
+        # All features the engine registered (may be a superset of oracle's active_features
+        # when max_features is set — engine needs all of them in every observation).
+        engine_features: list[str] = list(init_result.get("active_features", active_features))
 
         norm_matrix, norm_mean, norm_std, cat_encoders = _build_norm_matrix(full_df, active_features)
 
@@ -230,9 +236,9 @@ def _run_single_model(
                     c: (
                         float(full_df.at[i, c])
                         if pd.api.types.is_numeric_dtype(full_df[c])
-                        else ("__none__" if pd.isna(full_df.at[i, c]) else str(full_df.at[i, c]))
+                        else ("no_value" if pd.isna(full_df.at[i, c]) else str(full_df.at[i, c]))
                     )
-                    for c in active_features
+                    for c in engine_features
                     if c in full_df.columns
                 },
                 "y": float(full_df.at[i, target_col]),
@@ -265,7 +271,7 @@ def _run_single_model(
                 in_top_k.append(nn_idx in top_k_set)
 
                 x_df = pd.DataFrame([{c: x.get(c) for c in active_features}])
-                y_pred = float(predict_original_scale(run_dir, state, x_df)[0])
+                y_pred = float(predict_original_scale(backend_dir, objective, x_df)[0])
                 obs_for_engine.append({"x": x, "y": y_pred})
 
             engine.observe(run_id, obs_for_engine, source="proxy-oracle", verbose=False)

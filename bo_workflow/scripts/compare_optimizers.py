@@ -14,8 +14,8 @@ import numpy as np
 from tqdm import tqdm
 
 from bo_workflow.engine import BOEngine
-from bo_workflow.observers.proxy import ProxyObserver
-from bo_workflow.oracle import build_proxy_oracle
+from bo_workflow.evaluation.proxy import ProxyObserver
+from bo_workflow.evaluation.oracle import build_proxy_oracle
 from bo_workflow.plotting import plot_optimization_convergence
 
 ENGINE_CHOICES = ("hebo", "bo_lcb", "random", "botorch")
@@ -88,7 +88,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--max-features", type=int, default=None)
     parser.add_argument("--repeats", type=int, default=1)
     parser.add_argument("--seed", type=int, default=7)
-    parser.add_argument("--runs-root", type=Path, default=Path("runs"))
+    parser.add_argument("--runs-root", type=Path, default=Path("bo_runs"))
     parser.add_argument(
         "--drop-cols",
         type=str,
@@ -166,9 +166,15 @@ def main(argv: list[str] | None = None) -> int:
             if args.verbose:
                 print(f"  init: run_id={run_id}")
 
-            run_dir = engine.get_run_dir(run_id)
+            backend_dir = args.runs_root.parent / "evaluation_backends" / run_id
             oracle_info = build_proxy_oracle(
-                run_dir,
+                dataset_path=args.dataset,
+                target_column=args.target,
+                objective=args.objective,
+                backend_dir=backend_dir,
+                drop_cols=drop_cols,
+                seed=run_seed,
+                default_engine=engine_name,
                 cv_folds=args.cv_folds,
                 max_features=args.max_features,
             )
@@ -179,7 +185,7 @@ def main(argv: list[str] | None = None) -> int:
                     f"(cv_rmse={oracle_info.get('selected_rmse'):.4f})"
                 )
 
-            observer = ProxyObserver(run_dir)
+            observer = ProxyObserver(backend_dir)
             engine.run_optimization(
                 run_id,
                 observer=observer,
