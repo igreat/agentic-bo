@@ -11,10 +11,13 @@ from typing import Any
 
 import numpy as np
 import pandas as pd
+from scipy.stats import spearmanr
 from sklearn.compose import ColumnTransformer
-from sklearn.ensemble import ExtraTreesRegressor, RandomForestRegressor
+from sklearn.ensemble import ExtraTreesRegressor, HistGradientBoostingRegressor, RandomForestRegressor
+from sklearn.gaussian_process import GaussianProcessRegressor
+from sklearn.gaussian_process.kernels import RBF, ConstantKernel, WhiteKernel
 from sklearn.impute import SimpleImputer
-from sklearn.model_selection import KFold, cross_val_score
+from sklearn.model_selection import KFold, cross_val_predict
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OrdinalEncoder
 
@@ -50,6 +53,13 @@ def _log(verbose: bool, message: str) -> None:
         print(message, file=sys.stderr)
 
 
+def _safe_spearman(a: np.ndarray, b: np.ndarray) -> float | None:
+    if len(a) < 3:
+        return None
+    val = spearmanr(a, b).statistic
+    return None if (val is None or np.isnan(val)) else float(val)
+
+
 # ------------------------------------------------------------------
 # Public API
 # ------------------------------------------------------------------
@@ -58,9 +68,10 @@ def _log(verbose: bool, message: str) -> None:
 def build_proxy_oracle(
     run_dir: str | Path,
     *,
-    model_candidates: tuple[str, ...] = ("random_forest", "extra_trees"),
+    model_candidates: tuple[str, ...] = ("random_forest", "extra_trees", "gradient_boosting", "gaussian_process"),
     cv_folds: int = 5,
     max_features: int | None = None,
+    top_k_pct: float = 3.0,
     verbose: bool = False,
 ) -> dict[str, Any]:
     """Train/select a proxy oracle and persist model + metadata."""
@@ -146,7 +157,7 @@ def build_proxy_oracle(
                 "cat",
                 Pipeline(
                     [
-                        ("imputer", SimpleImputer(strategy="most_frequent")),
+                        ("imputer", SimpleImputer(strategy="constant", fill_value="no_value")),
                         (
                             "encoder",
                             OrdinalEncoder(
@@ -171,9 +182,21 @@ def build_proxy_oracle(
         )
     if "extra_trees" in model_candidates:
         model_pool["extra_trees"] = ExtraTreesRegressor(
-            n_estimators=240,
+            n_estimators=200,
             random_state=state["seed"],
             n_jobs=1,
+        )
+    if "gradient_boosting" in model_candidates:
+        model_pool["gradient_boosting"] = HistGradientBoostingRegressor(
+            max_iter=200,
+            random_state=state["seed"],
+        )
+    if "gaussian_process" in model_candidates:
+        kernel = ConstantKernel(1.0) * RBF(1.0) + WhiteKernel(1e-3)
+        model_pool["gaussian_process"] = GaussianProcessRegressor(
+            kernel=kernel,
+            random_state=state["seed"],
+            normalize_y=True,
         )
     if not model_pool:
         raise ValueError("No supported model candidates were provided.")
@@ -182,8 +205,14 @@ def build_proxy_oracle(
     n_splits = min(max(2, cv_folds), n_rows)
     cv = KFold(n_splits=n_splits, shuffle=True, random_state=state["seed"])
 
-    scores: dict[str, float] = {}
+    # Top-K% mask for Spearman selection (internal scale: lower = better)
+    n_top_k = max(1, int(n_rows * top_k_pct / 100))
+    top_k_threshold = float(np.partition(y_internal.copy(), n_top_k - 1)[n_top_k - 1])
+    top_k_mask = y_internal <= top_k_threshold
+
+    scores: dict[str, dict[str, float | None]] = {}
     trained_pipelines: dict[str, Pipeline] = {}
+
     for model_name, regressor in model_pool.items():
         pipeline = Pipeline(
             steps=[
@@ -191,20 +220,34 @@ def build_proxy_oracle(
                 ("model", regressor),
             ]
         )
-        cv_scores = cross_val_score(
-            pipeline,
-            x_full,
-            y_internal,
-            scoring="neg_root_mean_squared_error",
-            cv=cv,
-            n_jobs=1,
-        )
-        rmse = float(-np.mean(cv_scores))
-        scores[model_name] = rmse
-        trained_pipelines[model_name] = pipeline
-        _log(verbose, f"[oracle] {model_name}: cv_rmse={rmse:.4f}")
+        cv_preds = cross_val_predict(pipeline, x_full, y_internal, cv=cv)
 
-    best_model_name = min(scores, key=lambda k: scores[k])
+        rmse = float(np.sqrt(np.mean((cv_preds - y_internal) ** 2)))
+        sr_all = _safe_spearman(cv_preds, y_internal)
+        sr_top_k = _safe_spearman(cv_preds[top_k_mask], y_internal[top_k_mask]) if top_k_mask.sum() >= 3 else None
+
+        scores[model_name] = {
+            "rmse": rmse,
+            "spearman_all": sr_all,
+            "spearman_top_k": sr_top_k,
+        }
+        trained_pipelines[model_name] = pipeline
+        sr_all_str = f"{sr_all:.3f}" if sr_all is not None else "n/a"
+        sr_top_k_str = f"{sr_top_k:.3f}" if sr_top_k is not None else "n/a"
+        _log(
+            verbose,
+            f"[oracle] {model_name}: rmse={rmse:.4f} spearman_all={sr_all_str} spearman_top_k={sr_top_k_str}",
+        )
+
+    def _selection_key(name: str) -> tuple[float, float, float]:
+        s = scores[name]
+        # Higher Spearman is better → negate for min-sort. Lower RMSE is better → keep.
+        top_k = s["spearman_top_k"] if s["spearman_top_k"] is not None else s["spearman_all"]
+        top_k = top_k if top_k is not None else -1.0
+        sr_all = s["spearman_all"] if s["spearman_all"] is not None else -1.0
+        return (-top_k, -sr_all, s["rmse"])
+
+    best_model_name = min(scores, key=_selection_key)
     best_pipeline = trained_pipelines[best_model_name]
     best_pipeline.fit(x_full, y_internal)
 
@@ -215,9 +258,12 @@ def build_proxy_oracle(
     oracle_meta = {
         "built_at": utc_now_iso(),
         "model_candidates": list(model_pool.keys()),
-        "cv_rmse": scores,
+        "scores": scores,
         "selected_model": best_model_name,
-        "selected_rmse": scores[best_model_name],
+        "selected_rmse": scores[best_model_name]["rmse"],
+        "selected_spearman_all": scores[best_model_name]["spearman_all"],
+        "selected_spearman_top_k": scores[best_model_name]["spearman_top_k"],
+        "top_k_pct": top_k_pct,
         "rows_used": int(n_rows),
         "active_features": list(active_features),
         "objective_internal": "min",
@@ -236,17 +282,16 @@ def build_proxy_oracle(
     write_json(paths.state, state)
     _log(
         verbose,
-        f"[oracle] selected={best_model_name} rmse={scores[best_model_name]:.4f}",
+        f"[oracle] selected={best_model_name} rmse={scores[best_model_name]['rmse']:.4f}",
     )
 
     return {
         "run_id": state["run_id"],
         "status": state["status"],
         "active_features": state["active_features"],
-        "ignored_features": state["ignored_features"],
+        "ignored_features": state.get("ignored_features", []),
         "selected_model": best_model_name,
-        "selected_rmse": scores[best_model_name],
-        "cv_rmse": scores,
+        "scores": scores,
     }
 
 
@@ -275,34 +320,3 @@ def predict_original_scale(
     return _restore_objective_values(y_internal, state["objective"], target_max)
 
 
-def predict_with_uncertainty(
-    run_dir: str | Path,
-    state: dict[str, Any],
-    x_df: pd.DataFrame,
-) -> tuple[np.ndarray, np.ndarray]:
-    """Run oracle prediction and return mean and inter-tree std.
-
-    Returns (y_mean, y_std) both in the user's objective scale.
-
-    y_std is the standard deviation of individual tree predictions — a
-    measure of how much the ensemble disagrees. High values indicate
-    regions where the oracle has little support from training data.
-
-    The std is invariant to the internal objective transform (negating
-    values for max objectives shifts the mean but not the spread), so
-    y_std needs no separate conversion.
-    """
-    model = load_oracle(run_dir)
-    regressor = model.named_steps["model"]
-    x_preprocessed = model.named_steps["preprocessor"].transform(x_df)
-
-    # shape: (n_estimators, n_samples)
-    tree_preds = np.array(
-        [tree.predict(x_preprocessed) for tree in regressor.estimators_]
-    )
-    y_internal_mean = tree_preds.mean(axis=0)
-    y_std = tree_preds.std(axis=0)
-
-    target_max = float(state["oracle"]["target_max_for_restore"])
-    y_mean = _restore_objective_values(y_internal_mean, state["objective"], target_max)
-    return y_mean, y_std

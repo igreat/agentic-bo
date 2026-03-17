@@ -3,10 +3,9 @@
 from pathlib import Path
 from typing import Any
 
-import numpy as np
 import pandas as pd
 
-from ..oracle import predict_with_uncertainty
+from ..oracle import predict_original_scale
 from ..utils import RunPaths, read_json
 from .base import Observer
 
@@ -16,12 +15,6 @@ class ProxyObserver(Observer):
 
     Self-contained: captures all needed context (run_dir, features,
     objective, oracle metadata) at construction time.
-
-    Observations fed to the BO engine are sampled from
-    N(y_mean, y_std), where y_std is the inter-tree standard deviation
-    of the ensemble. This communicates oracle uncertainty to the engine:
-    suggestions in poorly-supported regions receive noisier observations,
-    which naturally shifts the acquisition function toward exploration.
     """
 
     def __init__(self, run_dir: str | Path) -> None:
@@ -37,7 +30,6 @@ class ProxyObserver(Observer):
         self._objective = state["objective"]
         self._default_engine = state.get("default_engine", "hebo")
         self._state = state
-        self._rng = np.random.default_rng(state.get("seed"))
 
     @property
     def source(self) -> str:
@@ -45,11 +37,10 @@ class ProxyObserver(Observer):
 
     def evaluate(self, suggestions: list[dict[str, Any]]) -> list[dict[str, Any]]:
         x_df = pd.DataFrame([row["x"] for row in suggestions])[self._active_features]
-        y_mean, y_std = predict_with_uncertainty(self._run_dir, self._state, x_df)
-        y_obs = self._rng.normal(y_mean, y_std)
+        y_preds = predict_original_scale(self._run_dir, self._state, x_df)
 
         payloads = []
-        for row, y_val in zip(suggestions, y_obs, strict=True):
+        for row, y_val in zip(suggestions, y_preds, strict=True):
             payloads.append(
                 {
                     "x": row["x"],

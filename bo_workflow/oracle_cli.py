@@ -17,6 +17,13 @@ def register_commands(sub: argparse._SubParsersAction) -> None:
     oracle_cmd.add_argument("--run-id", type=str, required=True)
     oracle_cmd.add_argument("--cv-folds", type=int, default=5)
     oracle_cmd.add_argument("--max-features", type=int, default=None)
+    oracle_cmd.add_argument("--top-k-pct", type=float, default=3.0)
+    oracle_cmd.add_argument(
+        "--model-candidates",
+        nargs="+",
+        default=None,
+        help="Models to evaluate (default: all four). Choices: random_forest extra_trees gradient_boosting gaussian_process",
+    )
     oracle_cmd.add_argument("--verbose", action="store_true")
 
     run_cmd = sub.add_parser("run-proxy", help="Run iterative proxy optimization loop")
@@ -32,12 +39,15 @@ def handle(args: argparse.Namespace, engine: BOEngine) -> int | None:
         from .oracle import build_proxy_oracle
 
         run_dir = engine.get_run_dir(args.run_id)
-        payload = build_proxy_oracle(
-            run_dir,
+        kwargs = dict(
             cv_folds=args.cv_folds,
             max_features=args.max_features,
+            top_k_pct=args.top_k_pct,
             verbose=args.verbose,
         )
+        if args.model_candidates:
+            kwargs["model_candidates"] = tuple(args.model_candidates)
+        payload = build_proxy_oracle(run_dir, **kwargs)
         _json_print(payload)
         return 0
 
