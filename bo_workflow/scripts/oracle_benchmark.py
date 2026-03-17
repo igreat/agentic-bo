@@ -27,23 +27,15 @@ so they reflect genuine generalisation rather than in-sample memorisation.
 The top-K% Spearman is the most informative: it tells you whether the oracle
 correctly orders the best candidates relative to each other.
 
-Works with any all-numeric tabular dataset; primary development dataset is
-HER_virtual_data.csv.
-
 Usage:
-    # Benchmark on HER dataset (primary development dataset)
-    # Outputs: results/HER_virtual_data.json, results/HER_virtual_data.pdf, results/runs/
+    # Benchmark on BH dataset (primary development dataset)
+    # Outputs: results/bh/BH_synthesis_data.json, results/bh/BH_synthesis_data.pdf, results/bh/runs/
     uv run python -m bo_workflow.scripts.oracle_benchmark run \\
-        --dataset data/HER_virtual_data.csv \\
-        --target Target --objective max \\
+        --dataset data/BH_synthesis_data.csv \\
+        --target yield --objective max \\
+        --max-features 20 \\
         --seed-count 20 --iterations 50 --repeats 10 \\
-        --output-dir results/her_baseline
-
-    # Compare baseline vs improved oracle
-    uv run python -m bo_workflow.scripts.oracle_benchmark compare \\
-        results/her_baseline/HER_virtual_data.json results/her_improved/HER_virtual_data.json \\
-        --labels "Baseline" "Improved" \\
-        --plot-out results/comparison.pdf
+        --output-dir results/bh
 """
 
 import argparse
@@ -773,60 +765,6 @@ def _save_run_plot(results: dict[str, Any], out_path: Path) -> None:
     print(f"Plot saved: {out_path}", file=sys.stderr)
 
 
-def _save_comparison_plot(
-    all_results: list[dict[str, Any]], labels: list[str], out_path: Path
-) -> None:
-    """Compare multiple benchmark runs. Each run gets its own row of panels + table."""
-    n_runs = len(all_results)
-    fig = plt.figure(figsize=(14, 6 * n_runs + 4))
-    outer_gs = gridspec.GridSpec(n_runs + 1, 1, figure=fig,
-                                  height_ratios=[2] * n_runs + [1.2],
-                                  hspace=0.6)
-
-    for run_idx, (results, label) in enumerate(zip(all_results, labels)):
-        inner_gs = gridspec.GridSpecFromSubplotSpec(
-            1, 2, subplot_spec=outer_gs[run_idx], wspace=0.3
-        )
-        ax_best = fig.add_subplot(inner_gs[0])
-        ax_topk = fig.add_subplot(inner_gs[1])
-
-        objective = results["objective"]
-        true_optimum = results["true_optimum"]
-        top_k_pct = results["top_k_pct"]
-        target = results["target"]
-
-        _plot_convergence_panels(ax_best, ax_topk, results, objective, true_optimum, top_k_pct, target)
-        ax_best.set_title(f"[{label}] Cumulative Best ({('↓ min' if objective == 'min' else '↑ max')})",
-                          fontweight="bold")
-        ax_topk.set_title(f"[{label}] Top-{top_k_pct:.0f}% Recovery Rate", fontweight="bold")
-
-    # Shared summary table at the bottom (first result as reference)
-    ax_table = fig.add_subplot(outer_gs[-1])
-    cell_data, col_labels = _build_summary_table_data(all_results[0], all_results[0]["top_k_pct"])
-    ax_table.axis("off")
-    tbl = ax_table.table(
-        cellText=cell_data,
-        colLabels=col_labels,
-        loc="center",
-        cellLoc="center",
-    )
-    tbl.auto_set_font_size(False)
-    tbl.set_fontsize(9)
-    tbl.auto_set_column_width(col=list(range(len(col_labels))))
-    for col_idx in range(len(col_labels)):
-        tbl[(0, col_idx)].set_facecolor("#E3F2FD")
-        tbl[(0, col_idx)].set_text_props(fontweight="bold")
-    ax_table.set_title(f"Summary — {labels[0]} (mean ± std)", fontweight="bold", pad=8)
-
-    fig.suptitle(
-        f"Oracle Benchmark Comparison — {all_results[0]['target']}",
-        fontsize=12, fontweight="bold",
-    )
-    out_path.parent.mkdir(parents=True, exist_ok=True)
-    fig.savefig(out_path, dpi=150, bbox_inches="tight")
-    plt.close(fig)
-    print(f"Plot saved: {out_path}", file=sys.stderr)
-
 
 def _print_summary(results: dict[str, Any], label: str) -> None:
     top_k_pct = results.get("top_k_pct", 3.0)
@@ -932,22 +870,6 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     run.add_argument("--verbose", action="store_true")
 
-    # --- compare mode ---
-    cmp = sub.add_parser("compare", help="Compare two or more saved benchmark JSON files")
-    cmp.add_argument("results", nargs="+", type=Path, help="Benchmark JSON files to compare")
-    cmp.add_argument(
-        "--labels",
-        nargs="+",
-        default=None,
-        help="Display labels (one per results file)",
-    )
-    cmp.add_argument(
-        "--plot-out",
-        type=Path,
-        default=Path("results/comparison.pdf"),
-        help="Output PDF path (default: results/comparison.pdf)",
-    )
-
     return p
 
 
@@ -966,46 +888,6 @@ def main(argv: list[str] | None = None) -> int:
             for model in results["models"]
         }
         print(json.dumps(summary, indent=2))
-        return 0
-
-    if args.mode == "compare":
-        all_results = []
-        for path in args.results:
-            if not path.exists():
-                print(f"File not found: {path}", file=sys.stderr)
-                return 1
-            all_results.append(json.loads(path.read_text()))
-
-        labels = args.labels or [p.stem for p in args.results]
-        if len(labels) != len(all_results):
-            print(
-                f"--labels count ({len(labels)}) must match results count ({len(all_results)})",
-                file=sys.stderr,
-            )
-            return 1
-
-        # Validate that all results share the same benchmark setup so the
-        # comparison plot is meaningful.
-        _COMPARE_KEYS = ["dataset", "target", "objective", "top_k_pct", "iterations"]
-        ref = all_results[0]
-        for path, result in zip(args.results[1:], all_results[1:]):
-            mismatches = [
-                k for k in _COMPARE_KEYS if result.get(k) != ref.get(k)
-            ]
-            if mismatches:
-                print(
-                    f"Warning: {path.name} differs from {args.results[0].name} "
-                    f"on: {', '.join(mismatches)}. Comparison plot may be misleading.",
-                    file=sys.stderr,
-                )
-
-        for result, label in zip(all_results, labels):
-            _print_summary(result, label)
-
-        _save_comparison_plot(all_results, labels, Path(args.plot_out))
-        print(
-            json.dumps({"plot": str(args.plot_out), "n_compared": len(all_results)}, indent=2)
-        )
         return 0
 
     parser.print_help()
