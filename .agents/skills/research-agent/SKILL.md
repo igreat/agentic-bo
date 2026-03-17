@@ -22,6 +22,7 @@ Do not tell the agent to build its own proxy oracle as part of this workflow.
 - Optional dataset path
 - Optional prior observations path or inline observations
 - Optional search-space context already supplied by the user
+- Optional benchmark task bundle path or `task_manifest.json`
 
 ## State Files
 
@@ -115,9 +116,16 @@ Otherwise, delegate to the `literature-review` skill. Pass:
 - `objective_property`
 - `objective_direction`
 - `dataset_path` (if available)
+- `local_packet_path` when the benchmark task bundle provides `literature.mode = local_packet`
 - path: `research_runs/<research_id>/research_plan.md` (for the skill to write the Literature Context section)
 
 Receive back the structured `literature_findings` JSON and write it into `research_state.json`.
+
+For closed-world benchmark runs:
+
+- use only the local packet from the task bundle when present
+- do not browse the web
+- treat the task bundle as the authoritative public context
 
 ### 3. Experiment Setup
 
@@ -184,6 +192,10 @@ Do not re-run Phase 3 setup during Phase 4. In particular:
 
 If the user or operator explicitly provides a `backend_id` for external evaluation, `bo-run-evaluator` is an acceptable way to automate the suggest/observe loop. It is still not acceptable to build the backend from inside `research-agent`.
 
+If a benchmark task bundle provides an opaque `evaluation.handle` rather than a
+raw `backend_id`, automate Phase 4 through `benchmarks/run_task_evaluator.py`
+instead of direct `run-evaluator`.
+
 ### 5. Interpretation
 
 Summarize:
@@ -230,3 +242,4 @@ On resume:
 - Keep `research_state.json` concise and structured; put narrative detail in `research_plan.md`.
 - Do not call `build-oracle` or `run-proxy` as part of `research-agent`.
 - A fully unresolved search space is out of scope for execution; resolve `experiment_spec` first.
+- In benchmark runs with a local literature packet, do not browse beyond the packet.
