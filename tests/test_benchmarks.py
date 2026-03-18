@@ -227,6 +227,66 @@ def test_report_trajectory_summary_treats_random_engine_as_fully_random(
     assert "model_guided_phase" not in trajectory
 
 
+def test_report_trajectory_summary_excludes_seeded_observations_from_phase_split(
+    tmp_path: Path,
+) -> None:
+    runs_root = tmp_path / "bo_runs"
+    engine = BOEngine(runs_root=runs_root)
+    state = engine.init_run(
+        target_column="target",
+        objective="min",
+        search_space_spec={
+            "design_parameters": [
+                {"name": "x", "type": "num", "lb": 0.0, "ub": 1.0}
+            ],
+            "fixed_features": {},
+        },
+        seed=42,
+        num_initial_random_samples=2,
+    )
+    run_id = state["run_id"]
+
+    # Seeded observations should not be treated as the BO random phase.
+    engine.observe(
+        run_id,
+        [
+            {"x": {"x": 0.01}, "y": 0.50},
+            {"x": {"x": 0.02}, "y": 0.49},
+        ],
+        source="pool-seed",
+    )
+    engine.observe(
+        run_id,
+        [
+            {"x": {"x": 0.10}, "y": 0.42, "suggestion_id": "s1", "engine": "hebo"},
+            {"x": {"x": 0.20}, "y": 0.36, "suggestion_id": "s2", "engine": "hebo"},
+            {"x": {"x": 0.30}, "y": 0.37, "suggestion_id": "s3", "engine": "hebo"},
+            {"x": {"x": 0.40}, "y": 0.355, "suggestion_id": "s4", "engine": "hebo"},
+        ],
+        source="benchmark-evaluator",
+    )
+
+    report = engine.report(run_id)
+    trajectory = report["trajectory"]
+
+    assert trajectory["random_phase"] == {
+        "num_observations": 2,
+        "start_observation": 3,
+        "end_observation": 4,
+        "min_value": 0.36,
+        "max_value": 0.42,
+        "best_value": 0.36,
+        "best_observation_number": 4,
+    }
+    assert trajectory["model_guided_phase"]["num_observations"] == 2
+    assert trajectory["model_guided_phase"]["start_observation"] == 5
+    assert trajectory["model_guided_phase"]["end_observation"] == 6
+    assert trajectory["model_guided_phase"]["best_observation_number"] == 6
+    assert trajectory["model_guided_phase"]["improvement_over_random_best"] == pytest.approx(
+        0.005
+    )
+
+
 def test_build_workspace_rejects_overwriting_repo_or_ancestor(
     tmp_path: Path,
     monkeypatch,
@@ -240,6 +300,13 @@ def test_build_workspace_rejects_overwriting_repo_or_ancestor(
 
     with pytest.raises(ValueError, match="unsafe output directory"):
         build_workspace(output_dir=fake_root.parent, task_ids=["oer"], overwrite=True)
+
+    with pytest.raises(ValueError, match="inside repo"):
+        build_workspace(
+            output_dir=fake_root / "nested-output",
+            task_ids=["oer"],
+            overwrite=True,
+        )
 
 
 def test_build_workspace_copies_prebuilt_backend_when_present(

@@ -383,16 +383,24 @@ class BOEngine:
             },
         }
 
-        observation_engines = {
-            str(row.get("engine", state.get("default_engine", "hebo")))
-            for row in observations
+        phase_indices = [
+            idx
+            for idx, row in enumerate(observations)
+            if row.get("suggestion_id") is not None
+        ]
+        if not phase_indices:
+            phase_indices = list(range(total))
+
+        phase_engines = {
+            str(observations[idx].get("engine", state.get("default_engine", "hebo")))
+            for idx in phase_indices
         }
-        if observation_engines == {"random"}:
-            random_count = total
+        if phase_engines == {"random"}:
+            random_indices = phase_indices
         else:
-            random_count = min(init_random, total)
-        if random_count > 0:
-            random_values = y_values[:random_count]
+            random_indices = phase_indices[: min(init_random, len(phase_indices))]
+        if random_indices:
+            random_values = y_values[random_indices]
             if objective == "min":
                 random_best_idx = int(np.argmin(random_values))
                 random_best_value = float(np.min(random_values))
@@ -400,17 +408,18 @@ class BOEngine:
                 random_best_idx = int(np.argmax(random_values))
                 random_best_value = float(np.max(random_values))
             summary["random_phase"] = {
-                "num_observations": random_count,
-                "start_observation": 1,
-                "end_observation": random_count,
+                "num_observations": len(random_indices),
+                "start_observation": random_indices[0] + 1,
+                "end_observation": random_indices[-1] + 1,
                 "min_value": float(np.min(random_values)),
                 "max_value": float(np.max(random_values)),
                 "best_value": random_best_value,
-                "best_observation_number": random_best_idx + 1,
+                "best_observation_number": random_indices[random_best_idx] + 1,
             }
 
-        if total > random_count:
-            guided_values = y_values[random_count:]
+        guided_indices = phase_indices[len(random_indices) :]
+        if guided_indices:
+            guided_values = y_values[guided_indices]
             if objective == "min":
                 guided_best_idx = int(np.argmin(guided_values))
                 guided_best_value = float(np.min(guided_values))
@@ -419,13 +428,13 @@ class BOEngine:
                 guided_best_value = float(np.max(guided_values))
 
             guided_summary = {
-                "num_observations": total - random_count,
-                "start_observation": random_count + 1,
-                "end_observation": total,
+                "num_observations": len(guided_indices),
+                "start_observation": guided_indices[0] + 1,
+                "end_observation": guided_indices[-1] + 1,
                 "min_value": float(np.min(guided_values)),
                 "max_value": float(np.max(guided_values)),
                 "best_value": guided_best_value,
-                "best_observation_number": random_count + guided_best_idx + 1,
+                "best_observation_number": guided_indices[guided_best_idx] + 1,
             }
             if "random_phase" in summary:
                 guided_summary["improvement_over_random_best"] = improve_delta(

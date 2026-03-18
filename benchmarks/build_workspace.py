@@ -81,6 +81,13 @@ def validate_output_dir(output_dir: Path, *, root: Path, overwrite: bool) -> Pat
             f"Refusing to overwrite unsafe output directory: {resolved_output}"
         )
 
+    # Also refuse overwrite targets nested inside the repo, since removing them
+    # can delete tracked project files or corrupt the checkout.
+    if overwrite and resolved_output.is_relative_to(resolved_root):
+        raise ValueError(
+            f"Refusing to overwrite output directory inside repo: {resolved_output}"
+        )
+
     # Also reject obvious filesystem roots like '/'.
     if overwrite and resolved_output == resolved_output.parent:
         raise ValueError(
