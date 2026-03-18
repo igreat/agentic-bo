@@ -14,6 +14,7 @@ V1 output is markdown only: `research_runs/<research_id>/paper.md`. Target lengt
 - `research_runs/<research_id>/research_state.json`
 - `research_runs/<research_id>/research_plan.md`
 - `bo_runs/<bo_run_id>/report.json`
+- `bo_runs/<bo_run_id>/observations.jsonl` when you want exact trajectory or phase-specific numeric claims
 - `bo_runs/<bo_run_id>/convergence.pdf` (reference in Methods; do not embed, just cite its path)
 - optional literature sources gathered earlier
 
@@ -49,12 +50,19 @@ If literature review was skipped:
 - Describe the search space actually used (design variables, bounds, any simplex constraints).
 - Describe the BO engine and relevant configuration (surrogate model, acquisition function, batch size).
 - State how observations were obtained based on the available artifacts.
+- Describe oracle provenance only from what the artifacts explicitly say. If `report.json` exposes oracle metadata but not training timing, describe it as backend-reported or artifact-reported oracle metadata rather than claiming it was fitted post hoc.
 - If the BO artifacts indicate proxy-backed evaluation: report the proxy oracle CV RMSE and note that outcomes reflect surrogate predictions, not direct measurements.
 - Reference the convergence plot at `bo_runs/<bo_run_id>/convergence.pdf`.
 
 ### Results
 - Report the best value found and the corresponding candidate (composition, conditions, etc.).
 - Mention convergence behavior — did the search plateau, was it still improving at the end?
+- Use `report.json` as the source of truth for best-value summary statistics.
+- For human-facing numbering, prefer `report.json["best_observation_number"]` over the zero-based internal `best_iteration` field.
+- Prefer `report.json["trajectory"]` for phase summaries, random-phase ranges, and best-observation numbering when it is available.
+- If `report.json["trajectory"]` is present, use it directly rather than recomputing phase summaries from memory or ad hoc shell output.
+- If you include exact random-phase ranges, phase breakpoints, or iteration-specific claims beyond the reported best and they are not already present in `report.json["trajectory"]`, verify them from `observations.jsonl`.
+- If `observations.jsonl` is not provided or not read, avoid precise trajectory numbers and keep the narrative qualitative.
 - If the BO artifacts indicate proxy-backed evaluation: do not present outcomes as measured values. Use phrasing like "the proxy oracle predicted…" or "the surrogate model identified…".
 
 ### Discussion
@@ -78,3 +86,6 @@ If literature review was skipped:
 - If evidence is weak (high oracle RMSE, few iterations, narrow dataset), say so directly.
 - Keep references lightweight in v1; plain links or compact citations are enough.
 - Keep the writing tied to the actual artifacts rather than generic BO boilerplate.
+- Do not invent fine-grained numeric trajectory details from memory. If exact ranges or iteration-level numbers are not explicitly supported by `report.json` or `observations.jsonl`, leave them out.
+- Do not infer oracle training timing or methodology unless it is explicitly stated in the artifacts.
+- If `report.json["oracle"]["source"]` says the metadata came from the evaluation backend, describe it as backend-reported oracle metadata rather than implying a fresh model fit after the run.

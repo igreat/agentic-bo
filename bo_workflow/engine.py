@@ -345,6 +345,108 @@ class BOEngine:
         if verbose:
             print(message, file=sys.stderr)
 
+    def _trajectory_summary(
+        self,
+        state: dict[str, Any],
+        observations: list[dict[str, Any]],
+    ) -> dict[str, Any] | None:
+        if not observations:
+            return None
+
+        objective = str(state["objective"])
+        init_random = int(state.get("num_initial_random_samples", 0))
+        total = len(observations)
+        y_values = np.asarray([float(row["y"]) for row in observations], dtype=float)
+
+        if objective == "min":
+            best_idx = int(np.argmin(y_values))
+            compare = np.less
+            # Lower is better, so a positive delta means the guided phase improved.
+            improve_delta = lambda a, b: float(a - b)
+        else:
+            best_idx = int(np.argmax(y_values))
+            compare = np.greater
+            # Higher is better, so a positive delta means the guided phase improved.
+            improve_delta = lambda a, b: float(b - a)
+
+        best_so_far = float(y_values[0])
+        last_improvement_idx = 0
+        for idx, value in enumerate(y_values[1:], start=1):
+            if compare(value, best_so_far):
+                best_so_far = float(value)
+                last_improvement_idx = idx
+
+        summary: dict[str, Any] = {
+            "best_observation_number": best_idx + 1,
+            "last_improvement_observation": last_improvement_idx + 1,
+            "observed_range": {
+                "min_value": float(np.min(y_values)),
+                "max_value": float(np.max(y_values)),
+            },
+        }
+
+        phase_indices = [
+            idx
+            for idx, row in enumerate(observations)
+            if row.get("suggestion_id") is not None
+        ]
+        if not phase_indices:
+            phase_indices = list(range(total))
+
+        phase_engines = {
+            str(observations[idx].get("engine", state.get("default_engine", "hebo")))
+            for idx in phase_indices
+        }
+        if phase_engines == {"random"}:
+            random_indices = phase_indices
+        else:
+            random_indices = phase_indices[: min(init_random, len(phase_indices))]
+        if random_indices:
+            random_values = y_values[random_indices]
+            if objective == "min":
+                random_best_idx = int(np.argmin(random_values))
+                random_best_value = float(np.min(random_values))
+            else:
+                random_best_idx = int(np.argmax(random_values))
+                random_best_value = float(np.max(random_values))
+            summary["random_phase"] = {
+                "num_observations": len(random_indices),
+                "start_observation": random_indices[0] + 1,
+                "end_observation": random_indices[-1] + 1,
+                "min_value": float(np.min(random_values)),
+                "max_value": float(np.max(random_values)),
+                "best_value": random_best_value,
+                "best_observation_number": random_indices[random_best_idx] + 1,
+            }
+
+        guided_indices = phase_indices[len(random_indices) :]
+        if guided_indices:
+            guided_values = y_values[guided_indices]
+            if objective == "min":
+                guided_best_idx = int(np.argmin(guided_values))
+                guided_best_value = float(np.min(guided_values))
+            else:
+                guided_best_idx = int(np.argmax(guided_values))
+                guided_best_value = float(np.max(guided_values))
+
+            guided_summary = {
+                "num_observations": len(guided_indices),
+                "start_observation": guided_indices[0] + 1,
+                "end_observation": guided_indices[-1] + 1,
+                "min_value": float(np.min(guided_values)),
+                "max_value": float(np.max(guided_values)),
+                "best_value": guided_best_value,
+                "best_observation_number": guided_indices[guided_best_idx] + 1,
+            }
+            if "random_phase" in summary:
+                guided_summary["improvement_over_random_best"] = improve_delta(
+                    summary["random_phase"]["best_value"],
+                    guided_best_value,
+                )
+            summary["model_guided_phase"] = guided_summary
+
+        return summary
+
     def init_run(
         self,
         *,
@@ -763,12 +865,16 @@ class BOEngine:
                 best_value = float(np.max(y_values))
             payload["best_value"] = best_value
             payload["best_iteration"] = best_idx
+            payload["best_observation_number"] = best_idx + 1
             payload["best_x"] = observations[best_idx]["x"]
 
         if state.get("oracle") is not None:
             payload["oracle"] = {
+                "source": state["oracle"].get("source", "unknown"),
                 "selected_model": state["oracle"]["selected_model"],
                 "selected_rmse": state["oracle"]["selected_rmse"],
+                "cv_rmse": state["oracle"].get("cv_rmse", {}),
+                "active_features": state["oracle"].get("active_features", []),
             }
         return payload
 
@@ -820,9 +926,11 @@ class BOEngine:
             "target_column": state["target_column"],
             "best_value": status.get("best_value"),
             "best_iteration": status.get("best_iteration"),
+            "best_observation_number": status.get("best_observation_number"),
             "best_x": status.get("best_x"),
             "oracle": status.get("oracle"),
             "observation_sources": status.get("observation_sources", []),
+            "trajectory": self._trajectory_summary(state, observations),
             "artifacts": {
                 "plot": str(self._paths(run_id).convergence_plot),
                 "state": str(self._paths(run_id).state),

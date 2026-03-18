@@ -1,0 +1,41 @@
+{
+  "design_parameters": [
+    {
+      "name": "Mn_molar_fraction",
+      "type": "num",
+      "lb": 0.0,
+      "ub": 1.0
+    },
+    {
+      "name": "Fe_molar_fraction",
+      "type": "num",
+      "lb": 0.0,
+      "ub": 1.0
+    },
+    {
+      "name": "Co_molar_fraction",
+      "type": "num",
+      "lb": 0.0,
+      "ub": 1.0
+    },
+    {
+      "name": "Ni_molar_fraction",
+      "type": "num",
+      "lb": 0.0,
+      "ub": 1.0
+    },
+    {
+      "name": "La_molar_fraction",
+      "type": "num",
+      "lb": 0.0,
+      "ub": 1.0
+    },
+    {
+      "name": "Ce_molar_fraction",
+      "type": "num",
+      "lb": 0.0,
+      "ub": 1.0
+    }
+  ],
+  "fixed_features": {}
+}

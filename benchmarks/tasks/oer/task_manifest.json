@@ -1,0 +1,46 @@
+{
+  "task_id": "oer",
+  "title": "Mn-Fe-Co-Ni-La-Ce OER composition optimization",
+  "modality": "simplex_composition",
+  "objective": {
+    "target_column": "overpotential_V",
+    "direction": "min"
+  },
+  "budget": {
+    "iterations": 100,
+    "batch_size": 1,
+    "init_random": 10
+  },
+  "init": {
+    "mode": "search_space_json",
+    "path": "search_space.json"
+  },
+  "constraints": [
+    {
+      "type": "simplex",
+      "cols": [
+        "Mn_molar_fraction",
+        "Fe_molar_fraction",
+        "Co_molar_fraction",
+        "Ni_molar_fraction",
+        "La_molar_fraction",
+        "Ce_molar_fraction"
+      ],
+      "total": 1.0
+    }
+  ],
+  "representation": {
+    "type": "none"
+  },
+  "literature": {
+    "mode": "local_packet",
+    "path": "literature"
+  },
+  "workflow": {
+    "entrypoint": "research-agent"
+  },
+  "evaluation": {
+    "mode": "prebuilt_backend",
+    "backend_id": "oer_hidden"
+  }
+}

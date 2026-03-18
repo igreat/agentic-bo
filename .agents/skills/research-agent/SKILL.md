@@ -22,6 +22,7 @@ Do not tell the agent to build its own proxy oracle as part of this workflow.
 - Optional dataset path
 - Optional prior observations path or inline observations
 - Optional search-space context already supplied by the user
+- Optional benchmark task bundle path or `task_manifest.json`
 
 ## State Files
 
@@ -115,9 +116,16 @@ Otherwise, delegate to the `literature-review` skill. Pass:
 - `objective_property`
 - `objective_direction`
 - `dataset_path` (if available)
+- `local_packet_path` when the benchmark task bundle provides `literature.mode = local_packet`
 - path: `research_runs/<research_id>/research_plan.md` (for the skill to write the Literature Context section)
 
 Receive back the structured `literature_findings` JSON and write it into `research_state.json`.
+
+For closed-world benchmark runs:
+
+- use only the local packet from the task bundle when present
+- do not browse the web
+- treat the task bundle as the authoritative public context
 
 ### 3. Experiment Setup
 
@@ -184,6 +192,10 @@ Do not re-run Phase 3 setup during Phase 4. In particular:
 
 If the user or operator explicitly provides a `backend_id` for external evaluation, `bo-run-evaluator` is an acceptable way to automate the suggest/observe loop. It is still not acceptable to build the backend from inside `research-agent`.
 
+If a benchmark task bundle provides a prebuilt `evaluation.backend_id`, it is
+acceptable to automate Phase 4 directly with `run-evaluator` against the
+backend copied into the public workspace.
+
 ### 5. Interpretation
 
 Summarize:
@@ -194,6 +206,14 @@ Summarize:
 - important caveats such as oracle error or sparse evidence
 
 Write this into the Interpretation section of `research_plan.md`.
+
+When updating `research_plan.md` after Phase 4:
+- use `bo_runs/<bo_run_id>/report.json` as the source of truth for `best_value`, `best_iteration`, `num_observations`, `oracle_model`, and `oracle_rmse`
+- use `report.json["best_observation_number"]` for human-facing iteration/observation references; treat `best_iteration` as a zero-based engine index
+- prefer `report.json["trajectory"]` for human-facing trajectory summaries when it is available
+- if `report.json["trajectory"]` is present, use it directly rather than reconstructing ranges or phase breakpoints from memory
+- if you want to describe random-phase or iteration-specific trajectory details that are not present in `report.json["trajectory"]`, verify them against `observations.jsonl` rather than summarizing from memory
+- if you did not read `observations.jsonl`, keep trajectory language qualitative rather than claiming exact phase ranges or per-iteration values
 
 If literature was skipped or the BO artifacts indicate proxy-backed evaluation:
 - keep interpretation artifact-grounded
@@ -214,6 +234,17 @@ Output:
 - `research_runs/<research_id>/paper.md`
 - `research_state.json.paper_path`
 
+After the paper is written, perform a final consistency pass before declaring the workflow complete:
+- reread `research_state.json`, `research_plan.md`, `bo_runs/<bo_run_id>/report.json`, and `research_runs/<research_id>/paper.md`
+- ensure all phase states are correct
+- ensure `research_state.json.paper_path` points to the final paper
+- update the **Paper Draft Link** section in `research_plan.md` to the real paper path; do not leave placeholder text like "to be written in Phase 6"
+- ensure key numeric claims in `research_plan.md` and `paper.md` match `report.json`
+- ensure any detailed trajectory claims match `report.json["trajectory"]` when that field is present
+- ensure human-facing iteration numbering in `research_plan.md` and `paper.md` uses `best_observation_number` when available rather than the zero-based `best_iteration`
+- ensure oracle provenance language stays artifact-backed; do not let the paper imply a post-hoc fit unless an artifact explicitly says that
+- if any artifact is stale or contradictory, fix it before marking the run complete
+
 ## Resuming
 
 On resume:
@@ -230,3 +261,4 @@ On resume:
 - Keep `research_state.json` concise and structured; put narrative detail in `research_plan.md`.
 - Do not call `build-oracle` or `run-proxy` as part of `research-agent`.
 - A fully unresolved search space is out of scope for execution; resolve `experiment_spec` first.
+- In benchmark runs with a local literature packet, do not browse beyond the packet.
