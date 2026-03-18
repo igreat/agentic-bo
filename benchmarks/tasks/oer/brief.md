@@ -1,7 +1,6 @@
 # Benchmark Task: OER Composition Optimization
 
-You are optimizing a six-component mixed-metal oxide catalyst composition for
-the oxygen evolution reaction in alkaline media.
+You are optimizing a six-component mixed-metal oxide catalyst composition for the oxygen evolution reaction in alkaline media.
 
 Goal:
 
@@ -11,9 +10,8 @@ Goal:
 System:
 
 - mixed Mn-Fe-Co-Ni-La-Ce oxide compositions
-- retrospective hidden-evaluator benchmark
-- intended story: high-throughput catalyst discovery under a compositional
-  simplex constraint
+- retrospective evaluator-backed benchmark
+- intended story: high-throughput catalyst discovery under a compositional simplex constraint
 
 Design variables:
 
@@ -29,22 +27,13 @@ Hard constraints:
 - each variable is in `[0, 1]`
 - all six molar fractions must sum to `1.0`
 
-Benchmark rules:
+Public task materials:
 
-- this is a retrospective benchmark with external hidden evaluation
-- do not use web search
-- use only the local boxed literature packet in `literature/`
-- do not request or use a labeled dataset
-- do not build your own oracle or proxy evaluator
-- use the prebuilt evaluator backend from `task_manifest.json` when
-  observations are to be automated
+- `task_manifest.json`
+- `search_space.json`
+- local literature packet in `literature/`
 
-Expected workflow:
+Notes:
 
-1. frame the catalyst-discovery problem
-2. use the local literature packet to identify sensible baselines, variables,
-   and caveats
-3. initialize from `search_space.json`
-4. execute BO under the stated budget
-5. interpret the outcome honestly as hidden-evaluator evidence
-6. draft the paper or report
+- this is a retrospective benchmark with external evaluation
+- interpret results honestly as evaluator-backed benchmark evidence

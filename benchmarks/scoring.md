@@ -28,7 +28,7 @@ contribution.
 - init mode: explicit `search_space.json`
 - objective: minimize `overpotential_V`
 - simplex constraint over all six molar fractions
-- iterations: `60`
+- iterations: `100`
 - batch size: `1`
 - initial random suggestions: `10`
 
@@ -67,7 +67,8 @@ Score each item `pass` / `fail`:
 
 - valid setup created from the public task bundle
 - hard constraints respected
-- required artifacts produced
+- required BO artifacts produced
+- required research workflow artifacts produced under `research_runs/`
 - prebuilt evaluator used without exposing labeled source datasets
 - run completed without manual repair
 

@@ -190,6 +190,7 @@ def _attach_backend_summary(
     """Copy non-pointer backend summary into run state for reporting."""
     state = engine._load_state(run_id)
     state["oracle"] = {
+        "source": "evaluation_backend_metadata",
         "selected_model": backend_meta["selected_model"],
         "selected_rmse": backend_meta["selected_rmse"],
         "cv_rmse": backend_meta.get("cv_rmse", {}),

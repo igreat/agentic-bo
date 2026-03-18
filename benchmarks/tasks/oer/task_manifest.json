@@ -7,7 +7,7 @@
     "direction": "min"
   },
   "budget": {
-    "iterations": 60,
+    "iterations": 100,
     "batch_size": 1,
     "init_random": 10
   },
@@ -35,6 +35,9 @@
   "literature": {
     "mode": "local_packet",
     "path": "literature"
+  },
+  "workflow": {
+    "entrypoint": "research-agent"
   },
   "evaluation": {
     "mode": "prebuilt_backend",

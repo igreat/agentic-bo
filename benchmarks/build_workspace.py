@@ -55,6 +55,21 @@ def load_json(path: Path) -> dict:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
+def benchmark_claude_settings() -> dict:
+    return {
+        "defaultMode": "acceptEdits",
+        "permissions": {
+            "allow": ["Bash"],
+            "deny": ["WebSearch", "WebFetch"],
+        },
+    }
+
+
+def write_json(path: Path, payload: dict) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+
+
 def build_workspace(
     *,
     output_dir: Path,
@@ -82,6 +97,11 @@ def build_workspace(
 
     for rel_path in PUBLIC_ROOT_DIRS:
         copy_tree(root / rel_path, output_dir / rel_path, COPYTREE_IGNORE)
+
+    write_json(
+        output_dir / ".claude" / "settings.local.json",
+        benchmark_claude_settings(),
+    )
 
     public_tasks_root = output_dir / "tasks"
     public_tasks_root.mkdir(parents=True, exist_ok=True)

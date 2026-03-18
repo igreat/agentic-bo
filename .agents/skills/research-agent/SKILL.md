@@ -207,6 +207,14 @@ Summarize:
 
 Write this into the Interpretation section of `research_plan.md`.
 
+When updating `research_plan.md` after Phase 4:
+- use `bo_runs/<bo_run_id>/report.json` as the source of truth for `best_value`, `best_iteration`, `num_observations`, `oracle_model`, and `oracle_rmse`
+- use `report.json["best_observation_number"]` for human-facing iteration/observation references; treat `best_iteration` as a zero-based engine index
+- prefer `report.json["trajectory"]` for human-facing trajectory summaries when it is available
+- if `report.json["trajectory"]` is present, use it directly rather than reconstructing ranges or phase breakpoints from memory
+- if you want to describe random-phase or iteration-specific trajectory details that are not present in `report.json["trajectory"]`, verify them against `observations.jsonl` rather than summarizing from memory
+- if you did not read `observations.jsonl`, keep trajectory language qualitative rather than claiming exact phase ranges or per-iteration values
+
 If literature was skipped or the BO artifacts indicate proxy-backed evaluation:
 - keep interpretation artifact-grounded
 - describe patterns visible in the BO trajectory, best candidate, oracle quality, and convergence
@@ -225,6 +233,17 @@ Delegate drafting to `scientific-writing`. Pass all of the following so the skil
 Output:
 - `research_runs/<research_id>/paper.md`
 - `research_state.json.paper_path`
+
+After the paper is written, perform a final consistency pass before declaring the workflow complete:
+- reread `research_state.json`, `research_plan.md`, `bo_runs/<bo_run_id>/report.json`, and `research_runs/<research_id>/paper.md`
+- ensure all phase states are correct
+- ensure `research_state.json.paper_path` points to the final paper
+- update the **Paper Draft Link** section in `research_plan.md` to the real paper path; do not leave placeholder text like "to be written in Phase 6"
+- ensure key numeric claims in `research_plan.md` and `paper.md` match `report.json`
+- ensure any detailed trajectory claims match `report.json["trajectory"]` when that field is present
+- ensure human-facing iteration numbering in `research_plan.md` and `paper.md` uses `best_observation_number` when available rather than the zero-based `best_iteration`
+- ensure oracle provenance language stays artifact-backed; do not let the paper imply a post-hoc fit unless an artifact explicitly says that
+- if any artifact is stale or contradictory, fix it before marking the run complete
 
 ## Resuming
 
