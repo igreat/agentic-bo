@@ -18,7 +18,7 @@ You now have a complete, tested system for generating publication-quality LaTeX 
 ### Code
 | File | Purpose |
 |------|---------|
-| **scripts/generate_latex_report.py** | Main script - converts BO results → LaTeX automatically |
+| **generate_latex_report.py** | Main script - converts BO results → LaTeX automatically |
 | **runs/vivid-heron-3397/report.tex** | Example generated report (already tested!) |
 
 ---
@@ -29,9 +29,8 @@ You now have a complete, tested system for generating publication-quality LaTeX 
 
 ```bash
 # After BO optimization completes
-uv run python scripts/generate_latex_report.py <RUN_ID>
-cd runs/<RUN_ID>
-xelatex report.tex
+uv run python latex/generate_latex_report.py <RUN_ID>
+xelatex -output-directory="runs/RUN_ID" "runs/RUN_ID/report.tex"
 ```
 
 That's it! You get `report.pdf` instantly.
@@ -74,7 +73,7 @@ Your Project
 │   ├── Template Placeholders
 │   └── Style Tips
 │
-└── scripts/generate_latex_report.py .......... Python automation (JUST RUNS - no editing needed)
+└── generate_latex_report.py .......... Python automation (JUST RUNS - no editing needed)
     └── Uses built-in template
     └── Fills in placeholders from your BO data
     └── Outputs professional LaTeX
@@ -108,15 +107,16 @@ uv run python -m bo_workflow.cli run-proxy --run-id $RUN_ID --iterations 20
 
 ```bash
 # Generate LaTeX from results
-uv run python scripts/generate_latex_report.py $RUN_ID
+uv run python latex/generate_latex_report.py $RUN_ID
 ```
 
 ### Phase 3: Compile to PDF (3 sec)
 
 ```bash
-cd runs/$RUN_ID
-xelatex report.tex
-# Output: report.pdf ✅ READY TO SHARE!
+# Run from your project root so the LaTeX style file is found
+uv run python latex/generate_latex_report.py <RUN_ID>
+xelatex -output-directory="runs/<RUN_ID>" "runs/<RUN_ID>/report.tex"
+# Output: runs/<RUN_ID>/report.pdf ✅ READY TO SHARE!
 ```
 
 ---
@@ -154,14 +154,14 @@ xelatex report.tex
 
 ### Generate Report for Different Run
 ```bash
-uv run python scripts/generate_latex_report.py different-run-id-5678
+uv run python latex/generate_latex_report.py different-run-id-5678
 ```
 
 ### Customize Report Template
-1. Open `scripts/generate_latex_report.py`
+1. Open `generate_latex_report.py`
 2. Find the `_get_default_template()` function (line ~290)
 3. Edit the LaTeX template
-4. Regenerate: `uv run python scripts/generate_latex_report.py <RUN_ID>`
+4. Regenerate: `uv run python latex/generate_latex_report.py <RUN_ID>`
 
 ### Add Your Logo
 Edit template in script, find `\makereporttitle`, change to:
@@ -180,7 +180,7 @@ Edit template in script, find `\makereporttitle`, change to:
 for run_dir in runs/*/; do
     run_id=$(basename "$run_dir")
     echo "Generating report for $run_id..."
-    uv run python scripts/generate_latex_report.py "$run_id"
+    uv run python latex/generate_latex_report.py "$run_id"
 done
 ```
 
@@ -202,7 +202,7 @@ done
 3. **Want to customize heavily?**
    - Read: Complete LATEX_REPORT_GUIDE.md (30 min)
    - Study: LATEX_COMMANDS_REFERENCE.md (15 min)
-   - Modify: `scripts/generate_latex_report.py` template (varies)
+   - Modify: `generate_latex_report.py` template (varies)
    - Test and refine (varies)
 
 ---
@@ -364,12 +364,11 @@ DISCUSSION
 ```
 c:\Users\Deepe\Documents\BOGroupResearch\agentic-bo\
 │
-├── LATEX_REPORT_GUIDE.md                    ← Comprehensive (400+ lines)
-├── LATEX_QUICK_START.md                     ← Executive summary (100 lines)
-├── LATEX_COMMANDS_REFERENCE.md              ← Command lookup (300 lines)
-│
-├── scripts/
-│   └── generate_latex_report.py             ← Main automation script
+├── latex/
+│   ├── LATEX_REPORT_GUIDE.md                    ← Comprehensive (400+ lines)
+│   ├── LATEX_QUICK_START.md                     ← Executive summary (100 lines)
+│   ├── LATEX_COMMANDS_REFERENCE.md              ← Command lookup (300 lines)
+│   └── generate_latex_report.py                 ← Main automation script
 │
 ├── runs/
 │   └── vivid-heron-3397/

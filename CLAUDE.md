@@ -30,6 +30,12 @@ data/
   HER_virtual_data.csv  # example dataset (HER virtual screen)
 scripts/
   compare_optimizers.py  # benchmark hebo/bo_lcb/random
+latex/
+  generate_latex_report.py  # LaTeX report generation from BO results
+  LATEX_REPORT_GUIDE.md     # comprehensive LaTeX guide
+  LATEX_QUICK_START.md      # quick start guide
+  LATEX_COMMANDS_REFERENCE.md  # LaTeX command reference
+  README_LATEX_SETUP.md     # LaTeX setup instructions
 ```
 
 ### Key design boundaries

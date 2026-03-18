@@ -3,7 +3,7 @@
 ## ✅ What You Now Have
 
 1. **LATEX_REPORT_GUIDE.md** — Complete step-by-step guide (comprehensive)
-2. **scripts/generate_latex_report.py** — Automated report generation script
+2. **generate_latex_report.py** — Automated report generation script
 3. **runs/vivid-heron-3397/report.tex** — Example LaTeX report (already generated!)
 
 ---
@@ -28,17 +28,17 @@ uv run python -m bo_workflow.cli run-proxy --run-id <RUN_ID> --iterations 20
 ### Step 2: Generate LaTeX report
 
 ```bash
-uv run python scripts/generate_latex_report.py <RUN_ID>
+uv run python latex/generate_latex_report.py <RUN_ID>
 ```
 
 ### Step 3: Compile to PDF
 
 ```bash
-cd runs/<RUN_ID>
-xelatex report.tex
+# Run from the project root so LaTeX can find the included style file
+xelatex -output-directory="runs/<RUN_ID>" "runs/<RUN_ID>/report.tex"
 ```
 
-**Output:** `report.pdf` ← Ready for sharing!
+**Output:** `runs/<RUN_ID>/report.pdf` ← Ready for sharing!
 
 ---
 
@@ -61,7 +61,7 @@ Each generated LaTeX report includes:
 
 ### Option A: Modify the Default Template
 
-Edit the template in `scripts/generate_latex_report.py` (lines ~290-450) to add:
+Edit the template in `generate_latex_report.py` (lines ~290-450) to add:
 - Your institution logo
 - Custom color scheme
 - Additional sections
@@ -72,7 +72,7 @@ Edit the template in `scripts/generate_latex_report.py` (lines ~290-450) to add:
 Create your own LaTeX template (e.g., `my_template.tex`):
 
 ```bash
-uv run python scripts/generate_latex_report.py <RUN_ID> --template my_template.tex
+uv run python latex/generate_latex_report.py <RUN_ID> --template my_template.tex
 ```
 
 The script will fill in placeholders like:
@@ -89,7 +89,7 @@ The script will fill in placeholders like:
 
 ```bash
 # After run-proxy completes
-uv run python scripts/generate_latex_report.py <RUN_ID>
+uv run python latex/generate_latex_report.py <RUN_ID>
 xelatex runs/<RUN_ID>/report.tex
 ```
 
@@ -101,7 +101,7 @@ Modify `bo_workflow/cli.py` to add a new command:
 # In bo_workflow/cli.py
 subparsers.add_parser("report-latex", ...).set_defaults(
     handler=lambda args: subprocess.run([
-        "python", "scripts/generate_latex_report.py", args.run_id
+        "python", "latex/generate_latex_report.py", args.run_id
     ])
 )
 ```
@@ -132,7 +132,7 @@ uv run python -m bo_workflow.cli run-proxy --run-id $RUN_ID --iterations 20
 
 # 4. Generate both JSON and LaTeX reports
 uv run python -m bo_workflow.cli report --run-id $RUN_ID
-uv run python scripts/generate_latex_report.py $RUN_ID
+uv run python latex/generate_latex_report.py $RUN_ID
 
 # 5. Compile LaTeX to PDF
 cd runs/$RUN_ID
@@ -153,7 +153,7 @@ start runs/$RUN_ID/report.pdf         # Windows
 |-------|----------|
 | `ModuleNotFoundError: pandas` | Use `uv run python` instead of just `python` |
 | LaTeX compilation fails | Ensure you have XeLaTeX installed: `xelatex --version` |
-| Missing `scientific_report.sty` | Download from [claude-scientific-skills repo](https://github.com/K-Dense-AI/claude-scientific-skills/blob/main/scientific-skills/scientific-writing/assets/scientific_report.sty) and place in `runs/<RUN_ID>/` |
+| Missing `scientific_report.sty` | Download from [claude-scientific-skills repo](https://github.com/K-Dense-AI/claude-scientific-skills/blob/main/scientific-skills/scientific-writing/assets/scientific_report.sty) and place in `latex/` (or in `runs/<RUN_ID>/` if compiling from within the run folder) |
 | Placeholders not filled | Check column names in suggestions/observations JSONLs match the script |
 | PDF is blank | Run: `xelatex report.tex` twice or use `latexmk -xelatex report.tex` |
 
@@ -176,7 +176,7 @@ For complete details, see **LATEX_REPORT_GUIDE.md** in the workspace root:
 2. **Batch reports** — Generate reports for multiple runs:
    ```bash
    for run in runs/*/; do
-     uv run python scripts/generate_latex_report.py $(basename $run)
+     uv run python latex/generate_latex_report.py $(basename $run)
    done
    ```
 3. **Version control** — Git-track your `.tex` files for collaboration

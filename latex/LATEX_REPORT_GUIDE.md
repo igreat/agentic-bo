@@ -412,7 +412,7 @@ def generate_latex_report(run_id: str, output_file: str = None):
     
     Args:
         run_id: The run ID (e.g., 'vivid-heron-3397')
-        output_file: Output .tex file path (default: runs/<RUN_ID>/report_generated.tex)
+        output_file: Output .tex file path (default: runs/<RUN_ID>/report.tex)
     """
     
     run_path = Path(f"runs/{run_id}")
@@ -420,7 +420,7 @@ def generate_latex_report(run_id: str, output_file: str = None):
         raise FileNotFoundError(f"Run directory not found: {run_path}")
     
     if output_file is None:
-        output_file = run_path / "report_generated.tex"
+        output_file = run_path / "report.tex"
     
     # Load data
     with open(run_path / "state.json") as f:
@@ -540,23 +540,20 @@ if __name__ == "__main__":
 Once the LaTeX is generated:
 
 ```bash
-# Navigate to the run directory
-cd runs/vivid-heron-3397
-
-# Compile with XeLaTeX
-xelatex report_generated.tex
+# From the project root (so the style file is found automatically)
+xelatex -output-directory="runs/vivid-heron-3397" "runs/vivid-heron-3397/report.tex"
 
 # If using bibliography (for citations):
-xelatex report_generated.tex
-bibtex report_generated
-xelatex report_generated.tex
-xelatex report_generated.tex
+xelatex -output-directory="runs/vivid-heron-3397" "runs/vivid-heron-3397/report.tex"
+bibtex runs/vivid-heron-3397/report
+xelatex -output-directory="runs/vivid-heron-3397" "runs/vivid-heron-3397/report.tex"
+xelatex -output-directory="runs/vivid-heron-3397" "runs/vivid-heron-3397/report.tex"
 
 # Or use latexmk (handles all passes automatically)
-latexmk -xelatex report_generated.tex
+latexmk -xelatex runs/vivid-heron-3397/report.tex
 ```
 
-**Output:** `report_generated.pdf`
+**Output:** `runs/vivid-heron-3397/report.pdf`
 
 ---
 
@@ -582,11 +579,11 @@ uv run python -m bo_workflow.cli run-proxy --run-id <RUN_ID> --iterations 20
 uv run python -m bo_workflow.cli report --run-id <RUN_ID>
 
 # 5. Generate LaTeX report (new step)
-python generate_latex_report.py <RUN_ID>
+python latex/generate_latex_report.py <RUN_ID>
 
 # 6. Compile to PDF
-cd runs/<RUN_ID>
-xelatex report_generated.tex
+# From the project root, compile using the run directory as the output directory
+xelatex -output-directory="runs/<RUN_ID>" "runs/<RUN_ID>/report.tex"
 ```
 
 ### Approach B: Add Skill Integration to CLI
@@ -604,7 +601,7 @@ def register_commands(subparsers):
         "--run-id", required=True, help="Run ID"
     )
     parser.add_argument(
-        "--output", help="Output .tex file (default: runs/<RUN_ID>/report_generated.tex)"
+        "--output", help="Output .tex file (default: runs/<RUN_ID>/report.tex)"
     )
     parser.set_defaults(handler=handle)
 
@@ -630,13 +627,11 @@ For quick dissemination:
 ```latex
 \chapter{Results}
 \section{Best Candidate}
-Value: \textbf{INSERT_BEST_Y} (improvement: \insert_improvement_pct\%)
+Value: \textbf{INSERT_BEST_Y} (improvement: INSERT_IMPROVEMENT_PERCENT\%)
 
 \section{Top 3 Recommendations}
 \begin{enumerate}
-    \item INSERT_TOP_1
-    \item INSERT_TOP_2
-    \item INSERT_TOP_3
+    \item INSERT_TOP_CANDIDATES
 \end{enumerate}
 ```
 
