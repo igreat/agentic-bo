@@ -23,7 +23,7 @@ contribution.
 
 ## Task budgets
 
-### `plate3496`
+### `oer`
 
 - init mode: explicit `search_space.json`
 - objective: minimize `overpotential_V`
@@ -56,7 +56,7 @@ For each scored task report:
 
 Interpretation guidance:
 
-- `plate3496`: compare against the hidden optimum and dataset percentile
+- `oer`: compare against the hidden optimum and dataset percentile
 - EGFR: compare against the best candidate in the hidden pool and improvement
   beyond the provided seed set
 - reaction task: emphasize early efficiency under tight budget

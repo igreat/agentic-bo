@@ -15,7 +15,7 @@ The benchmark is intentionally **closed-world**:
 
 Locked task direction:
 
-1. `plate3496`
+1. `oer`
    - flagship simplex/composition benchmark
    - search-space-only init
    - local boxed literature
@@ -30,7 +30,7 @@ Locked task direction:
    - fallback/alternative: Buchwald fixed-substrate categorical exact lookup
    - do not use Buchwald DRFP decode as the scored benchmark path
 
-Today, only `plate3496` is fully bundled. The other two tasks are locked at the
+Today, only `oer` is fully bundled. The other two tasks are locked at the
 protocol level but are not packaged yet.
 
 ## Public / private split
@@ -85,7 +85,7 @@ From a clean repo checkout:
 ```bash
 uv run python benchmarks/materialize_workspace.py \
   --output-dir /tmp/agentic-bo-benchmark \
-  --tasks plate3496
+  --tasks oer
 ```
 
 Then inside the materialized workspace:
@@ -116,8 +116,8 @@ operator-side config such as:
 
 ```json
 {
-  "plate3496_v1": {
-    "backend_id": "plate3496_hidden"
+  "oer_v1": {
+    "backend_id": "oer_hidden"
   }
 }
 ```

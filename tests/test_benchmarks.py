@@ -12,14 +12,14 @@ from bo_workflow.evaluation.oracle import build_proxy_oracle
 from bo_workflow.utils import RunPaths, read_jsonl
 
 
-def test_materialize_workspace_copies_public_plate3496_bundle(
+def test_materialize_workspace_copies_public_oer_bundle(
     tmp_path: Path,
 ) -> None:
     output_dir = tmp_path / "benchmark_workspace"
 
     materialize_workspace(
         output_dir=output_dir,
-        task_ids=["plate3496"],
+        task_ids=["oer"],
         overwrite=False,
     )
 
@@ -29,15 +29,15 @@ def test_materialize_workspace_copies_public_plate3496_bundle(
     assert (output_dir / ".claude").is_dir()
     assert (output_dir / "benchmarks" / "run_task_evaluator.py").exists()
     assert not (output_dir / "benchmarks" / "scoring.md").exists()
-    assert (output_dir / "benchmark_tasks" / "plate3496" / "brief.md").exists()
+    assert (output_dir / "benchmark_tasks" / "oer" / "brief.md").exists()
     assert (
         output_dir
         / "benchmark_tasks"
-        / "plate3496"
+        / "oer"
         / "literature"
         / "background.md"
     ).exists()
-    assert not (output_dir / "benchmark_tasks" / "plate3496" / "assessment.md").exists()
+    assert not (output_dir / "benchmark_tasks" / "oer" / "assessment.md").exists()
     assert (output_dir / "bo_runs").is_dir()
     assert (output_dir / "research_runs").is_dir()
     assert not (output_dir / "evaluation_backends").exists()

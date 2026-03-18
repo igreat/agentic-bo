@@ -1,4 +1,4 @@
-# Benchmark Task: Plate 3496 OER Composition Optimization
+# Benchmark Task: OER Composition Optimization
 
 You are optimizing a six-component mixed-metal oxide catalyst composition for
 the oxygen evolution reaction in alkaline media.

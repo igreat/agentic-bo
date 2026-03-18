@@ -1,5 +1,5 @@
 {
-  "task_id": "plate3496",
+  "task_id": "oer",
   "title": "Mn-Fe-Co-Ni-La-Ce OER composition optimization",
   "modality": "simplex_composition",
   "objective": {
@@ -42,6 +42,6 @@
   "evaluation": {
     "mode": "external_hidden",
     "runner": "benchmark-evaluator",
-    "handle": "plate3496_v1"
+    "handle": "oer_v1"
   }
 }
