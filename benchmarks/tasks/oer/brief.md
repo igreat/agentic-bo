@@ -36,8 +36,8 @@ Benchmark rules:
 - use only the local boxed literature packet in `literature/`
 - do not request or use a labeled dataset
 - do not build your own oracle or proxy evaluator
-- use the external evaluator handle from `task_manifest.json` when observations
-  are to be automated
+- use the prebuilt evaluator backend from `task_manifest.json` when
+  observations are to be automated
 
 Expected workflow:
 

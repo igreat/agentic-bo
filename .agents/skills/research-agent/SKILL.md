@@ -192,9 +192,9 @@ Do not re-run Phase 3 setup during Phase 4. In particular:
 
 If the user or operator explicitly provides a `backend_id` for external evaluation, `bo-run-evaluator` is an acceptable way to automate the suggest/observe loop. It is still not acceptable to build the backend from inside `research-agent`.
 
-If a benchmark task bundle provides an opaque `evaluation.handle` rather than a
-raw `backend_id`, automate Phase 4 through `benchmarks/run_task_evaluator.py`
-instead of direct `run-evaluator`.
+If a benchmark task bundle provides a prebuilt `evaluation.backend_id`, it is
+acceptable to automate Phase 4 directly with `run-evaluator` against the
+backend copied into the public workspace.
 
 ### 5. Interpretation
 

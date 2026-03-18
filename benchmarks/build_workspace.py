@@ -1,7 +1,7 @@
-#!/usr/bin/env python3
-"""Materialize a stripped public benchmark workspace from the current repo."""
+"""Build a stripped public benchmark workspace from the current repo."""
 
 import argparse
+import json
 import shutil
 from pathlib import Path
 
@@ -18,11 +18,6 @@ PUBLIC_ROOT_DIRS = (
     "bo_workflow",
     ".agents",
     ".claude",
-)
-
-PUBLIC_BENCHMARK_FILES = (
-    "README.md",
-    "run_task_evaluator.py",
 )
 
 COPYTREE_IGNORE = shutil.ignore_patterns(
@@ -56,7 +51,11 @@ def copy_tree(src: Path, dst: Path, ignore) -> None:
     shutil.copytree(src, dst, dirs_exist_ok=True, ignore=ignore)
 
 
-def materialize_workspace(
+def load_json(path: Path) -> dict:
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def build_workspace(
     *,
     output_dir: Path,
     task_ids: list[str],
@@ -64,8 +63,8 @@ def materialize_workspace(
 ) -> Path:
     root = repo_root()
     benchmarks_root = root / "benchmarks"
-    template_root = benchmarks_root / "workspace_template"
-    task_template_root = template_root / "benchmark_tasks"
+    tasks_root = benchmarks_root / "tasks"
+    source_backends_root = root / "evaluation_backends"
 
     if output_dir.exists():
         if not overwrite and any(output_dir.iterdir()):
@@ -84,17 +83,27 @@ def materialize_workspace(
     for rel_path in PUBLIC_ROOT_DIRS:
         copy_tree(root / rel_path, output_dir / rel_path, COPYTREE_IGNORE)
 
-    for rel_path in PUBLIC_BENCHMARK_FILES:
-        copy_file(benchmarks_root / rel_path, output_dir / "benchmarks" / rel_path)
-
-    task_manifest_dir = output_dir / "benchmark_tasks"
-    task_manifest_dir.mkdir(parents=True, exist_ok=True)
+    public_tasks_root = output_dir / "tasks"
+    public_tasks_root.mkdir(parents=True, exist_ok=True)
+    public_backends_root = output_dir / "evaluation_backends"
 
     for task_id in task_ids:
-        src = task_template_root / task_id
+        src = tasks_root / task_id
         if not src.exists():
             raise FileNotFoundError(f"Unknown benchmark task bundle: {task_id}")
-        copy_tree(src, task_manifest_dir / task_id, PUBLIC_TASK_IGNORE)
+        dst = public_tasks_root / task_id
+        copy_tree(src, dst, PUBLIC_TASK_IGNORE)
+
+        manifest = load_json(dst / "task_manifest.json")
+        backend_id = manifest.get("evaluation", {}).get("backend_id")
+        if backend_id:
+            source_backend = source_backends_root / str(backend_id)
+            if source_backend.exists():
+                copy_tree(
+                    source_backend,
+                    public_backends_root / str(backend_id),
+                    COPYTREE_IGNORE,
+                )
 
     (output_dir / "bo_runs").mkdir(parents=True, exist_ok=True)
     (output_dir / "research_runs").mkdir(parents=True, exist_ok=True)
@@ -104,7 +113,7 @@ def materialize_workspace(
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description="Materialize a stripped public benchmark workspace."
+        description="Build a stripped public benchmark workspace."
     )
     parser.add_argument("--output-dir", type=Path, required=True)
     parser.add_argument(
@@ -123,7 +132,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
-    workspace = materialize_workspace(
+    workspace = build_workspace(
         output_dir=args.output_dir,
         task_ids=list(args.tasks),
         overwrite=bool(args.overwrite),

@@ -36,12 +36,8 @@
     "mode": "local_packet",
     "path": "literature"
   },
-  "seed_observations": {
-    "path": null
-  },
   "evaluation": {
-    "mode": "external_hidden",
-    "runner": "benchmark-evaluator",
-    "handle": "oer_v1"
+    "mode": "prebuilt_backend",
+    "backend_id": "oer_hidden"
   }
 }

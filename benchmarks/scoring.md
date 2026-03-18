@@ -68,7 +68,7 @@ Score each item `pass` / `fail`:
 - valid setup created from the public task bundle
 - hard constraints respected
 - required artifacts produced
-- hidden evaluation used without leaking raw evaluator assets
+- prebuilt evaluator used without exposing labeled source datasets
 - run completed without manual repair
 
 ## Qualitative review rubric
@@ -108,9 +108,10 @@ The report should state:
 
 - scored runs used a stripped public workspace
 - web search was disabled during scored runs
-- hidden evaluators stayed outside the public workspace
+- labeled source datasets stayed outside the public workspace
+- prebuilt evaluator assets were fixed before scoring
 - local literature packets were frozen in advance
-- task prompts, budgets, and evaluator handles were fixed before scoring
+- task prompts, budgets, and backend ids were fixed before scoring
 
 Also state the limitations:
 

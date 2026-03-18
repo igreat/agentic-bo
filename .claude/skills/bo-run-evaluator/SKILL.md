@@ -1,6 +1,6 @@
 ---
 name: bo-run-evaluator
-description: Run an external evaluator loop for a BO run using either a raw backend id or an opaque benchmark handle.
+description: Run an external evaluator loop for a BO run using a pre-provisioned backend id.
 ---
 
 # BO Run Evaluator
@@ -10,7 +10,7 @@ evaluation backend and wants the BO loop automated.
 
 This is a low-level execution helper. It does **not** build backends or reveal labeled datasets.
 
-## Direct backend mode
+## Command
 
 ```bash
 uv run python -m bo_workflow.cli run-evaluator \
@@ -20,25 +20,10 @@ uv run python -m bo_workflow.cli run-evaluator \
   [--batch-size <N>]
 ```
 
-## Benchmark handle mode
-
-If the public workspace exposes a task manifest with `evaluation.handle` and the
-operator has configured the private environment variables, use:
-
-```bash
-uv run python benchmarks/run_task_evaluator.py \
-  --task-manifest <TASK_MANIFEST_JSON> \
-  --run-id <RUN_ID> \
-  [--iterations <T>] \
-  [--batch-size <N>]
-```
-
 ## Use this only when
 
 - the run already exists
-- either:
-  - the backend id is explicitly provided by the user or operator, or
-  - the task manifest exposes an opaque benchmark handle
+- the backend id is explicitly provided by the user, operator, or benchmark task bundle
 - external evaluation is intended
 
 ## Do not use this for

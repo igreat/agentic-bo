@@ -1,4 +1,4 @@
-# Benchmark Buildout
+# Benchmarks
 
 This directory defines the benchmark packaging and scoring model for the final
 report.
@@ -6,9 +6,9 @@ report.
 The benchmark is intentionally **closed-world**:
 
 - scored runs happen in a stripped public workspace
-- the agent can only see public task bundles and repo code/docs needed to run
-- hidden evaluators, labeled datasets, and answer keys stay outside that
-  workspace
+- the agent can only see public task bundles, prebuilt evaluator artifacts, and
+  repo code/docs needed to run
+- labeled datasets and answer keys stay outside that workspace
 - web search is disabled by protocol during scored runs
 
 ## Current benchmark suite
@@ -19,7 +19,7 @@ Locked task direction:
    - flagship simplex/composition benchmark
    - search-space-only init
    - local boxed literature
-   - hidden proxy evaluator behind an opaque handle
+   - prebuilt proxy backend copied into the public workspace
 2. `egfr_warm_start`
    - warm-start molecule benchmark
    - real seed observations
@@ -33,26 +33,26 @@ Locked task direction:
 Today, only `oer` is fully bundled. The other two tasks are locked at the
 protocol level but are not packaged yet.
 
-## Public / private split
+## Root repo vs public workspace
 
-### Public benchmark workspace
+The benchmark only needs one extra directory:
 
-Visible to the agent:
+- the **root repo** remains the operator/developer environment
+- a separate **public benchmark workspace** is built for the agent
 
-- repo code/docs/skills needed to run the workflow
-- `benchmark_tasks/<task_id>/...`
-- fresh `bo_runs/` and `research_runs/`
-- the benchmark evaluator wrapper at `benchmarks/run_task_evaluator.py`
-
-### Private operator side
-
-Hidden from the agent:
+The root repo may contain:
 
 - labeled source datasets
-- `evaluation_backends/`
-- exact lookup tables / answer keys
-- evaluator handle map
-- scoring sheets and benchmark logs
+- full development history and notes
+- reusable `evaluation_backends/`
+- benchmark planning docs
+
+The public workspace should contain only:
+
+- repo code/docs/skills needed to run the workflow
+- `tasks/<task_id>/...`
+- sanitized prebuilt backends under `evaluation_backends/`
+- fresh `bo_runs/` and `research_runs/`
 
 ## Task bundle contract
 
@@ -73,63 +73,52 @@ The visible manifest should stay minimal:
 - representation info if fixed
 - literature mode/path
 - optional seed observations path
-- `evaluation.handle`
+- `evaluation.backend_id`
 
-The handle must stay opaque. Public task bundles must not expose raw backend ids
-or backend file paths.
+Public task bundles may expose the backend id of a prebuilt evaluator that is
+already present inside the public workspace. They should not expose the source
+dataset or where that backend was originally built.
 
-## Materialize a public workspace
+## Build the public workspace
 
 From a clean repo checkout:
 
 ```bash
-uv run python benchmarks/materialize_workspace.py \
+uv run python benchmarks/build_workspace.py \
   --output-dir /tmp/agentic-bo-benchmark \
   --tasks oer
 ```
 
-Then inside the materialized workspace:
+Then inside the built workspace:
 
 ```bash
 uv sync
 uv pip install --no-deps "hebo @ git+https://github.com/huawei-noah/HEBO.git#subdirectory=HEBO"
 ```
 
-## Hidden evaluator setup
+If a task manifest names `evaluation.backend_id`, the builder will copy
+`evaluation_backends/<backend_id>/` into the public workspace when that backend
+already exists in the root repo.
 
-The public evaluator wrapper resolves an opaque handle through operator-owned
-environment variables:
-
-```bash
-export BENCHMARK_HANDLE_MAP=/abs/path/to/handle_map.json
-export BENCHMARK_BACKENDS_ROOT=/abs/path/to/evaluation_backends
-```
-
-Optional:
+Build the backend in the root repo first when needed:
 
 ```bash
-export BENCHMARK_RUNS_ROOT=/abs/path/to/public_workspace/bo_runs
+uv run python -m bo_workflow.cli build-oracle \
+  --dataset data/caltech_oer/plate_3496.csv \
+  --target overpotential_V \
+  --objective min \
+  --backend-id oer_hidden
 ```
 
-The handle map stays private. A minimal example lives in
-operator-side config such as:
-
-```json
-{
-  "oer_v1": {
-    "backend_id": "oer_hidden"
-  }
-}
-```
-
-That file should stay outside the public benchmark workspace.
+Then build the workspace. The resulting public workspace can use direct
+`run-evaluator --backend-id <BACKEND_ID>` calls against the copied backend.
 
 ## Scored run rules
 
 - no web search
 - use only local literature packets when present
-- observations come only from the hidden evaluator
-- no direct access to hidden datasets or evaluator assets
+- observations come only from the prebuilt evaluator in the public workspace
+- no direct access to labeled source datasets
 - no manual artifact editing before scoring
 
 See `benchmarks/scoring.md` for metrics, workflow checks, and qualitative review
