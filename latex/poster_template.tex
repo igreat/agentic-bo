@@ -1,0 +1,69 @@
+\documentclass[10pt,letterpaper]{article}
+\usepackage{geometry}
+\usepackage{multicol}
+\usepackage{booktabs}
+\usepackage{amsmath}
+\usepackage{graphicx}
+\usepackage{hyperref}
+\usepackage{xcolor}
+\usepackage{enumitem}
+\usepackage{tcolorbox}
+\geometry{margin=0.7in}
+\setlength{\columnsep}{1cm}
+\setlist[itemize]{leftmargin=*}
+\setlength{\parskip}{0.8ex}
+\setlength{\parindent}{0pt}
+
+\title{Bayesian Optimization Poster: INSERT_RUN_ID}
+\author{BO Agent}
+\date{\today}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+INSERT_ABSTRACT
+\end{abstract}
+
+\begin{multicols}{2}
+
+\section*{Introduction}
+INSERT_INTRODUCTION
+
+\section*{Key Results}
+\begin{itemize}
+  \item \textbf{Best value:} INSERT_BEST_Y
+  \item \textbf{Improvement:} INSERT_IMPROVEMENT_PERCENT\%
+  \item \textbf{Iterations:} INSERT_ITERATIONS
+  \item \textbf{Oracle RMSE:} INSERT_RMSE (INSERT_FIDELITY)
+\end{itemize}
+
+INSERT_CONVERGENCE_FIGURE
+
+\section*{Top Candidates}
+\small
+\begin{tabular}{@{}lrlp{4.3cm}@{}}
+\toprule
+\textbf{Rank} & \textbf{Iter} & \textbf{Value} & \textbf{Parameters} \\
+\midrule
+INSERT_TOP_CANDIDATES
+\bottomrule
+\end{tabular}
+\normalsize
+
+\section*{Results}
+INSERT_RESULTS_SECTION
+
+\section*{Discussion}
+INSERT_DISCUSSION
+
+\section*{Why It Matters}
+INSERT_SIGNIFICANCE
+
+\section*{Summary}
+INSERT_SUMMARY
+
+\end{multicols}
+
+\end{document}
