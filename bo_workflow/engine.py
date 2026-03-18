@@ -385,13 +385,38 @@ class BOEngine:
             },
         }
 
-        phase_indices = [
-            idx
-            for idx, row in enumerate(observations)
-            if row.get("suggestion_id") is not None
-        ]
+        seed_count = min(max(int(state.get("seed_observations_count", 0)), 0), total)
+        if seed_count > 0:
+            seed_values = y_values[:seed_count]
+            if objective == "min":
+                seed_best_idx = int(np.argmin(seed_values))
+                seed_best_value = float(np.min(seed_values))
+            else:
+                seed_best_idx = int(np.argmax(seed_values))
+                seed_best_value = float(np.max(seed_values))
+            summary["seed_phase"] = {
+                "num_observations": seed_count,
+                "start_observation": 1,
+                "end_observation": seed_count,
+                "min_value": float(np.min(seed_values)),
+                "max_value": float(np.max(seed_values)),
+                "best_value": seed_best_value,
+                "best_observation_number": seed_best_idx + 1,
+            }
+
+        if seed_count > 0:
+            phase_indices = list(range(seed_count, total))
+        else:
+            phase_indices = [
+                idx
+                for idx, row in enumerate(observations)
+                if row.get("suggestion_id") is not None
+            ]
+            if not phase_indices:
+                phase_indices = list(range(total))
+
         if not phase_indices:
-            phase_indices = list(range(total))
+            return summary
 
         phase_engines = {
             str(observations[idx].get("engine", state.get("default_engine", "hebo")))
@@ -400,7 +425,8 @@ class BOEngine:
         if phase_engines == {"random"}:
             random_indices = phase_indices
         else:
-            random_indices = phase_indices[: min(init_random, len(phase_indices))]
+            random_budget_remaining = max(0, init_random - seed_count)
+            random_indices = phase_indices[: min(random_budget_remaining, len(phase_indices))]
         if random_indices:
             random_values = y_values[random_indices]
             if objective == "min":
@@ -441,6 +467,11 @@ class BOEngine:
             if "random_phase" in summary:
                 guided_summary["improvement_over_random_best"] = improve_delta(
                     summary["random_phase"]["best_value"],
+                    guided_best_value,
+                )
+            elif "seed_phase" in summary:
+                guided_summary["improvement_over_seed_best"] = improve_delta(
+                    summary["seed_phase"]["best_value"],
                     guided_best_value,
                 )
             summary["model_guided_phase"] = guided_summary
@@ -554,6 +585,7 @@ class BOEngine:
             "drop_cols": list(drop_cols) if drop_cols else [],
             "ignored_features": [],
             "constraints": [],
+            "seed_observations_count": 0,
         }
         if constraints:
             # Validate and round-trip through constraint objects to catch errors early.
@@ -749,6 +781,7 @@ class BOEngine:
 
         target_col = state["target_column"]
         existing = read_jsonl(self._paths(run_id).observations)
+        existing_suggestions = read_jsonl(self._paths(run_id).suggestions)
         next_iteration = len(existing)
         rows = []
 
@@ -787,6 +820,10 @@ class BOEngine:
             rows.append(payload)
 
         state["updated_at"] = utc_now_iso()
+        if not existing_suggestions:
+            state["seed_observations_count"] = int(
+                state.get("seed_observations_count", 0)
+            ) + len(rows)
         self._save_state(run_id, state)
         self._log(
             verbose,
