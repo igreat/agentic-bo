@@ -137,13 +137,14 @@ def test_report_trajectory_summary_matches_observations(
     )
     run_id = state["run_id"]
 
+    suggestions = engine.suggest(run_id, batch_size=4)["suggestions"]
     engine.observe(
         run_id,
         [
-            {"x": {"x": 0.1}, "y": 0.42},
-            {"x": {"x": 0.2}, "y": 0.36},
-            {"x": {"x": 0.3}, "y": 0.37},
-            {"x": {"x": 0.4}, "y": 0.355},
+            {"x": {"x": 0.1}, "y": 0.42, "suggestion_id": suggestions[0]["suggestion_id"]},
+            {"x": {"x": 0.2}, "y": 0.36, "suggestion_id": suggestions[1]["suggestion_id"]},
+            {"x": {"x": 0.3}, "y": 0.37, "suggestion_id": suggestions[2]["suggestion_id"]},
+            {"x": {"x": 0.4}, "y": 0.355, "suggestion_id": suggestions[3]["suggestion_id"]},
         ],
         source="benchmark-evaluator",
     )
@@ -201,13 +202,14 @@ def test_report_trajectory_summary_treats_random_engine_as_fully_random(
     )
     run_id = state["run_id"]
 
+    suggestions = engine.suggest(run_id, batch_size=4)["suggestions"]
     engine.observe(
         run_id,
         [
-            {"x": {"x": 0.1}, "y": 0.42},
-            {"x": {"x": 0.2}, "y": 0.36},
-            {"x": {"x": 0.3}, "y": 0.37},
-            {"x": {"x": 0.4}, "y": 0.355},
+            {"x": {"x": 0.1}, "y": 0.42, "suggestion_id": suggestions[0]["suggestion_id"]},
+            {"x": {"x": 0.2}, "y": 0.36, "suggestion_id": suggestions[1]["suggestion_id"]},
+            {"x": {"x": 0.3}, "y": 0.37, "suggestion_id": suggestions[2]["suggestion_id"]},
+            {"x": {"x": 0.4}, "y": 0.355, "suggestion_id": suggestions[3]["suggestion_id"]},
         ],
         source="benchmark-evaluator",
     )
@@ -227,7 +229,7 @@ def test_report_trajectory_summary_treats_random_engine_as_fully_random(
     assert "model_guided_phase" not in trajectory
 
 
-def test_report_trajectory_summary_excludes_seeded_observations_from_phase_split(
+def test_report_trajectory_summary_treats_pre_suggest_observations_as_seed_phase(
     tmp_path: Path,
 ) -> None:
     runs_root = tmp_path / "bo_runs"
@@ -246,7 +248,8 @@ def test_report_trajectory_summary_excludes_seeded_observations_from_phase_split
     )
     run_id = state["run_id"]
 
-    # Seeded observations should not be treated as the BO random phase.
+    # Pre-suggest observations are warm-start seed data and should be summarized
+    # separately from the BO-controlled phase split.
     engine.observe(
         run_id,
         [
@@ -255,13 +258,18 @@ def test_report_trajectory_summary_excludes_seeded_observations_from_phase_split
         ],
         source="pool-seed",
     )
+
+    # Later BO observations may be recorded without suggestion_id in manual
+    # suggest/observe flows; they should still be treated as BO-phase rows once
+    # suggestions exist.
+    engine.suggest(run_id, batch_size=4)
     engine.observe(
         run_id,
         [
-            {"x": {"x": 0.10}, "y": 0.42, "suggestion_id": "s1", "engine": "hebo"},
-            {"x": {"x": 0.20}, "y": 0.36, "suggestion_id": "s2", "engine": "hebo"},
-            {"x": {"x": 0.30}, "y": 0.37, "suggestion_id": "s3", "engine": "hebo"},
-            {"x": {"x": 0.40}, "y": 0.355, "suggestion_id": "s4", "engine": "hebo"},
+            {"x": {"x": 0.10}, "y": 0.42, "engine": "hebo"},
+            {"x": {"x": 0.20}, "y": 0.36, "engine": "hebo"},
+            {"x": {"x": 0.30}, "y": 0.37, "engine": "hebo"},
+            {"x": {"x": 0.40}, "y": 0.355, "engine": "hebo"},
         ],
         source="benchmark-evaluator",
     )
@@ -269,21 +277,22 @@ def test_report_trajectory_summary_excludes_seeded_observations_from_phase_split
     report = engine.report(run_id)
     trajectory = report["trajectory"]
 
-    assert trajectory["random_phase"] == {
+    assert trajectory["seed_phase"] == {
         "num_observations": 2,
-        "start_observation": 3,
-        "end_observation": 4,
-        "min_value": 0.36,
-        "max_value": 0.42,
-        "best_value": 0.36,
-        "best_observation_number": 4,
+        "start_observation": 1,
+        "end_observation": 2,
+        "min_value": 0.49,
+        "max_value": 0.5,
+        "best_value": 0.49,
+        "best_observation_number": 2,
     }
-    assert trajectory["model_guided_phase"]["num_observations"] == 2
-    assert trajectory["model_guided_phase"]["start_observation"] == 5
+    assert "random_phase" not in trajectory
+    assert trajectory["model_guided_phase"]["num_observations"] == 4
+    assert trajectory["model_guided_phase"]["start_observation"] == 3
     assert trajectory["model_guided_phase"]["end_observation"] == 6
     assert trajectory["model_guided_phase"]["best_observation_number"] == 6
-    assert trajectory["model_guided_phase"]["improvement_over_random_best"] == pytest.approx(
-        0.005
+    assert trajectory["model_guided_phase"]["improvement_over_seed_best"] == pytest.approx(
+        0.135
     )
 
 
@@ -306,6 +315,13 @@ def test_build_workspace_rejects_overwriting_repo_or_ancestor(
             output_dir=fake_root / "nested-output",
             task_ids=["oer"],
             overwrite=True,
+        )
+
+    with pytest.raises(ValueError, match="inside repo"):
+        build_workspace(
+            output_dir=fake_root / "nested-output-no-overwrite",
+            task_ids=["oer"],
+            overwrite=False,
         )
 
 
