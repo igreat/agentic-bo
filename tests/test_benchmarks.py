@@ -181,6 +181,67 @@ def test_report_trajectory_summary_matches_observations(
     )
 
 
+def test_report_trajectory_summary_treats_random_engine_as_fully_random(
+    tmp_path: Path,
+) -> None:
+    runs_root = tmp_path / "bo_runs"
+    engine = BOEngine(runs_root=runs_root)
+    state = engine.init_run(
+        target_column="target",
+        objective="min",
+        search_space_spec={
+            "design_parameters": [
+                {"name": "x", "type": "num", "lb": 0.0, "ub": 1.0}
+            ],
+            "fixed_features": {},
+        },
+        default_engine="random",
+        seed=42,
+        num_initial_random_samples=2,
+    )
+    run_id = state["run_id"]
+
+    engine.observe(
+        run_id,
+        [
+            {"x": {"x": 0.1}, "y": 0.42},
+            {"x": {"x": 0.2}, "y": 0.36},
+            {"x": {"x": 0.3}, "y": 0.37},
+            {"x": {"x": 0.4}, "y": 0.355},
+        ],
+        source="benchmark-evaluator",
+    )
+
+    report = engine.report(run_id)
+    trajectory = report["trajectory"]
+
+    assert trajectory["random_phase"] == {
+        "num_observations": 4,
+        "start_observation": 1,
+        "end_observation": 4,
+        "min_value": 0.355,
+        "max_value": 0.42,
+        "best_value": 0.355,
+        "best_observation_number": 4,
+    }
+    assert "model_guided_phase" not in trajectory
+
+
+def test_build_workspace_rejects_overwriting_repo_or_ancestor(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    fake_root = tmp_path / "repo"
+    fake_root.mkdir(parents=True)
+    monkeypatch.setattr(build_workspace_module, "repo_root", lambda: fake_root)
+
+    with pytest.raises(ValueError, match="unsafe output directory"):
+        build_workspace(output_dir=fake_root, task_ids=["oer"], overwrite=True)
+
+    with pytest.raises(ValueError, match="unsafe output directory"):
+        build_workspace(output_dir=fake_root.parent, task_ids=["oer"], overwrite=True)
+
+
 def test_build_workspace_copies_prebuilt_backend_when_present(
     tmp_path: Path,
     monkeypatch,

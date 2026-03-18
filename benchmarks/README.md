@@ -162,7 +162,7 @@ The manifest may also declare the intended workflow entrypoint, e.g.
 
 For `oer`, the task bundle lives at:
 
-- [tasks/oer](/Users/mujtabaalajmi/Documents/agentic-bo/bo-fun-benchmark-buildout/benchmarks/tasks/oer)
+- `benchmarks/tasks/oer` in the root repo
 
 ## Scored run rules
 

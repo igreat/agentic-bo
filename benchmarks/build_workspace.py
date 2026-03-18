@@ -70,6 +70,26 @@ def write_json(path: Path, payload: dict) -> None:
     path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
 
 
+def validate_output_dir(output_dir: Path, *, root: Path, overwrite: bool) -> Path:
+    resolved_output = output_dir.resolve()
+    resolved_root = root.resolve()
+
+    # Refuse destructive overwrite targets that would delete the repo itself
+    # or any ancestor directory containing it.
+    if overwrite and resolved_root.is_relative_to(resolved_output):
+        raise ValueError(
+            f"Refusing to overwrite unsafe output directory: {resolved_output}"
+        )
+
+    # Also reject obvious filesystem roots like '/'.
+    if overwrite and resolved_output == resolved_output.parent:
+        raise ValueError(
+            f"Refusing to overwrite filesystem root: {resolved_output}"
+        )
+
+    return resolved_output
+
+
 def build_workspace(
     *,
     output_dir: Path,
@@ -77,6 +97,7 @@ def build_workspace(
     overwrite: bool = False,
 ) -> Path:
     root = repo_root()
+    output_dir = validate_output_dir(output_dir, root=root, overwrite=overwrite)
     benchmarks_root = root / "benchmarks"
     tasks_root = benchmarks_root / "tasks"
     source_backends_root = root / "evaluation_backends"

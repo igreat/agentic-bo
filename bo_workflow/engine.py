@@ -383,7 +383,14 @@ class BOEngine:
             },
         }
 
-        random_count = min(init_random, total)
+        observation_engines = {
+            str(row.get("engine", state.get("default_engine", "hebo")))
+            for row in observations
+        }
+        if observation_engines == {"random"}:
+            random_count = total
+        else:
+            random_count = min(init_random, total)
         if random_count > 0:
             random_values = y_values[:random_count]
             if objective == "min":
