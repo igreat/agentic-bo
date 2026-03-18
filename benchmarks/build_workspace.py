@@ -145,11 +145,11 @@ def build_workspace(
         manifest = load_json(dst / "task_manifest.json")
         backend_id = manifest.get("evaluation", {}).get("backend_id")
         if backend_id:
-            source_backend = source_backends_root / str(backend_id)
+            source_backend = source_backends_root / backend_id
             if source_backend.exists():
                 copy_tree(
                     source_backend,
-                    public_backends_root / str(backend_id),
+                    public_backends_root / backend_id,
                     COPYTREE_IGNORE,
                 )
 

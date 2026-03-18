@@ -23,6 +23,10 @@ contribution.
 
 ## Task budgets
 
+Only `oer` is fully packaged in this PR. The `egfr_warm_start` and reaction
+task sections below are planned benchmark targets so their intended budgets are
+predeclared for follow-up work.
+
 ### `oer`
 
 - init mode: explicit `search_space.json`

@@ -361,10 +361,12 @@ class BOEngine:
         if objective == "min":
             best_idx = int(np.argmin(y_values))
             compare = np.less
+            # Lower is better, so a positive delta means the guided phase improved.
             improve_delta = lambda a, b: float(a - b)
         else:
             best_idx = int(np.argmax(y_values))
             compare = np.greater
+            # Higher is better, so a positive delta means the guided phase improved.
             improve_delta = lambda a, b: float(b - a)
 
         best_so_far = float(y_values[0])

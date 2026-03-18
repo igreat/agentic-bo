@@ -309,6 +309,17 @@ def test_build_workspace_rejects_overwriting_repo_or_ancestor(
         )
 
 
+def test_build_workspace_rejects_unknown_task_id(
+    tmp_path: Path,
+) -> None:
+    with pytest.raises(FileNotFoundError, match="Unknown benchmark task bundle"):
+        build_workspace(
+            output_dir=tmp_path / "workspace",
+            task_ids=["definitely-not-a-task"],
+            overwrite=False,
+        )
+
+
 def test_build_workspace_copies_prebuilt_backend_when_present(
     tmp_path: Path,
     monkeypatch,
