@@ -27,6 +27,8 @@ Choose the output format that best matches the request:
 ### Research workflow inputs
 - `research_runs/<research_id>/research_state.json`
 - `research_runs/<research_id>/research_plan.md`
+- `research_runs/<research_id>/initial_prompt.md` when present
+- `research_runs/<research_id>/operationalization_log.jsonl` when present
 
 ### BO run inputs
 - `bo_runs/<run_id>/report.json`
@@ -100,6 +102,7 @@ Write an IMRAD-style paper with these sections:
 - State how observations were obtained based on the available artifacts.
 - Describe oracle provenance only from what the artifacts explicitly say. If `report.json` exposes oracle metadata but not training timing, describe it as backend-reported or artifact-reported oracle metadata rather than claiming it was fitted post hoc.
 - For open-world tasks, state how the evaluator was discovered, what source URLs were used, and what simplifying assumptions were required to operationalize it.
+- For open-world tasks, state whether run-local helper scripts were written, whether new dependencies were installed, and whether the evaluator or search space was materially revised during the run.
 - **If proxy-backed evaluation:** report the proxy oracle CV RMSE and note that outcomes reflect surrogate predictions, not direct measurements.
 - Reference the convergence plot at `bo_runs/<run_id>/convergence.pdf` if it exists.
 
@@ -120,6 +123,7 @@ Write an IMRAD-style paper with these sections:
 - Compare against the literature baselines from `literature_findings.baselines` if available.
 - State important caveats: oracle error when applicable, dataset coverage when applicable, and any gap between simulated/externally observed evidence and real experiments.
 - If the evaluator was discovered from the web, make the caveats explicit: this is a literature-grounded operationalization, not a validated first-principles simulator unless the artifacts explicitly establish that.
+- If the run materially relied on ad hoc helper scripts, dependency installs, or mid-run setup changes, caveat that explicitly rather than presenting the workflow as a pre-baked pipeline.
 
 **If literature review was skipped:**
 - keep the Discussion grounded in the BO trajectory, candidate composition, oracle uncertainty, and simulation limitations
@@ -138,6 +142,7 @@ Write an IMRAD-style paper with these sections:
 - Keep references lightweight in v1; plain links or compact citations are enough.
 - Keep the writing tied to the actual artifacts rather than generic BO boilerplate.
 - For open-world tasks, include the nudge tier used when it materially affected success.
+- For open-world tasks, do not omit helper scripts, dependency installs, or major approach revisions if they materially affected the reported result.
 - Do not invent fine-grained numeric trajectory details from memory. If exact ranges or iteration-level numbers are not explicitly supported by `report.json` or `observations.jsonl`, leave them out.
 - Do not infer oracle training timing or methodology unless it is explicitly stated in the artifacts.
 - If `report.json["oracle"]["source"]` says the metadata came from the evaluation backend, describe it as backend-reported oracle metadata rather than implying a fresh model fit after the run.

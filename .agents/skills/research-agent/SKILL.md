@@ -31,6 +31,8 @@ Generate `research_id` as a short slug from the system and date, e.g. `oer_calte
 - `research_state.json`: machine-readable phase state
 - `research_plan.md`: human-readable lab notebook
 - `paper.md`: final draft written in Phase 6
+- `initial_prompt.md`: exact initial prompt and any nudge text used for this run
+- `operationalization_log.jsonl`: append-only log of major open-world setup decisions
 
 Use this `research_state.json` shape in v1:
 
@@ -53,9 +55,15 @@ Use this `research_state.json` shape in v1:
   },
   "open_world": {
     "nudge_tier": null,
+    "prompt_path": null,
+    "source_urls": [],
     "discovered_search_space_path": null,
     "evaluator_module_path": null,
-    "verification_artifacts": []
+    "helper_script_paths": [],
+    "verification_artifacts": [],
+    "dependency_installs": [],
+    "approach_revisions": [],
+    "final_setup_frozen": false
   },
   "experiment_spec": {
     "target_column": null,
@@ -95,6 +103,29 @@ Use this `research_state.json` shape in v1:
 - Interpretation
 - Paper Draft Link
 
+For open-world runs, also maintain an append-only `operationalization_log.jsonl`
+under `research_runs/<research_id>/` with one JSON object per major event.
+Supported event types:
+
+- `source_selected`
+- `search_space_resolved`
+- `evaluator_written`
+- `helper_script_written`
+- `dependency_installed`
+- `verification_generated`
+- `approach_revised`
+- `setup_frozen`
+- `bo_started`
+- `bo_completed`
+
+Each event must include:
+- `timestamp`
+- `event_type`
+- `summary`
+- `artifact_paths`
+- optional `source_urls`
+- optional `reason`
+
 ## Workflow
 
 ### 1. Problem Framing
@@ -113,6 +144,12 @@ Also decide whether to run a literature search:
 Other rules:
 - Do not infer the full BO schema from CSV columns alone.
 - If the system, objective, or direction are ambiguous, clarify them before continuing.
+
+For open-world tasks:
+
+- write the exact initial user prompt and any explicit nudge text to `research_runs/<research_id>/initial_prompt.md`
+- set `open_world.prompt_path` to that file
+- default `open_world.nudge_tier` to `N0` unless the user or operator explicitly adds a hint
 
 ### 2. Literature Search
 
@@ -139,7 +176,8 @@ For open-world tasks:
 - browsing the web is expected
 - prioritize sources that expose a computable evaluator, not just descriptive background
 - record the exact source URLs used in `literature_findings.source_urls`
-- default `open_world.nudge_tier` to `N0` unless the user or operator explicitly adds a hint
+- mirror evaluator-defining source URLs into `open_world.source_urls`
+- append a `source_selected` event when a source family is chosen for operationalization
 
 ### 3. Experiment Setup
 
@@ -166,10 +204,17 @@ Rules:
 For open-world tasks:
 
 - discover the search space from the research problem plus literature findings
+- prefer existing repo scripts and converters when they are a genuine fit, but do not force a poor fit
+- if existing tooling is insufficient, write run-local helper scripts under `research_runs/<research_id>/` for conversion, preprocessing, verification, or orchestration
+- if a new dependency is needed, install the minimal package(s) required and record the package(s), command, and reason in `open_world.dependency_installs`
+- major changes in setup are allowed during the run; record them in `open_world.approach_revisions` and append `approach_revised` events
 - write the resolved search space to `research_runs/<research_id>/discovered_search_space.json`
 - write the local evaluator module to `research_runs/<research_id>/evaluator.py`
 - generate at least one verification artifact before BO, e.g. `research_runs/<research_id>/verification_plot.png`
 - record those paths in `research_state.json.open_world`
+- append `search_space_resolved`, `evaluator_written`, `helper_script_written`, `dependency_installed`, and `verification_generated` events as applicable
+- once the final evaluator, search space, and verification path for the BO run being reported are settled, set `open_world.final_setup_frozen = true` and append a `setup_frozen` event
+- if the setup changes later, record an `approach_revised` event and then refresh the frozen setup before the BO run you report
 - only proceed to BO once the evaluator and verification artifact exist
 
 Delegate the BO-layer setup to `bo-execution-workflow`. That skill owns:
@@ -229,6 +274,12 @@ uv run python -m bo_workflow.cli run-python-evaluator \
   --batch-size <N>
 ```
 
+For open-world tasks:
+
+- append a `bo_started` event before the BO run being reported
+- append a `bo_completed` event after the final report is written
+- ensure `open_world.final_setup_frozen` is `true` for the setup used to produce the reported BO results
+
 ### 5. Interpretation
 
 Summarize:
@@ -276,7 +327,8 @@ After the paper is written, perform a final consistency pass before declaring th
 - ensure any detailed trajectory claims match `report.json["trajectory"]` when that field is present
 - ensure human-facing iteration numbering in `research_plan.md` and `paper.md` uses `best_observation_number` when available rather than the zero-based `best_iteration`
 - ensure oracle provenance language stays artifact-backed; do not let the paper imply a post-hoc fit unless an artifact explicitly says that
-- for open-world tasks, ensure `literature_findings.source_urls`, `open_world.nudge_tier`, `open_world.discovered_search_space_path`, and `open_world.evaluator_module_path` are populated
+- for open-world tasks, ensure `literature_findings.source_urls`, `open_world.nudge_tier`, `open_world.prompt_path`, `open_world.source_urls`, `open_world.discovered_search_space_path`, `open_world.evaluator_module_path`, `open_world.verification_artifacts`, and `open_world.final_setup_frozen` are populated appropriately
+- for open-world tasks, ensure `operationalization_log.jsonl` exists and reflects any helper scripts, dependency installs, and major approach revisions that materially affected the run
 - if any artifact is stale or contradictory, fix it before marking the run complete
 
 ## Resuming
@@ -300,3 +352,4 @@ On resume:
   - `N0`: plain-English prompt only
   - `N1`: light hint
   - `N2`: strong hint
+- For open-world tasks, the agent may write ad hoc helper scripts and install minimal new dependencies whenever it judges that necessary; the requirement is to record those actions clearly, not to avoid them.

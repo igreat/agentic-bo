@@ -123,6 +123,10 @@ Use the BO skills directly when the user wants only the optimization subsystem:
 ## Script-first policy
 
 - Before writing ad-hoc one-off scripts, check `bo_workflow/scripts/` and prefer existing scripts when they already cover the task.
+- For open-world runs, existing scripts and converters are optional accelerators, not mandatory pipelines. If they are not a good fit, write run-local helper scripts under `research_runs/<research_id>/` without hesitation.
+- For open-world runs, the agent may write ad hoc converters, preprocessors, evaluators, plotting scripts, and other helper modules whenever that is the best way to make progress.
+- For open-world runs, the agent may install minimal new dependencies when the current environment is insufficient. Every install must be recorded in the run artifacts with the package(s), command, and reason.
+- For open-world runs, the agent may revise its implementation path during the run if new evidence suggests a better setup. Major revisions must be recorded in the run artifacts.
 - For explicit optimizer benchmarking/comparison requests, use:
 
 ```bash
@@ -181,6 +185,10 @@ Each top-level research workflow produces files under `research_runs/<research_i
 | `research_state.json` | `research-agent` |
 | `research_plan.md` | `research-agent` |
 | `paper.md` | `research-agent` / `scientific-writing` |
+| `initial_prompt.md` | `research-agent` (open-world runs) |
+| `discovered_search_space.json` | `research-agent` (open-world runs) |
+| `evaluator.py` | `research-agent` (open-world runs) |
+| `operationalization_log.jsonl` | `research-agent` (open-world runs) |
 
 ## CLI quick reference
 
