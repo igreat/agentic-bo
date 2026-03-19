@@ -138,6 +138,13 @@ uv run python -m bo_workflow.open_world validate-spec \
 - `verification_artifacts/`
 - `operationalization_log.jsonl`
 
+`write-prompt` also updates the scaffolded `research_state.json` with the
+recorded nudge tier and prompt path.
+
+`log-event` appends to `operationalization_log.jsonl` and syncs the obvious
+state fields when possible, e.g. source URLs, helper-script paths, verification
+artifacts, and `final_setup_frozen`.
+
 ## Notes
 
 - Closed-world benchmark infrastructure remains useful as supporting/control

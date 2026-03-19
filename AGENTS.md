@@ -209,8 +209,8 @@ All commands: `uv run python -m bo_workflow.cli <command> [flags]`
 Open-world helper commands (separate entrypoint):
 
 - `uv run python -m bo_workflow.open_world scaffold --research-dir research_runs/<RESEARCH_ID>` to bootstrap `research_state.json`, `research_plan.md`, `paper.md`, `initial_prompt.md`, `discovered_search_space.json`, `evaluator.py`, `verification_artifacts/`, and `operationalization_log.jsonl`
-- `uv run python -m bo_workflow.open_world write-prompt --research-dir research_runs/<RESEARCH_ID> --nudge-tier N0 --prompt-file <PATH>`
-- `uv run python -m bo_workflow.open_world log-event --research-dir research_runs/<RESEARCH_ID> --event-type <TYPE> --summary <TEXT> --artifact-path <PATH>`
+- `uv run python -m bo_workflow.open_world write-prompt --research-dir research_runs/<RESEARCH_ID> --nudge-tier N0 --prompt-file <PATH>` to save the exact prompt and sync `open_world.nudge_tier`
+- `uv run python -m bo_workflow.open_world log-event --research-dir research_runs/<RESEARCH_ID> --event-type <TYPE> --summary <TEXT> --artifact-path <PATH>` to append an operationalization event and sync the obvious state fields when possible
 - `uv run python -m bo_workflow.open_world validate-run --research-dir research_runs/<RESEARCH_ID>`
 - `uv run python -m bo_workflow.open_world validate-spec --path benchmarks/open_world_cases/<TASK>/operator_spec.json`
 
