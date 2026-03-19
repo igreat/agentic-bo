@@ -48,7 +48,14 @@ Use this `research_state.json` shape in v1:
     "baselines": [],
     "key_variables": [],
     "known_constraints": [],
+    "source_urls": [],
     "summary": ""
+  },
+  "open_world": {
+    "nudge_tier": null,
+    "discovered_search_space_path": null,
+    "evaluator_module_path": null,
+    "verification_artifacts": []
   },
   "experiment_spec": {
     "target_column": null,
@@ -127,6 +134,13 @@ For closed-world benchmark runs:
 - do not browse the web
 - treat the task bundle as the authoritative public context
 
+For open-world tasks:
+
+- browsing the web is expected
+- prioritize sources that expose a computable evaluator, not just descriptive background
+- record the exact source URLs used in `literature_findings.source_urls`
+- default `open_world.nudge_tier` to `N0` unless the user or operator explicitly adds a hint
+
 ### 3. Experiment Setup
 
 Use the framed problem plus literature findings to define the experiment.
@@ -148,6 +162,15 @@ Rules:
   - target measurement to optimize
   - likely physical or chemical constraints
 - Present that draft as a recommendation for the user to confirm or edit before BO init.
+
+For open-world tasks:
+
+- discover the search space from the research problem plus literature findings
+- write the resolved search space to `research_runs/<research_id>/discovered_search_space.json`
+- write the local evaluator module to `research_runs/<research_id>/evaluator.py`
+- generate at least one verification artifact before BO, e.g. `research_runs/<research_id>/verification_plot.png`
+- record those paths in `research_state.json.open_world`
+- only proceed to BO once the evaluator and verification artifact exist
 
 Delegate the BO-layer setup to `bo-execution-workflow`. That skill owns:
 - dataset validation when a dataset is present
@@ -196,6 +219,17 @@ If a benchmark task bundle provides a prebuilt `evaluation.backend_id`, it is
 acceptable to automate Phase 4 directly with `run-evaluator` against the
 backend copied into the public workspace.
 
+If Phase 3 produced a local evaluator module and the task uses
+`evaluation.mode = discovered_python`, automate Phase 4 with:
+
+```bash
+uv run python -m bo_workflow.cli run-python-evaluator \
+  --run-id <BO_RUN_ID> \
+  --module-path research_runs/<research_id>/evaluator.py \
+  --iterations <BUDGET> \
+  --batch-size <N>
+```
+
 ### 5. Interpretation
 
 Summarize:
@@ -243,6 +277,7 @@ After the paper is written, perform a final consistency pass before declaring th
 - ensure any detailed trajectory claims match `report.json["trajectory"]` when that field is present
 - ensure human-facing iteration numbering in `research_plan.md` and `paper.md` uses `best_observation_number` when available rather than the zero-based `best_iteration`
 - ensure oracle provenance language stays artifact-backed; do not let the paper imply a post-hoc fit unless an artifact explicitly says that
+- for open-world tasks, ensure `literature_findings.source_urls`, `open_world.nudge_tier`, `open_world.discovered_search_space_path`, and `open_world.evaluator_module_path` are populated
 - if any artifact is stale or contradictory, fix it before marking the run complete
 
 ## Resuming
@@ -262,3 +297,7 @@ On resume:
 - Do not call `build-oracle` or `run-proxy` as part of `research-agent`.
 - A fully unresolved search space is out of scope for execution; resolve `experiment_spec` first.
 - In benchmark runs with a local literature packet, do not browse beyond the packet.
+- For open-world tasks, record the nudge tier explicitly:
+  - `N0`: plain-English prompt only
+  - `N1`: light hint
+  - `N2`: strong hint

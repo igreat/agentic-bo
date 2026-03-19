@@ -29,6 +29,7 @@ Return findings in this structure so they can be written into `research_state.js
   "baselines": [],
   "key_variables": [],
   "known_constraints": [],
+  "source_urls": [],
   "summary": ""
 }
 ```
@@ -40,6 +41,7 @@ Also write a short narrative summary into the **Literature Context** section of 
 - `baselines`: best or representative prior values for the target property, with source attribution
 - `key_variables`: variables that the literature repeatedly treats as important
 - `known_constraints`: physical, chemical, or experimental constraints that should inform BO setup
+- `source_urls`: links or source identifiers for the papers, docs, or repositories actually used
 - `summary`: 1–3 short paragraphs linking the literature to the experiment design
 
 ## Local Packet Mode
@@ -64,6 +66,13 @@ If no local packet is provided:
 2. Use web search to find recent reviews or benchmark studies for this system. Prefer sources from the last 5 years unless a classic baseline is widely cited.
 3. For each relevant result: extract the best reported value, the conditions it was achieved under, and what design variables were varied.
 4. Stop once you have 2–4 baselines and a clear picture of what variables the community treats as important. This is not a systematic review.
+
+For open-world tasks that require evaluator discovery:
+
+1. Prioritize sources that expose a computable model, analytical equation, descriptor relationship, code snippet, or reproducible algorithm.
+2. Capture the exact source URLs used to derive the evaluator.
+3. In the summary, state what evaluator family was found, what variables it requires, and any important simplifying assumptions.
+4. If multiple evaluator candidates exist, prefer the one that is most explicit and easiest to operationalize reproducibly.
 
 ## Sparse Results Fallback
 

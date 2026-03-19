@@ -2,20 +2,21 @@
 
 This directory holds the benchmark setup for the final report.
 
-Right now, only one task is fully packaged:
+Current task states:
 
-- `oer`: the flagship OER composition benchmark
+- `oer`: closed-world flagship OER composition benchmark
+- `her`: open-world HER discovery scaffold (web-enabled, evaluator discovered by the agent)
 
-The benchmark model is intentionally simple:
+The benchmark model currently supports two task styles:
+
+- **closed-world tasks**: frozen task bundle, optional local literature packet, optional prebuilt backend, web disabled
+- **open-world tasks**: vague research goal, web allowed, search space and evaluator discovered during the run
+
+In both cases:
 
 - the **root repo** is the operator/developer environment
 - a separate **built public workspace** is where the agent runs
-- labeled source datasets stay in the root repo
-- the public workspace contains only:
-  - code/docs/skills needed to run
-  - `tasks/<task_id>/...`
-  - prebuilt evaluator assets under `evaluation_backends/`
-  - fresh `bo_runs/` and `research_runs/`
+- the public workspace contains only the code/docs/skills needed to run plus `tasks/<task_id>/...`
 
 ## OER quick start
 
@@ -53,8 +54,8 @@ uv run python benchmarks/build_workspace.py \
 ```
 
 This also writes a benchmark-specific `.claude/settings.local.json` inside the
-built workspace so Claude Code can run shell commands and write artifacts
-without approval prompts while keeping Claude-native web/search disabled.
+built workspace. Closed-world tasks keep Claude-native web/search disabled;
+open-world tasks can opt back into web/search via `workspace.allow_web`.
 
 ### 4. Switch into the built workspace and install dependencies there too
 
