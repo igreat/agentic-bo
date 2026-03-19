@@ -1,7 +1,6 @@
 """CLI subcommands for the evaluation layer."""
 
 import argparse
-import importlib.util
 import json
 import sys
 from pathlib import Path
@@ -10,7 +9,6 @@ from typing import Any
 import pandas as pd
 
 from ..engine import BOEngine
-from ..observers.callback import CallbackObserver
 from ..utils import (
     EvaluationBackendPaths,
     read_jsonl,
@@ -18,6 +16,7 @@ from ..utils import (
     utc_now_iso,
 )
 from .oracle import build_proxy_oracle, predict_original_scale, read_backend_meta
+from .python_module import run_python_module_evaluator
 from .proxy import ProxyObserver
 
 
@@ -259,24 +258,6 @@ def _validate_evaluator_preconditions(
     return state, backend_meta
 
 
-def _validate_python_evaluator_preconditions(
-    engine: BOEngine,
-    run_id: str,
-    batch_size: int,
-) -> dict[str, Any]:
-    state = engine._load_state(run_id)
-    if state["status"] not in {"initialized", "running"}:
-        raise ValueError(
-            f"Run '{run_id}' is not ready for suggestions. Current status: {state['status']}"
-        )
-
-    engine_name = str(state.get("default_engine", "hebo"))
-    if engine_name == "bo_lcb" and int(batch_size) != 1:
-        raise ValueError("bo_lcb currently supports batch-size=1 only.")
-
-    return state
-
-
 def _pending_suggestions(engine: BOEngine, run_id: str) -> list[dict[str, Any]]:
     """Return suggestions that were logged but not yet observed."""
     paths = engine._paths(run_id)
@@ -317,77 +298,6 @@ def _evaluate_suggestions(
             }
         )
     return observations
-
-
-def _load_python_evaluator(module_path: str | Path, function_name: str) -> Any:
-    module_path = Path(module_path).resolve()
-    if not module_path.exists():
-        raise FileNotFoundError(f"Python evaluator module not found: {module_path}")
-
-    spec = importlib.util.spec_from_file_location(
-        f"_bo_local_eval_{module_path.stem}",
-        module_path,
-    )
-    if spec is None or spec.loader is None:
-        raise ImportError(f"Could not load Python evaluator module: {module_path}")
-
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-
-    fn = getattr(module, function_name, None)
-    if fn is None or not callable(fn):
-        raise AttributeError(
-            f"Python evaluator module {module_path} has no callable '{function_name}'"
-        )
-    return fn
-
-
-def _normalize_python_evaluator_result(
-    *,
-    result: Any,
-    suggestion: dict[str, Any],
-    target_column: str,
-    default_engine: str,
-) -> dict[str, Any]:
-    if isinstance(result, dict):
-        if "y" in result:
-            y_value = result["y"]
-        elif target_column in result:
-            y_value = result[target_column]
-        else:
-            raise ValueError(
-                "Python evaluator dict output must include 'y' or the target column."
-            )
-    else:
-        y_value = result
-
-    return {
-        "x": suggestion["x"],
-        "y": float(y_value),
-        "engine": suggestion.get("engine", default_engine),
-        "suggestion_id": suggestion.get("suggestion_id"),
-    }
-
-
-def _attach_python_evaluator_summary(
-    engine: BOEngine,
-    run_id: str,
-    *,
-    module_path: Path,
-    function_name: str,
-) -> None:
-    state = engine._load_state(run_id)
-    state["oracle"] = {
-        "source": "python_evaluator_module",
-        "selected_model": "python-callback",
-        "selected_rmse": None,
-        "cv_rmse": {},
-        "active_features": state.get("active_features", []),
-        "module_path": str(module_path),
-        "function_name": function_name,
-    }
-    state["updated_at"] = utc_now_iso()
-    engine._save_state(run_id, state)
 
 
 def run_hidden_oracle_evaluator(
@@ -464,83 +374,6 @@ def run_hidden_oracle_evaluator(
         "resolved_pending": len(pending),
         "best_value": report.get("best_value"),
         "best_iteration": report.get("best_iteration"),
-        "report_path": str(engine._paths(run_id).report),
-        "convergence_plot_path": str(engine._paths(run_id).convergence_plot),
-    }
-
-
-def run_python_module_evaluator(
-    engine: BOEngine,
-    *,
-    run_id: str,
-    module_path: str | Path,
-    function_name: str = "evaluate",
-    num_iterations: int,
-    batch_size: int = 1,
-    verbose: bool = False,
-) -> dict[str, Any]:
-    state = _validate_python_evaluator_preconditions(engine, run_id, batch_size)
-    module_path = Path(module_path).resolve()
-    evaluator = _load_python_evaluator(module_path, function_name)
-    _attach_python_evaluator_summary(
-        engine,
-        run_id,
-        module_path=module_path,
-        function_name=function_name,
-    )
-    target_column = str(state["target_column"])
-    default_engine = str(state.get("default_engine", "hebo"))
-
-    def callback(suggestions: list[dict[str, Any]]) -> list[dict[str, Any]]:
-        observations = []
-        for suggestion in suggestions:
-            result = evaluator(dict(suggestion["x"]))
-            observations.append(
-                _normalize_python_evaluator_result(
-                    result=result,
-                    suggestion=suggestion,
-                    target_column=target_column,
-                    default_engine=default_engine,
-                )
-            )
-        return observations
-
-    class PythonEvaluatorObserver(CallbackObserver):
-        @property
-        def source(self) -> str:
-            return "python-evaluator"
-
-    recorded = 0
-    pending = _pending_suggestions(engine, run_id)
-    if pending:
-        engine.observe(
-            run_id,
-            callback(pending),
-            source="python-evaluator",
-            verbose=verbose,
-        )
-        recorded += len(pending)
-
-    observer = PythonEvaluatorObserver(callback)
-    report = engine.run_optimization(
-        run_id,
-        observer=observer,
-        num_iterations=int(num_iterations),
-        batch_size=int(batch_size),
-        verbose=verbose,
-    )
-    recorded += int(num_iterations) * int(batch_size)
-    return {
-        "run_id": run_id,
-        "module_path": str(module_path),
-        "function_name": function_name,
-        "iterations": int(num_iterations),
-        "batch_size": int(batch_size),
-        "recorded": recorded,
-        "resolved_pending": len(pending),
-        "best_value": report.get("best_value"),
-        "best_iteration": report.get("best_iteration"),
-        "best_observation_number": report.get("best_observation_number"),
         "report_path": str(engine._paths(run_id).report),
         "convergence_plot_path": str(engine._paths(run_id).convergence_plot),
     }
