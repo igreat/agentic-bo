@@ -1,0 +1,34 @@
+{
+  "task_id": "replace_me",
+  "title": "Replace me",
+  "agent_prompt_family": {
+    "primary_prompt": "Plain-English prompt shown to the agent.",
+    "nudge_tiers": {
+      "N0": "No extra hint beyond the base prompt.",
+      "N1": "Light hint.",
+      "N2": "Strong hint."
+    }
+  },
+  "canonical_solution": {
+    "evaluator_family": "What evaluator family the operator expects the agent could reasonably discover.",
+    "design_parameter_family": "What variables are expected to be optimized.",
+    "constraints": [],
+    "verification_artifact": "What graph/check should be generated before BO."
+  },
+  "acceptable_alternatives": [
+    {
+      "description": "Alternate evaluator or design-space family that still counts as valid."
+    }
+  ],
+  "evaluation_window": {
+    "time_budget_minutes": 180
+  },
+  "success_checks": [
+    "Prompt saved",
+    "Source URLs recorded",
+    "Evaluator written",
+    "Search space written",
+    "Verification artifact generated",
+    "BO completed"
+  ]
+}
