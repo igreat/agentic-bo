@@ -236,9 +236,30 @@ def _compute_nmr(mf, verbose: int = 0):
 
         return isotropic, anisotropy
 
-    except Exception as exc:
+    except ImportError:
         if verbose:
-            print(f"[dft] NMR calculation failed: {exc}", file=sys.stderr)
+            print("[dft] NMR unavailable: pyscf-properties not installed.  "
+                  "Install with:  uv pip install pyscf-properties",
+                  file=sys.stderr)
+        return (
+            np.full(n_atoms, float("nan")),
+            np.full(n_atoms, float("nan")),
+        )
+    except AssertionError:
+        if verbose:
+            print("[dft] NMR failed: pyscf grid block-size assertion.  "
+                  "This is a known pyscf / pyscf-properties compatibility "
+                  "issue. Try:  uv pip install -U pyscf pyscf-properties",
+                  file=sys.stderr)
+        return (
+            np.full(n_atoms, float("nan")),
+            np.full(n_atoms, float("nan")),
+        )
+    except Exception as exc:
+        exc_name = type(exc).__name__
+        if verbose:
+            print(f"[dft] NMR calculation failed ({exc_name}): {exc}",
+                  file=sys.stderr)
         return (
             np.full(n_atoms, float("nan")),
             np.full(n_atoms, float("nan")),

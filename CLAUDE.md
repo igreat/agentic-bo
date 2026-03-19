@@ -187,6 +187,7 @@ Converter commands (separate entrypoints):
 - `uv run python -m bo_workflow.converters.reaction_drfp <subcommand> [flags]`
 - `uv run python -m bo_workflow.converters.molecule_descriptors <subcommand> [flags]`
 - `uv run python -m bo_workflow.converters.column_transform <subcommand> [flags]`
+- `uv run python -m bo_workflow.converters.smiles_to_dft <subcommand> [flags]`
 
 | Converter | Command | Key flags | Purpose |
 |---------|---------|-----------|---------|
@@ -196,6 +197,8 @@ Converter commands (separate entrypoints):
 | `molecule_descriptors` | `decode` | `--catalog --query` (req), `--k` (opt) | Decode descriptor suggestions to nearest molecules |
 | `column_transform` | `profile` | `--input` (req), `--cols` (opt) | Analyse columns and recommend transforms |
 | `column_transform` | `transform` | `--input --cols --transform --output` (req), `--keep-original` (opt) | Apply a named transform; renames column with prefix (e.g. `log10_ic50_nM`) |
+| `smiles_to_dft` | `encode` | `--input --output-dir` (req), `--preset --basis --xc --target-col` (opt) | Encode SMILES columns to DFT descriptors (PySCF B3LYP/6-31G*); auto-detects SMILES columns |
+| `smiles_to_dft` | `status` | `--cache-dir` (req) | Show DFT descriptor cache status |
 
 Engine options: `hebo` (default), `bo_lcb`, `random`, `botorch`. Note: `bo_lcb` currently supports batch-size 1 only. `botorch` supports mixed numeric + categorical features via BoTorch's native mixed GP model, but `hebo` remains the default for strongly categorical problems.
 

@@ -48,7 +48,8 @@ import pandas as pd
 # Dependency check
 # ---------------------------------------------------------------------------
 
-def _check_deps() -> None:
+def _check_deps(*, verbose: bool = False) -> None:
+    """Check required and optional dependencies, warn about missing optionals."""
     missing = []
     try:
         import rdkit  # noqa: F401
@@ -63,6 +64,26 @@ def _check_deps() -> None:
             f"DFT converter requires: {', '.join(missing)}.  "
             f"Install with:  uv pip install {' '.join(missing)}"
         )
+
+    # Optional dependencies — warn but don't fail
+    warnings: list[str] = []
+    try:
+        from pyscf.prop import nmr  # noqa: F401
+    except (ImportError, ModuleNotFoundError):
+        warnings.append(
+            "pyscf-properties not installed → NMR shielding will be NaN.  "
+            "Install with:  uv pip install pyscf-properties"
+        )
+    try:
+        import morfeus  # noqa: F401
+    except ImportError:
+        warnings.append(
+            "morfeus-ml not installed → %%VBur will be NaN.  "
+            "Install with:  uv pip install morfeus-ml"
+        )
+    if warnings and verbose:
+        for w in warnings:
+            print(f"[dft-warn] {w}", file=sys.stderr)
 
 
 # ---------------------------------------------------------------------------
@@ -465,7 +486,7 @@ def encode_dataset_dft(
     """
     from ._descriptor_cache import DescriptorCache
 
-    _check_deps()
+    _check_deps(verbose=verbose)
 
     df = pd.read_csv(input_path)
     output_dir.mkdir(parents=True, exist_ok=True)
