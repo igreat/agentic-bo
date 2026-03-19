@@ -206,6 +206,14 @@ All commands: `uv run python -m bo_workflow.cli <command> [flags]`
 | `status` | `--run-id` (req) | Quick run summary |
 | `report` | `--run-id` (req) | Full report + convergence plot |
 
+Open-world helper commands (separate entrypoint):
+
+- `uv run python -m bo_workflow.open_world scaffold --research-dir research_runs/<RESEARCH_ID>`
+- `uv run python -m bo_workflow.open_world write-prompt --research-dir research_runs/<RESEARCH_ID> --nudge-tier N0 --prompt-file <PATH>`
+- `uv run python -m bo_workflow.open_world log-event --research-dir research_runs/<RESEARCH_ID> --event-type <TYPE> --summary <TEXT> --artifact-path <PATH>`
+- `uv run python -m bo_workflow.open_world validate-run --research-dir research_runs/<RESEARCH_ID>`
+- `uv run python -m bo_workflow.open_world validate-spec --path benchmarks/open_world_cases/<TASK>/operator_spec.json`
+
 Converter commands (separate entrypoints):
 
 - `uv run python -m bo_workflow.converters.reaction_drfp <subcommand> [flags]`

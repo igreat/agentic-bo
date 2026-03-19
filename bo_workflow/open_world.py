@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import argparse
 import json
 from pathlib import Path
 from typing import Any
@@ -426,3 +427,151 @@ def validate_open_world_research_run(
     log_path = research_dir / "operationalization_log.jsonl"
     errors.extend(validate_operationalization_log(log_path))
     return errors
+
+
+def _json_print(payload: Any) -> None:
+    print(json.dumps(payload, indent=2, sort_keys=True))
+
+
+def _read_optional_text(text: str | None, path: Path | None) -> str | None:
+    if text is not None:
+        return text
+    if path is not None:
+        return path.read_text(encoding="utf-8")
+    return None
+
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        prog="python -m bo_workflow.open_world",
+        description="Scaffold and validate open-world research-agent artifacts.",
+    )
+    sub = parser.add_subparsers(dest="command", required=True)
+
+    scaffold_cmd = sub.add_parser(
+        "scaffold",
+        help="Create the standard open-world research-run scaffold.",
+    )
+    scaffold_cmd.add_argument("--research-dir", type=Path, required=True)
+
+    write_prompt_cmd = sub.add_parser(
+        "write-prompt",
+        help="Write the exact initial prompt shown to the agent.",
+    )
+    write_prompt_cmd.add_argument("--research-dir", type=Path, required=True)
+    write_prompt_cmd.add_argument("--nudge-tier", required=True)
+    prompt_group = write_prompt_cmd.add_mutually_exclusive_group(required=True)
+    prompt_group.add_argument("--prompt-text")
+    prompt_group.add_argument("--prompt-file", type=Path)
+    nudge_group = write_prompt_cmd.add_mutually_exclusive_group()
+    nudge_group.add_argument("--nudge-text")
+    nudge_group.add_argument("--nudge-file", type=Path)
+
+    log_event_cmd = sub.add_parser(
+        "log-event",
+        help="Append one operationalization event to the run log.",
+    )
+    log_event_cmd.add_argument("--research-dir", type=Path, required=True)
+    log_event_cmd.add_argument("--event-type", required=True)
+    log_event_cmd.add_argument("--summary", required=True)
+    log_event_cmd.add_argument(
+        "--artifact-path",
+        action="append",
+        default=[],
+        help="Artifact path to associate with the event. May be repeated.",
+    )
+    log_event_cmd.add_argument(
+        "--source-url",
+        action="append",
+        default=[],
+        help="Source URL used for this event. May be repeated.",
+    )
+    log_event_cmd.add_argument("--reason")
+    log_event_cmd.add_argument("--timestamp")
+
+    validate_run_cmd = sub.add_parser(
+        "validate-run",
+        help="Validate an open-world research run evidence package.",
+    )
+    validate_run_cmd.add_argument("--research-dir", type=Path, required=True)
+    validate_run_cmd.add_argument(
+        "--allow-unfrozen",
+        action="store_true",
+        help="Do not require open_world.final_setup_frozen to be true.",
+    )
+
+    validate_spec_cmd = sub.add_parser(
+        "validate-spec",
+        help="Validate a hidden operator-side open-world spec file.",
+    )
+    validate_spec_cmd.add_argument("--path", type=Path, required=True)
+
+    return parser
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = build_parser().parse_args(argv)
+
+    if args.command == "scaffold":
+        payload = {
+            "created": {
+                key: str(value)
+                for key, value in scaffold_open_world_research_dir(args.research_dir).items()
+            }
+        }
+        _json_print(payload)
+        return 0
+
+    if args.command == "write-prompt":
+        prompt_text = _read_optional_text(args.prompt_text, args.prompt_file)
+        nudge_text = _read_optional_text(args.nudge_text, args.nudge_file)
+        prompt_path = write_initial_prompt(
+            args.research_dir,
+            prompt_text=prompt_text or "",
+            nudge_tier=args.nudge_tier,
+            nudge_text=nudge_text,
+        )
+        _json_print({"prompt_path": str(prompt_path)})
+        return 0
+
+    if args.command == "log-event":
+        event = append_operationalization_event(
+            args.research_dir,
+            event_type=args.event_type,
+            summary=args.summary,
+            artifact_paths=list(args.artifact_path),
+            source_urls=list(args.source_url) or None,
+            reason=args.reason,
+            timestamp=args.timestamp,
+        )
+        _json_print(event)
+        return 0
+
+    if args.command == "validate-run":
+        errors = validate_open_world_research_run(
+            args.research_dir,
+            require_frozen=not bool(args.allow_unfrozen),
+        )
+        payload = {
+            "research_dir": str(args.research_dir),
+            "valid": len(errors) == 0,
+            "errors": errors,
+        }
+        _json_print(payload)
+        return 0 if not errors else 1
+
+    if args.command == "validate-spec":
+        errors = validate_open_world_operator_spec_file(args.path)
+        payload = {
+            "path": str(args.path),
+            "valid": len(errors) == 0,
+            "errors": errors,
+        }
+        _json_print(payload)
+        return 0 if not errors else 1
+
+    return 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

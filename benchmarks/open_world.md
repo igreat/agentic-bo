@@ -97,6 +97,36 @@ A run counts as structurally complete when:
 - BO completes and produces normal `bo_runs/<run_id>/` artifacts
 - the final paper/report explains the discovery and operationalization path
 
+## Helper commands
+
+The fixed evidence package is intentionally lightweight enough to manage from
+the terminal.
+
+Use:
+
+```bash
+uv run python -m bo_workflow.open_world scaffold \
+  --research-dir research_runs/<RESEARCH_ID>
+
+uv run python -m bo_workflow.open_world write-prompt \
+  --research-dir research_runs/<RESEARCH_ID> \
+  --nudge-tier N0 \
+  --prompt-file benchmarks/open_world_cases/her/agent_prompt.md
+
+uv run python -m bo_workflow.open_world log-event \
+  --research-dir research_runs/<RESEARCH_ID> \
+  --event-type source_selected \
+  --summary "Selected the HER tutorial family as the working evaluator path." \
+  --artifact-path research_runs/<RESEARCH_ID>/initial_prompt.md \
+  --source-url https://github.com/zwyu-ai/BO-Tutorial-for-Sci/blob/main/examples/HER
+
+uv run python -m bo_workflow.open_world validate-run \
+  --research-dir research_runs/<RESEARCH_ID>
+
+uv run python -m bo_workflow.open_world validate-spec \
+  --path benchmarks/open_world_cases/her/operator_spec.json
+```
+
 ## Notes
 
 - Closed-world benchmark infrastructure remains useful as supporting/control

@@ -2,6 +2,7 @@ import json
 from pathlib import Path
 
 from bo_workflow.open_world import append_operationalization_event
+from bo_workflow.open_world import main
 from bo_workflow.open_world import scaffold_open_world_research_dir
 from bo_workflow.open_world import validate_open_world_operator_spec
 from bo_workflow.open_world import validate_open_world_operator_spec_file
@@ -226,3 +227,153 @@ def test_repository_her_operator_spec_is_valid() -> None:
     )
 
     assert validate_open_world_operator_spec_file(spec_path) == []
+
+
+def test_open_world_cli_scaffold_creates_expected_structure(
+    tmp_path: Path,
+) -> None:
+    research_dir = tmp_path / "research_runs" / "her_demo"
+
+    exit_code = main(["scaffold", "--research-dir", str(research_dir)])
+
+    assert exit_code == 0
+    assert (research_dir / "verification_artifacts").is_dir()
+    assert (research_dir / "operationalization_log.jsonl").exists()
+
+
+def test_open_world_cli_write_prompt_creates_initial_prompt(
+    tmp_path: Path,
+) -> None:
+    research_dir = tmp_path / "research_runs" / "her_demo"
+
+    exit_code = main(
+        [
+            "write-prompt",
+            "--research-dir",
+            str(research_dir),
+            "--nudge-tier",
+            "N1",
+            "--prompt-text",
+            "Find a computable HER evaluator and optimize it.",
+            "--nudge-text",
+            "Look for a literature-grounded public tutorial or repo.",
+        ]
+    )
+
+    prompt_path = research_dir / "initial_prompt.md"
+    assert exit_code == 0
+    assert prompt_path.exists()
+    prompt_text = prompt_path.read_text(encoding="utf-8")
+    assert "**Nudge Tier:** N1" in prompt_text
+    assert "Find a computable HER evaluator and optimize it." in prompt_text
+    assert "Look for a literature-grounded public tutorial or repo." in prompt_text
+
+
+def test_open_world_cli_log_event_appends_jsonl(
+    tmp_path: Path,
+) -> None:
+    research_dir = tmp_path / "research_runs" / "her_demo"
+
+    exit_code = main(
+        [
+            "log-event",
+            "--research-dir",
+            str(research_dir),
+            "--event-type",
+            "source_selected",
+            "--summary",
+            "Selected a public HER tutorial source.",
+            "--artifact-path",
+            "research_runs/her_demo/initial_prompt.md",
+            "--source-url",
+            "https://github.com/zwyu-ai/BO-Tutorial-for-Sci/blob/main/examples/HER",
+        ]
+    )
+
+    log_path = research_dir / "operationalization_log.jsonl"
+    lines = log_path.read_text(encoding="utf-8").splitlines()
+    assert exit_code == 0
+    assert len(lines) == 1
+    event = json.loads(lines[0])
+    assert event["event_type"] == "source_selected"
+    assert event["artifact_paths"] == ["research_runs/her_demo/initial_prompt.md"]
+
+
+def test_open_world_cli_validate_run_handles_unfrozen_runs(
+    tmp_path: Path,
+) -> None:
+    research_dir = tmp_path / "research_runs" / "her_demo"
+    verification_path = research_dir / "verification_artifacts" / "volcano.png"
+
+    _write(research_dir / "research_plan.md", "# plan\n")
+    _write(research_dir / "paper.md", "# paper\n")
+    _write(research_dir / "initial_prompt.md", "Find a useful HER evaluator.\n")
+    _write(research_dir / "discovered_search_space.json", "{}\n")
+    _write(research_dir / "evaluator.py", "def evaluate(x):\n    return 1.0\n")
+    _write(verification_path, "fake-image\n")
+    _write(
+        research_dir / "operationalization_log.jsonl",
+        json.dumps(
+            {
+                "timestamp": "2026-03-19T20:00:00Z",
+                "event_type": "source_selected",
+                "summary": "Selected HER tutorial source.",
+                "artifact_paths": ["research_runs/her_demo/initial_prompt.md"],
+            }
+        )
+        + "\n",
+    )
+    _write(
+        research_dir / "research_state.json",
+        json.dumps(
+            {
+                "research_id": "her_demo",
+                "research_question": "Discover a useful HER setup.",
+                "open_world": {
+                    "nudge_tier": "N0",
+                    "prompt_path": "research_runs/her_demo/initial_prompt.md",
+                    "source_urls": [
+                        "https://github.com/zwyu-ai/BO-Tutorial-for-Sci/blob/main/examples/HER"
+                    ],
+                    "discovered_search_space_path": "research_runs/her_demo/discovered_search_space.json",
+                    "evaluator_module_path": "research_runs/her_demo/evaluator.py",
+                    "helper_script_paths": [],
+                    "verification_artifacts": [
+                        "research_runs/her_demo/verification_artifacts/volcano.png"
+                    ],
+                    "dependency_installs": [],
+                    "approach_revisions": [],
+                    "final_setup_frozen": False,
+                },
+            },
+            indent=2,
+        )
+        + "\n",
+    )
+
+    strict_exit_code = main(["validate-run", "--research-dir", str(research_dir)])
+    relaxed_exit_code = main(
+        [
+            "validate-run",
+            "--research-dir",
+            str(research_dir),
+            "--allow-unfrozen",
+        ]
+    )
+
+    assert strict_exit_code == 1
+    assert relaxed_exit_code == 0
+
+
+def test_open_world_cli_validate_spec_accepts_repository_her_spec() -> None:
+    spec_path = (
+        Path(__file__).resolve().parents[1]
+        / "benchmarks"
+        / "open_world_cases"
+        / "her"
+        / "operator_spec.json"
+    )
+
+    exit_code = main(["validate-spec", "--path", str(spec_path)])
+
+    assert exit_code == 0
