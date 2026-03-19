@@ -219,8 +219,7 @@ If a benchmark task bundle provides a prebuilt `evaluation.backend_id`, it is
 acceptable to automate Phase 4 directly with `run-evaluator` against the
 backend copied into the public workspace.
 
-If Phase 3 produced a local evaluator module and the task uses
-`evaluation.mode = discovered_python`, automate Phase 4 with:
+If Phase 3 produced a local evaluator module, automate Phase 4 with:
 
 ```bash
 uv run python -m bo_workflow.cli run-python-evaluator \
