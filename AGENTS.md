@@ -112,7 +112,7 @@ Use `research-agent` when the user wants an end-to-end study workflow:
 - initializes a run
 - continues through `suggest` / `observe` / `report`
 - does not need to know whether observations come from a user, a real experiment loop, or an external benchmark evaluator
-- in open-world tasks, it may also discover a local evaluator module and run BO against it with `run-python-evaluator`
+- it may also run BO against a local Python evaluator module with `run-python-evaluator` when that evaluator already exists as part of the workflow
 
 Use the BO skills directly when the user wants only the optimization subsystem:
 - `bo-execution-workflow` for a resolved BO-layer setup/execution handoff
@@ -123,10 +123,6 @@ Use the BO skills directly when the user wants only the optimization subsystem:
 ## Script-first policy
 
 - Before writing ad-hoc one-off scripts, check `bo_workflow/scripts/` and prefer existing scripts when they already cover the task.
-- For open-world runs, existing scripts and converters are optional accelerators, not mandatory pipelines. If they are not a good fit, write run-local helper scripts under `research_runs/<research_id>/` without hesitation.
-- For open-world runs, the agent may write ad hoc converters, preprocessors, evaluators, plotting scripts, and other helper modules whenever that is the best way to make progress.
-- For open-world runs, the agent may install minimal new dependencies when the current environment is insufficient. Every install must be recorded in the run artifacts with the package(s), command, and reason.
-- For open-world runs, the agent may revise its implementation path during the run if new evidence suggests a better setup. Major revisions must be recorded in the run artifacts.
 - For explicit optimizer benchmarking/comparison requests, use:
 
 ```bash
@@ -185,10 +181,6 @@ Each top-level research workflow produces files under `research_runs/<research_i
 | `research_state.json` | `research-agent` |
 | `research_plan.md` | `research-agent` |
 | `paper.md` | `research-agent` / `scientific-writing` |
-| `initial_prompt.md` | `research-agent` (open-world runs) |
-| `discovered_search_space.json` | `research-agent` (open-world runs) |
-| `evaluator.py` | `research-agent` (open-world runs) |
-| `operationalization_log.jsonl` | `research-agent` (open-world runs) |
 
 ## CLI quick reference
 
@@ -205,14 +197,6 @@ All commands: `uv run python -m bo_workflow.cli <command> [flags]`
 | `run-python-evaluator` | `--run-id --module-path --iterations` (req), `--function --batch-size` (opt) | Run BO against a local Python evaluator module discovered or written during the workflow |
 | `status` | `--run-id` (req) | Quick run summary |
 | `report` | `--run-id` (req) | Full report + convergence plot |
-
-Open-world helper commands (separate entrypoint):
-
-- `uv run python -m bo_workflow.open_world scaffold --research-dir research_runs/<RESEARCH_ID>` to bootstrap `research_state.json`, `research_plan.md`, `paper.md`, `initial_prompt.md`, `discovered_search_space.json`, `evaluator.py`, `verification_artifacts/`, and `operationalization_log.jsonl`
-- `uv run python -m bo_workflow.open_world write-prompt --research-dir research_runs/<RESEARCH_ID> --nudge-tier N0 --prompt-file <PATH>` to save the exact prompt and sync `open_world.nudge_tier`
-- `uv run python -m bo_workflow.open_world log-event --research-dir research_runs/<RESEARCH_ID> --event-type <TYPE> --summary <TEXT> --artifact-path <PATH>` to append an operationalization event and sync the obvious state fields when possible
-- `uv run python -m bo_workflow.open_world validate-run --research-dir research_runs/<RESEARCH_ID>`
-- `uv run python -m bo_workflow.open_world validate-spec --path benchmarks/open_world_cases/<TASK>/operator_spec.json`
 
 Converter commands (separate entrypoints):
 

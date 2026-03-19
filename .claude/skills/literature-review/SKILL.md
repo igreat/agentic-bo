@@ -67,13 +67,6 @@ If no local packet is provided:
 3. For each relevant result: extract the best reported value, the conditions it was achieved under, and what design variables were varied.
 4. Stop once you have 2–4 baselines and a clear picture of what variables the community treats as important. This is not a systematic review.
 
-For open-world tasks that require evaluator discovery:
-
-1. Prioritize sources that expose a computable model, analytical equation, descriptor relationship, code snippet, or reproducible algorithm.
-2. Capture the exact source URLs used to derive the evaluator.
-3. In the summary, state what evaluator family was found, what variables it requires, and any important simplifying assumptions.
-4. If multiple evaluator candidates exist, prefer the one that is most explicit and easiest to operationalize reproducibly.
-
 ## Sparse Results Fallback
 
 If the system is too narrow, novel, or obscure to find direct baselines:

@@ -2,23 +2,6 @@
 
 This document locks the evidence package for the final report.
 
-## Main evaluation split
-
-The project now has two evidence layers:
-
-- **open-world AI-scientist runs**: the headline story
-- **closed-world benchmark runs**: supporting/control evidence
-
-For open-world runs:
-
-- the prompt and nudge tier are fixed
-- the operator keeps a hidden answer key
-- the execution path is flexible
-- scoring is based on the required evidence package
-
-See [`open_world.md`](/Users/mujtabaalajmi/Documents/agentic-bo/bo-fun/benchmarks/open_world.md)
-for the operator-side model.
-
 ## Main benchmark comparison
 
 Primary scored comparison:
@@ -37,21 +20,6 @@ BO-only support evidence:
 
 Use this only as support evidence for optimizer quality. It is not the headline
 contribution.
-
-## Open-world evidence checklist
-
-For every scored open-world run, require:
-
-- exact initial prompt saved to `initial_prompt.md`
-- nudge tier recorded
-- credible source URLs recorded
-- final evaluator module exists
-- final search-space artifact exists
-- verification artifact exists
-- helper scripts and dependency installs are recorded if used
-- setup marked frozen before the reported BO run
-- normal `bo_runs/<run_id>/` artifacts exist
-- final paper/report explains the discovery and operationalization path
 
 ## Task budgets
 
@@ -108,14 +76,6 @@ Score each item `pass` / `fail`:
 - prebuilt evaluator used without exposing labeled source datasets
 - run completed without manual repair
 
-For open-world runs, also check:
-
-- initial prompt saved exactly
-- final evaluator/search space/verification artifact exist
-- operationalization log exists and has a valid event structure
-- any helper scripts and dependency installs are recorded if used
-- the reported BO run corresponds to a frozen final setup
-
 ## Qualitative review rubric
 
 Use a `0/1/2` rubric on four axes, with two-person consensus.
@@ -157,16 +117,6 @@ The report should state:
 - prebuilt evaluator assets were fixed before scoring
 - local literature packets were frozen in advance
 - task prompts, budgets, and backend ids were fixed before scoring
-
-For open-world runs, state instead:
-
-- the initial prompt and nudge tier were fixed before scoring
-- a hidden operator spec defined the intended evaluator family, design-space
-  family, constraints, and verification check
-- the agent was allowed to browse, write ad hoc scripts, and install minimal
-  dependencies
-- benchmarkability came from fixed evidence requirements rather than a fixed
-  execution path
 
 Also state the limitations:
 
