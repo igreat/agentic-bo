@@ -127,6 +127,17 @@ uv run python -m bo_workflow.open_world validate-spec \
   --path benchmarks/open_world_cases/her/operator_spec.json
 ```
 
+`scaffold` initializes a starter research directory with:
+
+- `research_state.json`
+- `research_plan.md`
+- `paper.md`
+- `initial_prompt.md`
+- `discovered_search_space.json`
+- `evaluator.py`
+- `verification_artifacts/`
+- `operationalization_log.jsonl`
+
 ## Notes
 
 - Closed-world benchmark infrastructure remains useful as supporting/control
