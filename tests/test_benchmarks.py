@@ -10,6 +10,7 @@ import benchmarks.build_workspace as build_workspace_module
 from benchmarks.build_workspace import build_workspace
 from bo_workflow.engine import BOEngine
 from bo_workflow.evaluation.cli import run_hidden_oracle_evaluator
+from bo_workflow.evaluation.cli import run_python_module_evaluator
 from bo_workflow.evaluation.oracle import build_proxy_oracle
 from bo_workflow.utils import RunPaths, read_jsonl
 
@@ -142,6 +143,60 @@ def test_run_evaluator_with_prebuilt_backend_records_observations(
     observations = read_jsonl(paths.observations)
     assert len(observations) == 2
     assert {row["source"] for row in observations} == {"benchmark-evaluator"}
+
+
+def test_run_python_evaluator_records_observations_and_resolves_pending(
+    tmp_path: Path,
+) -> None:
+    module_path = tmp_path / "blackbox_her.py"
+    module_path.write_text(
+        "\n".join(
+            [
+                "def evaluate(composition):",
+                "    x = float(composition['x'])",
+                "    return 1.0 - abs(x - 0.3)",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    runs_root = tmp_path / "bo_runs"
+    engine = BOEngine(runs_root=runs_root)
+    state = engine.init_run(
+        target_column="exchange_current_density",
+        objective="max",
+        search_space_spec={
+            "design_parameters": [
+                {"name": "x", "type": "num", "lb": 0.0, "ub": 1.0}
+            ],
+            "fixed_features": {},
+        },
+        seed=42,
+        num_initial_random_samples=2,
+    )
+    run_id = state["run_id"]
+
+    engine.suggest(run_id, batch_size=1)
+
+    payload = run_python_module_evaluator(
+        engine,
+        run_id=run_id,
+        module_path=module_path,
+        num_iterations=2,
+        batch_size=1,
+    )
+
+    paths = RunPaths(run_dir=runs_root / run_id)
+    report = json.loads(paths.report.read_text())
+    observations = read_jsonl(paths.observations)
+
+    assert payload["resolved_pending"] == 1
+    assert payload["recorded"] == 3
+    assert report["num_observations"] == 3
+    assert report["oracle"]["source"] == "python_evaluator_module"
+    assert report["oracle"]["selected_model"] == "python-callback"
+    assert {row["source"] for row in observations} == {"python-evaluator"}
 
 
 def test_report_trajectory_summary_matches_observations(
