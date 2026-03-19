@@ -1,7 +1,6 @@
 {
   "task_id": "oer",
   "title": "Mn-Fe-Co-Ni-La-Ce OER composition optimization",
-  "task_type": "closed_world",
   "modality": "simplex_composition",
   "objective": {
     "target_column": "overpotential_V",
@@ -43,8 +42,5 @@
   "evaluation": {
     "mode": "prebuilt_backend",
     "backend_id": "oer_hidden"
-  },
-  "workspace": {
-    "allow_web": false
   }
 }

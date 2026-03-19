@@ -42,8 +42,6 @@ def test_build_workspace_copies_public_oer_bundle(
     assert not (output_dir / "tasks" / "oer" / "assessment.md").exists()
     manifest = json.loads((output_dir / "tasks" / "oer" / "task_manifest.json").read_text())
     assert manifest["workflow"]["entrypoint"] == "research-agent"
-    assert manifest["task_type"] == "closed_world"
-    assert manifest["workspace"]["allow_web"] is False
     assert (output_dir / "bo_runs").is_dir()
     assert (output_dir / "research_runs").is_dir()
     backend_id = manifest["evaluation"]["backend_id"]
@@ -53,30 +51,6 @@ def test_build_workspace_copies_public_oer_bundle(
         assert copied_backend.exists()
     else:
         assert not (output_dir / "evaluation_backends").exists()
-
-
-def test_build_workspace_copies_public_her_bundle_and_enables_web(
-    tmp_path: Path,
-) -> None:
-    output_dir = tmp_path / "open_world_workspace"
-
-    build_workspace(
-        output_dir=output_dir,
-        task_ids=["her"],
-        overwrite=False,
-    )
-
-    assert (output_dir / "tasks" / "her" / "brief.md").exists()
-    manifest = json.loads((output_dir / "tasks" / "her" / "task_manifest.json").read_text())
-    assert manifest["task_type"] == "open_world"
-    assert manifest["workspace"]["allow_web"] is True
-    assert manifest["evaluation"]["mode"] == "discovered_python"
-    claude_settings = json.loads(
-        (output_dir / ".claude" / "settings.local.json").read_text()
-    )
-    assert claude_settings["defaultMode"] == "acceptEdits"
-    assert claude_settings["permissions"]["allow"] == ["Bash"]
-    assert "deny" not in claude_settings["permissions"]
 
 
 def test_run_evaluator_with_prebuilt_backend_records_observations(
