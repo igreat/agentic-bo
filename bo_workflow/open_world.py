@@ -53,6 +53,16 @@ REQUIRED_OPERATIONALIZATION_EVENT_FIELDS = (
     "artifact_paths",
 )
 
+REQUIRED_OPERATOR_SPEC_FIELDS = (
+    "task_id",
+    "title",
+    "agent_prompt_family",
+    "canonical_solution",
+    "acceptable_alternatives",
+    "evaluation_window",
+    "success_checks",
+)
+
 
 def utc_now_iso() -> str:
     return datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace(
@@ -223,6 +233,71 @@ def validate_operationalization_log(path: Path) -> list[str]:
     if not path.exists():
         return [f"missing operationalization log: {path}"]
     return validate_operationalization_events(_load_jsonl(path))
+
+
+def validate_open_world_operator_spec(
+    spec: dict[str, Any],
+    *,
+    root_dir: Path | None = None,
+) -> list[str]:
+    """Validate the hidden operator-side answer-key spec."""
+    errors: list[str] = []
+
+    for field in REQUIRED_OPERATOR_SPEC_FIELDS:
+        if field not in spec:
+            errors.append(f"operator spec: missing required field '{field}'")
+
+    prompt_family = spec.get("agent_prompt_family", {})
+    if not isinstance(prompt_family, dict):
+        errors.append("operator spec: agent_prompt_family must be an object")
+    else:
+        if "primary_prompt_path" not in prompt_family:
+            errors.append("operator spec: missing agent_prompt_family.primary_prompt_path")
+        if "nudge_tiers" not in prompt_family:
+            errors.append("operator spec: missing agent_prompt_family.nudge_tiers")
+
+        if root_dir and prompt_family.get("primary_prompt_path"):
+            prompt_path = root_dir / str(prompt_family["primary_prompt_path"])
+            if not prompt_path.exists():
+                errors.append(
+                    "operator spec: primary_prompt_path does not exist: "
+                    f"{prompt_family['primary_prompt_path']}"
+                )
+
+    canonical_solution = spec.get("canonical_solution", {})
+    if not isinstance(canonical_solution, dict):
+        errors.append("operator spec: canonical_solution must be an object")
+    else:
+        for field in (
+            "evaluator_family",
+            "design_parameter_family",
+            "constraints",
+            "verification_artifact",
+        ):
+            if field not in canonical_solution:
+                errors.append(f"operator spec: missing canonical_solution.{field}")
+
+    alternatives = spec.get("acceptable_alternatives")
+    if not isinstance(alternatives, list):
+        errors.append("operator spec: acceptable_alternatives must be a list")
+
+    evaluation_window = spec.get("evaluation_window", {})
+    if not isinstance(evaluation_window, dict):
+        errors.append("operator spec: evaluation_window must be an object")
+    elif "time_budget_minutes" not in evaluation_window:
+        errors.append("operator spec: missing evaluation_window.time_budget_minutes")
+
+    success_checks = spec.get("success_checks")
+    if not isinstance(success_checks, list) or not success_checks:
+        errors.append("operator spec: success_checks must be a non-empty list")
+
+    return errors
+
+
+def validate_open_world_operator_spec_file(path: Path) -> list[str]:
+    resolved = path.resolve()
+    root_dir = resolved.parents[3] if len(resolved.parents) >= 4 else None
+    return validate_open_world_operator_spec(_load_json(path), root_dir=root_dir)
 
 
 def validate_open_world_research_run(

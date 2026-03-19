@@ -3,6 +3,8 @@ from pathlib import Path
 
 from bo_workflow.open_world import append_operationalization_event
 from bo_workflow.open_world import scaffold_open_world_research_dir
+from bo_workflow.open_world import validate_open_world_operator_spec
+from bo_workflow.open_world import validate_open_world_operator_spec_file
 from bo_workflow.open_world import validate_open_world_research_run
 from bo_workflow.open_world import validate_operationalization_events
 from bo_workflow.open_world import write_initial_prompt
@@ -181,3 +183,46 @@ def test_validate_open_world_research_run_contract(
     )
 
     assert validate_open_world_research_run(research_dir) == []
+
+
+def test_validate_open_world_operator_spec_accepts_expected_shape(
+    tmp_path: Path,
+) -> None:
+    prompt_path = tmp_path / "benchmarks" / "open_world_cases" / "her" / "agent_prompt.md"
+    _write(prompt_path, "prompt\n")
+
+    spec = {
+        "task_id": "her_open_world",
+        "title": "Hydrogen evolution reaction catalyst design",
+        "agent_prompt_family": {
+            "primary_prompt_path": "benchmarks/open_world_cases/her/agent_prompt.md",
+            "nudge_tiers": {
+                "N0": "base",
+                "N1": "light",
+                "N2": "strong",
+            },
+        },
+        "canonical_solution": {
+            "evaluator_family": "HER tutorial example",
+            "design_parameter_family": "10 bounded continuous variables",
+            "constraints": [],
+            "verification_artifact": "sanity-check plot",
+        },
+        "acceptable_alternatives": [{"description": "similar public HER example"}],
+        "evaluation_window": {"time_budget_minutes": 180},
+        "success_checks": ["Prompt saved", "BO completed"],
+    }
+
+    assert validate_open_world_operator_spec(spec, root_dir=tmp_path) == []
+
+
+def test_repository_her_operator_spec_is_valid() -> None:
+    spec_path = (
+        Path(__file__).resolve().parents[1]
+        / "benchmarks"
+        / "open_world_cases"
+        / "her"
+        / "operator_spec.json"
+    )
+
+    assert validate_open_world_operator_spec_file(spec_path) == []
