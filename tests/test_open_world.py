@@ -79,6 +79,7 @@ def test_scaffold_and_prompt_helpers_create_expected_open_world_artifacts(
     assert prompt_path.exists()
     state = json.loads(paths["research_state_path"].read_text(encoding="utf-8"))
     assert state["research_id"] == "her_demo"
+    assert state["open_world"]["nudge_tier"] == "N0"
     assert state["open_world"]["prompt_path"] == "research_runs/her_demo/initial_prompt.md"
     prompt_text = prompt_path.read_text(encoding="utf-8")
     assert "**Nudge Tier:** N0" in prompt_text
@@ -104,6 +105,32 @@ def test_append_operationalization_event_writes_jsonl(
     lines = log_path.read_text(encoding="utf-8").splitlines()
     assert len(lines) == 1
     assert json.loads(lines[0]) == event
+    state = json.loads((research_dir / "research_state.json").read_text(encoding="utf-8"))
+    assert state["open_world"]["source_urls"] == [
+        "https://github.com/zwyu-ai/BO-Tutorial-for-Sci/blob/main/examples/HER"
+    ]
+    assert state["literature_findings"]["source_urls"] == [
+        "https://github.com/zwyu-ai/BO-Tutorial-for-Sci/blob/main/examples/HER"
+    ]
+
+
+def test_append_operationalization_event_syncs_frozen_state(
+    tmp_path: Path,
+) -> None:
+    research_dir = tmp_path / "research_runs" / "her_demo"
+
+    append_operationalization_event(
+        research_dir,
+        event_type="setup_frozen",
+        summary="Froze the final evaluator and search space.",
+        artifact_paths=[
+            "research_runs/her_demo/discovered_search_space.json",
+            "research_runs/her_demo/evaluator.py",
+        ],
+    )
+
+    state = json.loads((research_dir / "research_state.json").read_text(encoding="utf-8"))
+    assert state["open_world"]["final_setup_frozen"] is True
 
 
 def test_validate_open_world_research_run_contract(
@@ -451,6 +478,10 @@ def test_open_world_cli_log_event_appends_jsonl(
     event = json.loads(lines[0])
     assert event["event_type"] == "source_selected"
     assert event["artifact_paths"] == ["research_runs/her_demo/initial_prompt.md"]
+    state = json.loads((research_dir / "research_state.json").read_text(encoding="utf-8"))
+    assert state["open_world"]["source_urls"] == [
+        "https://github.com/zwyu-ai/BO-Tutorial-for-Sci/blob/main/examples/HER"
+    ]
 
 
 def test_open_world_cli_validate_run_handles_unfrozen_runs(

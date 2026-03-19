@@ -174,6 +174,10 @@ def _ensure_file(path: Path, content: str) -> None:
         path.write_text(content, encoding="utf-8")
 
 
+def _write_json(path: Path, payload: dict[str, Any]) -> None:
+    path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+
+
 def _research_plan_template() -> str:
     return (
         "# Research Plan\n\n"
@@ -282,6 +286,15 @@ def write_initial_prompt(
     if nudge_text:
         blocks.extend(["", "## Nudge", "", nudge_text.rstrip()])
     prompt_path.write_text("\n".join(blocks) + "\n", encoding="utf-8")
+
+    state_path = research_dir.resolve() / "research_state.json"
+    if state_path.exists():
+        state = _load_json(state_path)
+        open_world = state.setdefault("open_world", {})
+        open_world["nudge_tier"] = nudge_tier
+        open_world["prompt_path"] = str(Path("research_runs") / research_dir.name / "initial_prompt.md")
+        _write_json(state_path, state)
+
     return prompt_path
 
 
@@ -334,7 +347,73 @@ def append_operationalization_event(
     )
     with paths["operationalization_log_path"].open("a", encoding="utf-8") as handle:
         handle.write(json.dumps(event) + "\n")
+    _sync_open_world_state_from_event(paths["research_state_path"], event)
     return event
+
+
+def _merge_unique_strings(values: list[str], new_values: list[str]) -> list[str]:
+    seen: dict[str, None] = {value: None for value in values}
+    for value in new_values:
+        seen.setdefault(value, None)
+    return list(seen.keys())
+
+
+def _first_matching_path(paths: list[str], suffix: str) -> str | None:
+    for path in paths:
+        if path.endswith(suffix):
+            return path
+    return paths[0] if paths else None
+
+
+def _sync_open_world_state_from_event(
+    state_path: Path,
+    event: dict[str, Any],
+) -> None:
+    if not state_path.exists():
+        return
+
+    state = _load_json(state_path)
+    open_world = state.setdefault("open_world", {})
+    literature = state.setdefault("literature_findings", {})
+    event_type = event.get("event_type")
+    artifact_paths = [
+        str(path) for path in event.get("artifact_paths", []) if isinstance(path, str)
+    ]
+    source_urls = [
+        str(url) for url in event.get("source_urls", []) if isinstance(url, str)
+    ]
+
+    if event_type == "source_selected" and source_urls:
+        open_world["source_urls"] = _merge_unique_strings(
+            list(open_world.get("source_urls", [])),
+            source_urls,
+        )
+        literature["source_urls"] = _merge_unique_strings(
+            list(literature.get("source_urls", [])),
+            source_urls,
+        )
+    elif event_type == "search_space_resolved":
+        resolved_path = _first_matching_path(artifact_paths, ".json")
+        if resolved_path:
+            open_world["discovered_search_space_path"] = resolved_path
+    elif event_type == "evaluator_written":
+        resolved_path = _first_matching_path(artifact_paths, ".py")
+        if resolved_path:
+            open_world["evaluator_module_path"] = resolved_path
+    elif event_type == "helper_script_written" and artifact_paths:
+        open_world["helper_script_paths"] = _merge_unique_strings(
+            list(open_world.get("helper_script_paths", [])),
+            artifact_paths,
+        )
+    elif event_type == "verification_generated" and artifact_paths:
+        open_world["verification_artifacts"] = _merge_unique_strings(
+            list(open_world.get("verification_artifacts", [])),
+            artifact_paths,
+        )
+    elif event_type == "setup_frozen":
+        open_world["final_setup_frozen"] = True
+
+    _write_json(state_path, state)
 
 
 def validate_operationalization_events(
