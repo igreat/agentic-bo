@@ -1,8 +1,11 @@
 import json
 from pathlib import Path
 
+from bo_workflow.open_world import append_operationalization_event
+from bo_workflow.open_world import scaffold_open_world_research_dir
 from bo_workflow.open_world import validate_open_world_research_run
 from bo_workflow.open_world import validate_operationalization_events
+from bo_workflow.open_world import write_initial_prompt
 
 
 def _write(path: Path, content: str) -> None:
@@ -49,6 +52,47 @@ def test_validate_operationalization_events_rejects_bad_shape() -> None:
 
     assert any("unsupported event_type" in error for error in errors)
     assert any("artifact_paths must be a list" in error for error in errors)
+
+
+def test_scaffold_and_prompt_helpers_create_expected_open_world_artifacts(
+    tmp_path: Path,
+) -> None:
+    research_dir = tmp_path / "research_runs" / "her_demo"
+
+    paths = scaffold_open_world_research_dir(research_dir)
+    prompt_path = write_initial_prompt(
+        research_dir,
+        prompt_text="Find a useful HER setup and optimize it.",
+        nudge_tier="N0",
+    )
+
+    assert paths["verification_dir"].is_dir()
+    assert paths["operationalization_log_path"].exists()
+    assert prompt_path.exists()
+    prompt_text = prompt_path.read_text(encoding="utf-8")
+    assert "**Nudge Tier:** N0" in prompt_text
+    assert "Find a useful HER setup and optimize it." in prompt_text
+
+
+def test_append_operationalization_event_writes_jsonl(
+    tmp_path: Path,
+) -> None:
+    research_dir = tmp_path / "research_runs" / "her_demo"
+
+    event = append_operationalization_event(
+        research_dir,
+        event_type="source_selected",
+        summary="Selected the HER tutorial example.",
+        artifact_paths=["research_runs/her_demo/initial_prompt.md"],
+        source_urls=[
+            "https://github.com/zwyu-ai/BO-Tutorial-for-Sci/blob/main/examples/HER"
+        ],
+    )
+
+    log_path = research_dir / "operationalization_log.jsonl"
+    lines = log_path.read_text(encoding="utf-8").splitlines()
+    assert len(lines) == 1
+    assert json.loads(lines[0]) == event
 
 
 def test_validate_open_world_research_run_contract(

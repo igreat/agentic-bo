@@ -1,10 +1,11 @@
-"""Helpers for validating open-world research-agent evidence packages."""
+"""Helpers for scaffolding and validating open-world research-agent runs."""
 
 from __future__ import annotations
 
 import json
 from pathlib import Path
 from typing import Any
+from datetime import datetime, timezone
 
 
 REQUIRED_OPEN_WORLD_FILES = (
@@ -53,6 +54,13 @@ REQUIRED_OPERATIONALIZATION_EVENT_FIELDS = (
 )
 
 
+def utc_now_iso() -> str:
+    return datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace(
+        "+00:00",
+        "Z",
+    )
+
+
 def _load_json(path: Path) -> dict[str, Any]:
     return json.loads(path.read_text(encoding="utf-8"))
 
@@ -86,6 +94,102 @@ def _resolve_artifact_path(research_dir: Path, raw_path: str | None) -> Path | N
             return resolved
 
     return search_roots[0] / candidate
+
+
+def scaffold_open_world_research_dir(research_dir: Path) -> dict[str, Path]:
+    """Create the standard directory/file scaffold for an open-world run."""
+    research_dir = research_dir.resolve()
+    research_dir.mkdir(parents=True, exist_ok=True)
+    verification_dir = research_dir / "verification_artifacts"
+    verification_dir.mkdir(parents=True, exist_ok=True)
+    log_path = research_dir / "operationalization_log.jsonl"
+    if not log_path.exists():
+        log_path.write_text("", encoding="utf-8")
+    return {
+        "research_dir": research_dir,
+        "verification_dir": verification_dir,
+        "operationalization_log_path": log_path,
+        "initial_prompt_path": research_dir / "initial_prompt.md",
+        "search_space_path": research_dir / "discovered_search_space.json",
+        "evaluator_path": research_dir / "evaluator.py",
+    }
+
+
+def write_initial_prompt(
+    research_dir: Path,
+    *,
+    prompt_text: str,
+    nudge_tier: str,
+    nudge_text: str | None = None,
+) -> Path:
+    """Write the exact prompt/nudge text shown to the agent."""
+    paths = scaffold_open_world_research_dir(research_dir)
+    prompt_path = paths["initial_prompt_path"]
+    blocks = [
+        f"# Initial Prompt",
+        "",
+        f"**Nudge Tier:** {nudge_tier}",
+        "",
+        "## Prompt",
+        "",
+        prompt_text.rstrip(),
+    ]
+    if nudge_text:
+        blocks.extend(["", "## Nudge", "", nudge_text.rstrip()])
+    prompt_path.write_text("\n".join(blocks) + "\n", encoding="utf-8")
+    return prompt_path
+
+
+def build_operationalization_event(
+    *,
+    event_type: str,
+    summary: str,
+    artifact_paths: list[str],
+    source_urls: list[str] | None = None,
+    reason: str | None = None,
+    timestamp: str | None = None,
+) -> dict[str, Any]:
+    """Construct and validate one operationalization event object."""
+    event = {
+        "timestamp": timestamp or utc_now_iso(),
+        "event_type": event_type,
+        "summary": summary,
+        "artifact_paths": artifact_paths,
+    }
+    if source_urls is not None:
+        event["source_urls"] = source_urls
+    if reason is not None:
+        event["reason"] = reason
+
+    errors = validate_operationalization_events([event])
+    if errors:
+        raise ValueError("; ".join(errors))
+    return event
+
+
+def append_operationalization_event(
+    research_dir: Path,
+    *,
+    event_type: str,
+    summary: str,
+    artifact_paths: list[str],
+    source_urls: list[str] | None = None,
+    reason: str | None = None,
+    timestamp: str | None = None,
+) -> dict[str, Any]:
+    """Append one validated event to operationalization_log.jsonl."""
+    paths = scaffold_open_world_research_dir(research_dir)
+    event = build_operationalization_event(
+        event_type=event_type,
+        summary=summary,
+        artifact_paths=artifact_paths,
+        source_urls=source_urls,
+        reason=reason,
+        timestamp=timestamp,
+    )
+    with paths["operationalization_log_path"].open("a", encoding="utf-8") as handle:
+        handle.write(json.dumps(event) + "\n")
+    return event
 
 
 def validate_operationalization_events(

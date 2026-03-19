@@ -44,6 +44,11 @@ It should define:
 Use [`templates/open_world_operator_spec.template.json`](/Users/mujtabaalajmi/Documents/agentic-bo/bo-fun/benchmarks/templates/open_world_operator_spec.template.json)
 as the starting point.
 
+A concrete example now lives under:
+
+- [`open_world_cases/her/agent_prompt.md`](/Users/mujtabaalajmi/Documents/agentic-bo/bo-fun/benchmarks/open_world_cases/her/agent_prompt.md)
+- [`open_world_cases/her/operator_spec.json`](/Users/mujtabaalajmi/Documents/agentic-bo/bo-fun/benchmarks/open_world_cases/her/operator_spec.json)
+
 ### 3. Run evidence package
 
 Every scored open-world run must leave behind:
