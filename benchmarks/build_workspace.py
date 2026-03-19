@@ -55,14 +55,16 @@ def load_json(path: Path) -> dict:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
-def benchmark_claude_settings() -> dict:
-    return {
+def benchmark_claude_settings(*, allow_web: bool) -> dict:
+    settings = {
         "defaultMode": "acceptEdits",
         "permissions": {
             "allow": ["Bash"],
-            "deny": ["WebSearch", "WebFetch"],
         },
     }
+    if not allow_web:
+        settings["permissions"]["deny"] = ["WebSearch", "WebFetch"]
+    return settings
 
 
 def write_json(path: Path, payload: dict) -> None:
@@ -125,14 +127,10 @@ def build_workspace(
     for rel_path in PUBLIC_ROOT_DIRS:
         copy_tree(root / rel_path, output_dir / rel_path, COPYTREE_IGNORE)
 
-    write_json(
-        output_dir / ".claude" / "settings.local.json",
-        benchmark_claude_settings(),
-    )
-
     public_tasks_root = output_dir / "tasks"
     public_tasks_root.mkdir(parents=True, exist_ok=True)
     public_backends_root = output_dir / "evaluation_backends"
+    allow_web = False
 
     for task_id in task_ids:
         src = tasks_root / task_id
@@ -142,6 +140,9 @@ def build_workspace(
         copy_tree(src, dst, PUBLIC_TASK_IGNORE)
 
         manifest = load_json(dst / "task_manifest.json")
+        allow_web = allow_web or bool(
+            manifest.get("workspace", {}).get("allow_web", False)
+        )
         backend_id = manifest.get("evaluation", {}).get("backend_id")
         if backend_id:
             source_backend = source_backends_root / backend_id
@@ -151,6 +152,11 @@ def build_workspace(
                     public_backends_root / backend_id,
                     COPYTREE_IGNORE,
                 )
+
+    write_json(
+        output_dir / ".claude" / "settings.local.json",
+        benchmark_claude_settings(allow_web=allow_web),
+    )
 
     (output_dir / "bo_runs").mkdir(parents=True, exist_ok=True)
     (output_dir / "research_runs").mkdir(parents=True, exist_ok=True)
