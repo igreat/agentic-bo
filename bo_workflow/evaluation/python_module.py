@@ -1,4 +1,9 @@
-"""Run BO against a locally written Python evaluator module."""
+"""Run BO against a locally written Python evaluator module.
+
+TODO: after the first working open-world Claude runs, fold this into the
+backend-id flow via a persisted `backend_kind="python_module"` backend shape so
+`run-evaluator --backend-id ...` becomes the normalized evaluator entrypoint.
+"""
 
 import importlib.util
 from pathlib import Path

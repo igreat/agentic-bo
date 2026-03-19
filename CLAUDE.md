@@ -36,7 +36,7 @@ bo_workflow/
   plotting.py     # convergence plot generation
   utils.py        # RunPaths, JSON I/O, shared types
   evaluation/
-    cli.py        # CLI subcommands: build-oracle, run-proxy, run-evaluator
+    cli.py        # CLI subcommands: build-oracle, run-proxy, run-evaluator, run-python-evaluator
     oracle.py     # standalone proxy backend — train from run config, persist under evaluation_backends/
     proxy.py      # ProxyObserver — self-contained, captures backend_dir at init
     __main__.py   # optional evaluation-only module entrypoint
@@ -75,9 +75,9 @@ data/
     scientific-writing/     # IMRAD-style drafting from workflow artifacts
 .claude/
   skills/
-    research-agent/         # mirrored Claude skill tree
-    literature-review/      # mirrored Claude literature helper
-    scientific-writing/     # mirrored Claude writing helper
+    research-agent/         # primary Claude workflow skill tree
+    literature-review/      # primary Claude literature helper
+    scientific-writing/     # primary Claude writing helper
 research_runs/
   <research_id>/
     research_state.json     # machine-readable research workflow state
@@ -95,7 +95,9 @@ research_runs/
 - **Converters are standalone.** Each converter has its own `__main__`-style CLI (`python -m bo_workflow.converters.reaction_drfp`). They transform data before/after the BO loop but do not depend on the engine or oracle.
 - **Constraints are search-space properties.** `constraints/` is the enforcement layer — each `Constraint` subclass receives raw suggestions from the optimizer and projects them into the feasible region via `apply()`. Constraints are stored in `state.json["constraints"]` and enforced at every `suggest` call. The agent is responsible for inferring constraints from the user's problem description (e.g. "proportions sum to 100%") and passing them via `--simplex-groups`; the engine never auto-detects them.
 
-Skills in `.agents/skills/` and `.claude/skills/` are kept in sync. The BO engine is the source of truth for optimization behavior; skills are the agent-facing orchestration layer on top of it. `research-agent` is the top-level skill, while the BO skills are lower-level execution helpers.
+The BO engine is the source of truth for optimization behavior; skills are the agent-facing orchestration layer on top of it. `research-agent` is the top-level skill, while the BO skills are lower-level execution helpers.
+
+For the current HER-first workflow push, `CLAUDE.md` and `.claude/skills/` are the primary target. The `.agents/` skill tree may temporarily lag while the Claude workflow is being refined.
 
 ## Top-Level Workflows
 
@@ -112,6 +114,7 @@ Use `research-agent` when the user wants an end-to-end study workflow:
 - initializes a run
 - continues through `suggest` / `observe` / `report`
 - does not need to know whether observations come from a user, a real experiment loop, or an external benchmark evaluator
+- when a local evaluator already exists as part of the workflow, it may run BO against that evaluator with `run-python-evaluator`
 
 Use the BO skills directly when the user wants only the optimization subsystem:
 - `bo-execution-workflow` for a resolved BO-layer setup/execution handoff
@@ -122,6 +125,11 @@ Use the BO skills directly when the user wants only the optimization subsystem:
 ## Script-first policy
 
 - Before writing ad-hoc one-off scripts, check `bo_workflow/scripts/` and prefer existing scripts when they already cover the task.
+- If existing tooling is not a good fit, Claude may write run-local helper scripts under `research_runs/<research_id>/scripts/`.
+- The default location for a run-local evaluator is `research_runs/<research_id>/scripts/evaluator.py`.
+- For one-off run-local needs, Claude may install minimal extra dependencies with `uv pip install ...`.
+- Do not edit project dependency files for one-off run-local needs.
+- Record dependency installs and important helper artifacts in the research run artifacts.
 - For explicit optimizer benchmarking/comparison requests, use:
 
 ```bash
@@ -171,6 +179,11 @@ Each evaluation backend produces files under `evaluation_backends/<backend_id>/`
 | `oracle.pkl` | `build-oracle` |
 | `oracle_meta.json` | `build-oracle` |
 
+Deferred design note:
+- after the first working open-world Claude runs, consider normalizing all evaluator entrypoints behind `evaluation_backends/<backend_id>/`
+- the intended direction is a backend-kind model (for example `proxy_oracle` and `python_module`) so `run-evaluator --backend-id ...` becomes the common interface
+- do not prioritize this over the first end-to-end HER success case
+
 ## Research Run Artifacts
 
 Each top-level research workflow produces files under `research_runs/<research_id>/`:
@@ -193,6 +206,7 @@ All commands: `uv run python -m bo_workflow.cli <command> [flags]`
 | `observe` | `--run-id --data` (req) | Record real/simulated results |
 | `run-proxy` | `--run-id --iterations` (req), `--backend-id --batch-size` (opt) | Full proxy BO loop |
 | `run-evaluator` | `--run-id --backend-id --iterations` (req), `--batch-size` (opt) | Operator-owned hidden evaluation loop over `suggest` / `observe` |
+| `run-python-evaluator` | `--run-id --module-path --iterations` (req), `--function --batch-size` (opt) | Run BO against a local Python evaluator module |
 | `status` | `--run-id` (req) | Quick run summary |
 | `report` | `--run-id` (req) | Full report + convergence plot |
 

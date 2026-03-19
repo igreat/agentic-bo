@@ -32,6 +32,8 @@ Generate `research_id` as a short slug from the system and date, e.g. `oer_calte
 - `research_plan.md`: human-readable lab notebook
 - `paper.md`: final draft written in Phase 6
 
+These are the only required core artifacts. Any additional supporting files should be optional and discoverable through `research_state.json.run_artifacts`. When helper code is needed, the default run-local location is `research_runs/<research_id>/scripts/`.
+
 Use this `research_state.json` shape in v1:
 
 ```json
@@ -49,7 +51,13 @@ Use this `research_state.json` shape in v1:
     "key_variables": [],
     "known_constraints": [],
     "source_urls": [],
-    "summary": ""
+    "summary": "",
+    "computable_candidates": []
+  },
+  "run_artifacts": {
+    "scripts_dir": null,
+    "extra_paths": [],
+    "dependency_installs": []
   },
   "experiment_spec": {
     "target_column": null,
@@ -122,7 +130,13 @@ Otherwise, delegate to the `literature-review` skill. Pass:
 
 Receive back the structured `literature_findings` JSON and write it into `research_state.json`.
 
-For closed-world benchmark runs:
+By default, treat literature search as web-enabled and open-world:
+
+- browse for computable evaluator paths in papers, equations, code, tutorials, repositories, docs, or reproducible algorithms
+- identify the required inputs, design variables, and operational assumptions before worrying about broad baseline coverage
+- use baselines as lightweight context, not the primary output of the search
+
+Treat local-packet mode as the closed-world/control exception:
 
 - use only the local packet from the task bundle when present
 - do not browse the web
@@ -149,6 +163,14 @@ Rules:
   - target measurement to optimize
   - likely physical or chemical constraints
 - Present that draft as a recommendation for the user to confirm or edit before BO init.
+- Prefer existing repo tooling when it genuinely fits, but do not force a poor fit.
+- If helper code is needed, create `research_runs/<research_id>/scripts/` and put ad hoc converters, preprocessors, evaluator modules, plotting scripts, scraping helpers, and other one-off utilities there.
+- If a local evaluator is produced, use `research_runs/<research_id>/scripts/evaluator.py` by default.
+- If a local BO search-space file is produced, use `research_runs/<research_id>/search_space.json` by default.
+- If a minimal missing dependency is blocking progress, install it with `uv pip install <pkg>` rather than editing project dependency files.
+- Record run-local helper code and supporting outputs in `run_artifacts.extra_paths`.
+- Record dependency installs in `run_artifacts.dependency_installs` as objects with `packages`, `command`, and `reason`.
+- Set `run_artifacts.scripts_dir` when a run-local scripts directory is used.
 
 Delegate the BO-layer setup to `bo-execution-workflow`. That skill owns:
 - dataset validation when a dataset is present
@@ -193,16 +215,14 @@ Do not re-run Phase 3 setup during Phase 4. In particular:
 
 If the user or operator explicitly provides a `backend_id` for external evaluation, `bo-run-evaluator` is an acceptable way to automate the suggest/observe loop. It is still not acceptable to build the backend from inside `research-agent`.
 
-If a benchmark task bundle provides a prebuilt `evaluation.backend_id`, it is
-acceptable to automate Phase 4 directly with `run-evaluator` against the
-backend copied into the public workspace.
+If a benchmark task bundle provides a prebuilt `evaluation.backend_id`, it is acceptable to automate Phase 4 directly with `run-evaluator` against the backend copied into the public workspace.
 
 If Phase 3 produced a local evaluator module, automate Phase 4 with:
 
 ```bash
 uv run python -m bo_workflow.cli run-python-evaluator \
   --run-id <BO_RUN_ID> \
-  --module-path research_runs/<research_id>/evaluator.py \
+  --module-path research_runs/<research_id>/scripts/evaluator.py \
   --iterations <BUDGET> \
   --batch-size <N>
 ```
@@ -254,6 +274,7 @@ After the paper is written, perform a final consistency pass before declaring th
 - ensure any detailed trajectory claims match `report.json["trajectory"]` when that field is present
 - ensure human-facing iteration numbering in `research_plan.md` and `paper.md` uses `best_observation_number` when available rather than the zero-based `best_iteration`
 - ensure oracle provenance language stays artifact-backed; do not let the paper imply a post-hoc fit unless an artifact explicitly says that
+- if optional supporting files, helper scripts, or dependency installs materially affected the run, ensure they are reflected in `run_artifacts` and described in `research_plan.md`
 - if any artifact is stale or contradictory, fix it before marking the run complete
 
 ## Resuming

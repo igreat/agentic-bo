@@ -37,6 +37,7 @@ Choose the output format that best matches the request:
 ### Optional inputs
 - literature sources gathered earlier
 - repo docs describing run structure or oracle setup
+- optional supporting files referenced in `research_state.json.run_artifacts.extra_paths` when they materially help explain the workflow or result
 
 ---
 
@@ -99,6 +100,7 @@ Write an IMRAD-style paper with these sections:
 - Describe the BO engine and relevant configuration (surrogate model, acquisition function, batch size).
 - State how observations were obtained based on the available artifacts.
 - Describe oracle provenance only from what the artifacts explicitly say. If `report.json` exposes oracle metadata but not training timing, describe it as backend-reported or artifact-reported oracle metadata rather than claiming it was fitted post hoc.
+- If run-local helper scripts or dependency installs materially affected the setup, state that briefly and describe only what was actually supported by the artifacts.
 - **If proxy-backed evaluation:** report the proxy oracle CV RMSE and note that outcomes reflect surrogate predictions, not direct measurements.
 - Reference the convergence plot at `bo_runs/<run_id>/convergence.pdf` if it exists.
 
@@ -117,6 +119,7 @@ Write an IMRAD-style paper with these sections:
 - Interpret the result chemically or materially — why might this composition or condition work?
 - Compare against the literature baselines from `literature_findings.baselines` if available.
 - State important caveats: oracle error when applicable, dataset coverage when applicable, and any gap between simulated/externally observed evidence and real experiments.
+- If optional supporting artifacts in `run_artifacts.extra_paths` materially informed the workflow or the caveats, Claude may cite them, but they are not required inputs.
 
 **If literature review was skipped:**
 - keep the Discussion grounded in the BO trajectory, candidate composition, oracle uncertainty, and simulation limitations
@@ -134,6 +137,7 @@ Write an IMRAD-style paper with these sections:
 - If evidence is weak (high oracle RMSE, few iterations, narrow dataset), say so directly.
 - Keep references lightweight in v1; plain links or compact citations are enough.
 - Keep the writing tied to the actual artifacts rather than generic BO boilerplate.
+- Do not assume any rigid supporting artifact set beyond `research_state.json`, `research_plan.md`, `paper.md`, and the BO artifacts actually provided.
 - Do not invent fine-grained numeric trajectory details from memory. If exact ranges or iteration-level numbers are not explicitly supported by `report.json` or `observations.jsonl`, leave them out.
 - Do not infer oracle training timing or methodology unless it is explicitly stated in the artifacts.
 - If `report.json["oracle"]["source"]` says the metadata came from the evaluation backend, describe it as backend-reported oracle metadata rather than implying a fresh model fit after the run.
