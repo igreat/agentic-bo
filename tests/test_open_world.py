@@ -140,6 +140,18 @@ def test_validate_open_world_research_run_contract(
                 "research_runs/her_demo/evaluator.py",
             ],
         },
+        {
+            "timestamp": "2026-03-19T20:16:00Z",
+            "event_type": "bo_started",
+            "summary": "Started the reported BO run.",
+            "artifact_paths": ["bo_runs/her_demo_bo/state.json"],
+        },
+        {
+            "timestamp": "2026-03-19T20:17:00Z",
+            "event_type": "bo_completed",
+            "summary": "Completed the reported BO run.",
+            "artifact_paths": ["bo_runs/her_demo_bo/report.json"],
+        },
     ]
     _write(
         research_dir / "operationalization_log.jsonl",
@@ -184,6 +196,135 @@ def test_validate_open_world_research_run_contract(
     )
 
     assert validate_open_world_research_run(research_dir) == []
+
+
+def test_validate_open_world_research_run_requires_setup_frozen_event_for_frozen_state(
+    tmp_path: Path,
+) -> None:
+    research_dir = tmp_path / "research_runs" / "her_demo"
+    verification_path = research_dir / "verification_artifacts" / "volcano.png"
+
+    _write(research_dir / "research_plan.md", "# plan\n")
+    _write(research_dir / "paper.md", "# paper\n")
+    _write(research_dir / "initial_prompt.md", "Discover a useful HER evaluator.\n")
+    _write(research_dir / "discovered_search_space.json", "{}\n")
+    _write(research_dir / "evaluator.py", "def evaluate(x):\n    return 1.0\n")
+    _write(verification_path, "fake-image\n")
+    _write(
+        research_dir / "operationalization_log.jsonl",
+        json.dumps(
+            {
+                "timestamp": "2026-03-19T20:00:00Z",
+                "event_type": "source_selected",
+                "summary": "Selected HER tutorial source.",
+                "artifact_paths": ["research_runs/her_demo/initial_prompt.md"],
+            }
+        )
+        + "\n",
+    )
+    _write(
+        research_dir / "research_state.json",
+        json.dumps(
+            {
+                "research_id": "her_demo",
+                "research_question": "Discover a useful HER setup.",
+                "open_world": {
+                    "nudge_tier": "N0",
+                    "prompt_path": "research_runs/her_demo/initial_prompt.md",
+                    "source_urls": [
+                        "https://github.com/zwyu-ai/BO-Tutorial-for-Sci/blob/main/examples/HER"
+                    ],
+                    "discovered_search_space_path": "research_runs/her_demo/discovered_search_space.json",
+                    "evaluator_module_path": "research_runs/her_demo/evaluator.py",
+                    "helper_script_paths": [],
+                    "verification_artifacts": [
+                        "research_runs/her_demo/verification_artifacts/volcano.png"
+                    ],
+                    "dependency_installs": [],
+                    "approach_revisions": [],
+                    "final_setup_frozen": True,
+                },
+            },
+            indent=2,
+        )
+        + "\n",
+    )
+
+    errors = validate_open_world_research_run(research_dir)
+
+    assert any("missing setup_frozen event" in error for error in errors)
+
+
+def test_validate_open_world_research_run_requires_frozen_setup_before_bo_started(
+    tmp_path: Path,
+) -> None:
+    research_dir = tmp_path / "research_runs" / "her_demo"
+    verification_path = research_dir / "verification_artifacts" / "volcano.png"
+
+    _write(research_dir / "research_plan.md", "# plan\n")
+    _write(research_dir / "paper.md", "# paper\n")
+    _write(research_dir / "initial_prompt.md", "Discover a useful HER evaluator.\n")
+    _write(research_dir / "discovered_search_space.json", "{}\n")
+    _write(research_dir / "evaluator.py", "def evaluate(x):\n    return 1.0\n")
+    _write(verification_path, "fake-image\n")
+    _write(
+        research_dir / "operationalization_log.jsonl",
+        "\n".join(
+            [
+                json.dumps(
+                    {
+                        "timestamp": "2026-03-19T20:00:00Z",
+                        "event_type": "bo_started",
+                        "summary": "Started BO too early.",
+                        "artifact_paths": ["bo_runs/her_demo_bo/state.json"],
+                    }
+                ),
+                json.dumps(
+                    {
+                        "timestamp": "2026-03-19T20:01:00Z",
+                        "event_type": "setup_frozen",
+                        "summary": "Froze the setup only after BO had started.",
+                        "artifact_paths": [
+                            "research_runs/her_demo/discovered_search_space.json",
+                            "research_runs/her_demo/evaluator.py",
+                        ],
+                    }
+                ),
+            ]
+        )
+        + "\n",
+    )
+    _write(
+        research_dir / "research_state.json",
+        json.dumps(
+            {
+                "research_id": "her_demo",
+                "research_question": "Discover a useful HER setup.",
+                "open_world": {
+                    "nudge_tier": "N0",
+                    "prompt_path": "research_runs/her_demo/initial_prompt.md",
+                    "source_urls": [
+                        "https://github.com/zwyu-ai/BO-Tutorial-for-Sci/blob/main/examples/HER"
+                    ],
+                    "discovered_search_space_path": "research_runs/her_demo/discovered_search_space.json",
+                    "evaluator_module_path": "research_runs/her_demo/evaluator.py",
+                    "helper_script_paths": [],
+                    "verification_artifacts": [
+                        "research_runs/her_demo/verification_artifacts/volcano.png"
+                    ],
+                    "dependency_installs": [],
+                    "approach_revisions": [],
+                    "final_setup_frozen": True,
+                },
+            },
+            indent=2,
+        )
+        + "\n",
+    )
+
+    errors = validate_open_world_research_run(research_dir)
+
+    assert any("setup_frozen must occur before bo_started" in error for error in errors)
 
 
 def test_validate_open_world_operator_spec_accepts_expected_shape(

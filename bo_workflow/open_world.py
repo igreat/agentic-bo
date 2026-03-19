@@ -425,7 +425,44 @@ def validate_open_world_research_run(
                 )
 
     log_path = research_dir / "operationalization_log.jsonl"
-    errors.extend(validate_operationalization_log(log_path))
+    log_errors = validate_operationalization_log(log_path)
+    errors.extend(log_errors)
+    if not log_errors:
+        events = _load_jsonl(log_path)
+        setup_frozen_indices = [
+            index
+            for index, event in enumerate(events)
+            if event.get("event_type") == "setup_frozen"
+        ]
+        bo_started_indices = [
+            index
+            for index, event in enumerate(events)
+            if event.get("event_type") == "bo_started"
+        ]
+        bo_completed_indices = [
+            index
+            for index, event in enumerate(events)
+            if event.get("event_type") == "bo_completed"
+        ]
+
+        if open_world.get("final_setup_frozen") is True and not setup_frozen_indices:
+            errors.append(
+                "operationalization_log.jsonl: missing setup_frozen event for a frozen final setup"
+            )
+        if bo_started_indices and not any(
+            setup_index < bo_started_indices[0]
+            for setup_index in setup_frozen_indices
+        ):
+            errors.append(
+                "operationalization_log.jsonl: setup_frozen must occur before bo_started"
+            )
+        if bo_completed_indices and not any(
+            start_index < bo_completed_indices[0]
+            for start_index in bo_started_indices
+        ):
+            errors.append(
+                "operationalization_log.jsonl: bo_started must occur before bo_completed"
+            )
     return errors
 
 
