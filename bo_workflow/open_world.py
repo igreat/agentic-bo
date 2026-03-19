@@ -107,6 +107,123 @@ def _resolve_artifact_path(research_dir: Path, raw_path: str | None) -> Path | N
     return search_roots[0] / candidate
 
 
+def _default_research_state(research_dir: Path) -> dict[str, Any]:
+    research_id = research_dir.name
+    rel_prefix = Path("research_runs") / research_id
+    return {
+        "research_id": research_id,
+        "research_question": None,
+        "system": None,
+        "objective_property": None,
+        "objective_direction": None,
+        "dataset_path": None,
+        "prior_observations_path": None,
+        "bo_run_id": None,
+        "literature_findings": {
+            "baselines": [],
+            "key_variables": [],
+            "known_constraints": [],
+            "source_urls": [],
+            "summary": "",
+        },
+        "open_world": {
+            "nudge_tier": None,
+            "prompt_path": str(rel_prefix / "initial_prompt.md"),
+            "source_urls": [],
+            "discovered_search_space_path": str(
+                rel_prefix / "discovered_search_space.json"
+            ),
+            "evaluator_module_path": str(rel_prefix / "evaluator.py"),
+            "helper_script_paths": [],
+            "verification_artifacts": [],
+            "dependency_installs": [],
+            "approach_revisions": [],
+            "final_setup_frozen": False,
+        },
+        "experiment_spec": {
+            "target_column": None,
+            "design_parameters": [],
+            "fixed_features": {},
+            "constraints": [],
+            "seed_observations_count": 0,
+        },
+        "bo_results": {
+            "best_value": None,
+            "best_x": None,
+            "best_iteration": None,
+            "num_observations": None,
+            "oracle_model": None,
+            "oracle_rmse": None,
+            "report_path": None,
+            "convergence_plot_path": None,
+        },
+        "paper_path": str(rel_prefix / "paper.md"),
+        "phases": {
+            "problem_framing": "pending",
+            "literature_search": "pending",
+            "experiment_setup": "pending",
+            "bo_execution": "pending",
+            "interpretation": "pending",
+            "paper_writing": "pending",
+        },
+    }
+
+
+def _ensure_file(path: Path, content: str) -> None:
+    if not path.exists():
+        path.write_text(content, encoding="utf-8")
+
+
+def _research_plan_template() -> str:
+    return (
+        "# Research Plan\n\n"
+        "## Research Question\n\n"
+        "TODO\n\n"
+        "## Problem Framing\n\n"
+        "TODO\n\n"
+        "## Literature Context\n\n"
+        "TODO\n\n"
+        "## Experiment Design\n\n"
+        "TODO\n\n"
+        "## BO Results\n\n"
+        "TODO\n\n"
+        "## Interpretation\n\n"
+        "TODO\n\n"
+        "## Paper Draft Link\n\n"
+        "TODO\n"
+    )
+
+
+def _paper_template() -> str:
+    return "# Paper Draft\n\nTODO\n"
+
+
+def _prompt_template() -> str:
+    return (
+        "# Initial Prompt\n\n"
+        "**Nudge Tier:** TODO\n\n"
+        "## Prompt\n\n"
+        "TODO: record the exact prompt shown to the agent.\n"
+    )
+
+
+def _search_space_template() -> str:
+    payload = {
+        "design_parameters": [],
+        "fixed_features": {},
+        "constraints": [],
+    }
+    return json.dumps(payload, indent=2) + "\n"
+
+
+def _evaluator_template() -> str:
+    return (
+        '"""Run-local open-world evaluator stub."""\n\n'
+        "def evaluate(x):\n"
+        '    raise NotImplementedError("Replace this stub with the discovered evaluator.")\n'
+    )
+
+
 def scaffold_open_world_research_dir(research_dir: Path) -> dict[str, Path]:
     """Create the standard directory/file scaffold for an open-world run."""
     research_dir = research_dir.resolve()
@@ -116,10 +233,27 @@ def scaffold_open_world_research_dir(research_dir: Path) -> dict[str, Path]:
     log_path = research_dir / "operationalization_log.jsonl"
     if not log_path.exists():
         log_path.write_text("", encoding="utf-8")
+
+    _ensure_file(
+        research_dir / "research_state.json",
+        json.dumps(_default_research_state(research_dir), indent=2) + "\n",
+    )
+    _ensure_file(research_dir / "research_plan.md", _research_plan_template())
+    _ensure_file(research_dir / "paper.md", _paper_template())
+    _ensure_file(research_dir / "initial_prompt.md", _prompt_template())
+    _ensure_file(
+        research_dir / "discovered_search_space.json",
+        _search_space_template(),
+    )
+    _ensure_file(research_dir / "evaluator.py", _evaluator_template())
+
     return {
         "research_dir": research_dir,
         "verification_dir": verification_dir,
         "operationalization_log_path": log_path,
+        "research_state_path": research_dir / "research_state.json",
+        "research_plan_path": research_dir / "research_plan.md",
+        "paper_path": research_dir / "paper.md",
         "initial_prompt_path": research_dir / "initial_prompt.md",
         "search_space_path": research_dir / "discovered_search_space.json",
         "evaluator_path": research_dir / "evaluator.py",

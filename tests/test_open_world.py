@@ -71,7 +71,15 @@ def test_scaffold_and_prompt_helpers_create_expected_open_world_artifacts(
 
     assert paths["verification_dir"].is_dir()
     assert paths["operationalization_log_path"].exists()
+    assert paths["research_state_path"].exists()
+    assert paths["research_plan_path"].exists()
+    assert paths["paper_path"].exists()
+    assert paths["search_space_path"].exists()
+    assert paths["evaluator_path"].exists()
     assert prompt_path.exists()
+    state = json.loads(paths["research_state_path"].read_text(encoding="utf-8"))
+    assert state["research_id"] == "her_demo"
+    assert state["open_world"]["prompt_path"] == "research_runs/her_demo/initial_prompt.md"
     prompt_text = prompt_path.read_text(encoding="utf-8")
     assert "**Nudge Tier:** N0" in prompt_text
     assert "Find a useful HER setup and optimize it." in prompt_text
@@ -380,6 +388,11 @@ def test_open_world_cli_scaffold_creates_expected_structure(
     assert exit_code == 0
     assert (research_dir / "verification_artifacts").is_dir()
     assert (research_dir / "operationalization_log.jsonl").exists()
+    assert (research_dir / "research_state.json").exists()
+    assert (research_dir / "research_plan.md").exists()
+    assert (research_dir / "paper.md").exists()
+    assert (research_dir / "discovered_search_space.json").exists()
+    assert (research_dir / "evaluator.py").exists()
 
 
 def test_open_world_cli_write_prompt_creates_initial_prompt(
