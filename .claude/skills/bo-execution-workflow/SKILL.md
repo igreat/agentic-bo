@@ -159,6 +159,7 @@ uv run python -m bo_workflow.cli init \
 ```
 
 When this skill is used under `research-agent`, serialize `experiment_spec` into the `--search-space-json` input rather than relying on a labeled dataset.
+If `experiment_spec.bo_engine` is already set upstream, pass it through as `--engine <ENGINE>` during `init` rather than falling back to the default engine.
 
 Extract `run_id` from the JSON output.
 

@@ -52,7 +52,14 @@ Use this `research_state.json` shape in v1:
     "known_constraints": [],
     "source_urls": [],
     "summary": "",
-    "computable_candidates": []
+    "computable_candidates": [],
+    "evaluator_profile": {
+      "mode": "lookup | surrogate | live_simulation | unknown",
+      "evaluation_cost": "cheap | moderate | expensive",
+      "stability_risk": "low | medium | high",
+      "requires_run_local_setup": false,
+      "why": ""
+    }
   },
   "run_artifacts": {
     "scripts_dir": null,
@@ -64,7 +71,8 @@ Use this `research_state.json` shape in v1:
     "design_parameters": [],
     "fixed_features": {},
     "constraints": [],
-    "seed_observations_count": 0
+    "seed_observations_count": 0,
+    "bo_engine": null
   },
   "bo_results": {
     "best_value": null,
@@ -135,6 +143,8 @@ By default, treat literature search as web-enabled and open-world:
 - browse for computable evaluator paths in papers, equations, code, tutorials, repositories, docs, or reproducible algorithms
 - identify the required inputs, design variables, and operational assumptions before worrying about broad baseline coverage
 - use baselines as lightweight context, not the primary output of the search
+- if the user explicitly asked for a real DFT-style or first-principles evaluator, use literature to recover the workflow and constraints, not to replace the evaluator with a lookup-table surrogate
+- make sure `literature_findings.evaluator_profile` clearly says whether the path is a lookup, surrogate, or live simulation and how costly/risky it looks
 
 Treat local-packet mode as the closed-world/control exception:
 
@@ -145,6 +155,11 @@ Treat local-packet mode as the closed-world/control exception:
 ### 3. Experiment Setup
 
 Use the framed problem plus literature findings to define the experiment.
+
+Treat Phase 3 as two internal steps when the evaluator path is nontrivial:
+
+- **Phase 3A: Evaluator/Search-Space Design**
+- **Phase 3B: BO Setup**
 
 Rules:
 - Treat the dataset as supporting evidence, not the canonical source of semantics.
@@ -171,6 +186,26 @@ Rules:
 - Record run-local helper code and supporting outputs in `run_artifacts.extra_paths`.
 - Record dependency installs in `run_artifacts.dependency_installs` as objects with `packages`, `command`, and `reason`.
 - Set `run_artifacts.scripts_dir` when a run-local scripts directory is used.
+- If the user explicitly asked for a real DFT-style or first-principles evaluator, do not replace it with a literature lookup or pre-tabulated surrogate unless the user explicitly approves that fallback.
+
+Routing rule:
+- invoke the `evaluator-design` skill before BO init when any of these are true:
+  - `literature_findings.evaluator_profile.mode` is `live_simulation`
+  - `literature_findings.evaluator_profile.requires_run_local_setup` is `true`
+  - the user explicitly asked for a first-principles or simulator-backed evaluator
+  - the search space is still unresolved after literature review
+  - `literature_findings.evaluator_profile.mode` is not `lookup` and either:
+    - `literature_findings.evaluator_profile.stability_risk` is `high`
+    - `literature_findings.evaluator_profile.evaluation_cost` is `expensive`
+
+When `evaluator-design` is invoked:
+- treat that as **Phase 3A**
+- require a stabilized setup recommendation before BO init
+- record calibration points, failures, pruned choices, and engine rationale in `research_plan.md`
+- write the recommended engine into `research_state.json.experiment_spec.bo_engine`
+
+When `evaluator-design` is not needed:
+- skip directly to **Phase 3B**
 
 Delegate the BO-layer setup to `bo-execution-workflow`. That skill owns:
 - dataset validation when a dataset is present

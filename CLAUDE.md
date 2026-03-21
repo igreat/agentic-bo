@@ -76,6 +76,7 @@ data/
 .claude/
   skills/
     research-agent/         # primary Claude workflow skill tree
+    evaluator-design/       # expensive/fragile evaluator setup before BO
     literature-review/      # primary Claude literature helper
     scientific-writing/     # primary Claude writing helper
 research_runs/
@@ -104,6 +105,7 @@ For the current HER-first workflow push, `CLAUDE.md` and `.claude/skills/` are t
 Use `research-agent` when the user wants an end-to-end study workflow:
 - problem framing
 - optional literature review
+- evaluator/search-space design when needed
 - experiment setup
 - BO execution
 - interpretation
@@ -149,6 +151,26 @@ uv run python -m bo_workflow.scripts.egfr_ic50_global_experiment \
 
 - **Long-running scripts** (EGFR experiments, compare scripts with >1 repeat) can take 10–30+ minutes. Always run them with `run_in_background=true` in the Bash tool — do not use a fixed timeout, there is no safe upper bound.
 - Only create a new script if no existing command/script fits the request. If creating one, keep it reusable and place it under `bo_workflow/scripts/`.
+
+## First-Principles Evaluators
+
+When the user explicitly asks for a real DFT-style or first-principles evaluator:
+
+- Do not satisfy the request with a literature lookup table, pre-tabulated values, or other surrogate unless the user explicitly allows that fallback.
+- Treat search-space stability as part of the scientific setup, not as an afterthought.
+- Start with a narrow calibration subset of representative candidates before committing to the final BO search space.
+- Prefer stable metals, facets, and adsorption sites over broader but fragile families for the first working pass.
+- Distinguish candidate-local failures from systematic evaluator failures:
+  - candidate-local failures may be logged and penalized
+  - repeated systematic failures should trigger search-space shrinkage or evaluator revision before BO continues
+- If the task already points to a specific `research_runs/<research_id>/` directory, stay focused on the directly relevant run artifacts and workflow files instead of broadly exploring unrelated repo areas first.
+
+For any expensive or fragile evaluator family, not just DFT:
+
+- route through the Claude `evaluator-design` skill before BO setup when the evaluator still needs to be stabilized
+- use a 3–5 point calibration subset by default
+- treat the calibration phase as a stability-and-pruning pass, not an attempt to map the space
+- if repeated failures share the same setup cause, revise the evaluator family or search space before BO continues
 
 ## Artifact Roots
 
@@ -225,7 +247,7 @@ Converter commands (separate entrypoints):
 | `column_transform` | `profile` | `--input` (req), `--cols` (opt) | Analyse columns and recommend transforms |
 | `column_transform` | `transform` | `--input --cols --transform --output` (req), `--keep-original` (opt) | Apply a named transform; renames column with prefix (e.g. `log10_ic50_nM`) |
 
-Engine options: `hebo` (default), `bo_lcb`, `random`, `botorch`. Note: `bo_lcb` currently supports batch-size 1 only. `botorch` supports mixed numeric + categorical features via BoTorch's native mixed GP model, but `hebo` remains the default for strongly categorical problems.
+Engine options: `hebo` (default), `bo_lcb`, `random`, `botorch`. Note: `bo_lcb` currently supports batch-size 1 only. `botorch` supports mixed numeric + categorical features via BoTorch's native mixed GP model and is often the better choice for small-to-medium, mostly categorical, expensive-evaluation spaces. `hebo` remains the general default for broader mixed tabular BO problems.
 
 Constraints are domain knowledge, not something the engine can reliably infer from a dataset alone. When the problem description includes composition variables that must sum to a fixed total, pass them explicitly during `init` with `--simplex-groups 'col1,col2,...:total'`.
 
