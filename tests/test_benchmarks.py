@@ -430,6 +430,61 @@ def test_run_python_evaluator_supports_sibling_helper_imports(
     assert payload["recorded"] == 1
 
 
+def test_run_python_evaluator_supports_deferred_sibling_helper_imports(
+    tmp_path: Path,
+) -> None:
+    helper_path = tmp_path / "helper.py"
+    helper_path.write_text(
+        "\n".join(
+            [
+                "def objective(x):",
+                "    return 1.0 - abs(x - 0.3)",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    module_path = tmp_path / "blackbox_her.py"
+    module_path.write_text(
+        "\n".join(
+            [
+                "def evaluate(composition):",
+                "    from helper import objective",
+                "",
+                "    x = float(composition['x'])",
+                "    return {'y': objective(x)}",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    runs_root = tmp_path / "bo_runs"
+    engine = BOEngine(runs_root=runs_root)
+    state = engine.init_run(
+        target_column="exchange_current_density",
+        objective="max",
+        search_space_spec={
+            "design_parameters": [
+                {"name": "x", "type": "num", "lb": 0.0, "ub": 1.0}
+            ],
+            "fixed_features": {},
+        },
+        seed=42,
+        num_initial_random_samples=2,
+    )
+
+    payload = run_python_module_evaluator(
+        engine,
+        run_id=state["run_id"],
+        module_path=module_path,
+        num_iterations=1,
+        batch_size=1,
+    )
+
+    assert payload["recorded"] == 1
+
+
 def test_report_trajectory_summary_matches_observations(
     tmp_path: Path,
 ) -> None:
