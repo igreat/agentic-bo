@@ -110,6 +110,9 @@ research-layer orchestration, not to cripple the model or hide the BO engine.
 - workspace state: fresh clean repo workspaces for both naive and skilled runs
 - conversation state: both runs should start from a fresh empty chat
 - operator intervention: none for the core four runs
+- stop policy: let the run continue until the agent explicitly declares the
+  workflow complete; if it is stopped early for clear stalling or looping,
+  score it as incomplete and record the reason
 
 Do not claim that HER is a hidden-optimum benchmark. It is a case study with a
 different scoring model.

@@ -174,6 +174,9 @@ optional nudging-ablation support run.
 For the HER core pair, use two fresh clean repo workspaces from the same branch
 or commit. Keep the normal project skill trees present in both workspaces. The
 only intended intervention difference is whether `/research-agent` is invoked.
+Start each HER run from a fresh empty chat and let it continue uninterrupted
+until the agent explicitly declares completion, unless it is clearly stalled or
+looping.
 
 If you want to study mid-conversation nudging, treat it as a separate
 interactive rescue trace rather than a normal baseline:

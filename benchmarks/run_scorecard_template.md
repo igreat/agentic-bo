@@ -11,6 +11,8 @@ Use one copy of this template per scored or case-study run.
 - workspace type: `public benchmark workspace` / `open-world local workspace`
 - prompt file or prompt id:
 - intervention type: `none` / `prompt_only` / `interactive_rescue`
+- clean starting chat: `yes` / `no`
+- wall-clock duration:
 - run id:
 - bo run id:
 - research run id:

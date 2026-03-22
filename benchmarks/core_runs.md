@@ -42,6 +42,11 @@ Keep these fixed across the naive and skilled runs:
 - same access to local code and web research
 - same clean starting chat
 - no mid-run operator intervention
+- same operator stop policy:
+  - let the run continue uninterrupted until the agent explicitly declares the
+    workflow complete, or
+  - stop it only if it is clearly stalled or looping without forward progress,
+    and record that as incomplete in the scorecard
 
 Use **separate fresh workspaces** for the HER naive and HER skilled runs so
 package installs and artifacts do not contaminate the comparison. Unlike OER,
