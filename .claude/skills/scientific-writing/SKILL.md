@@ -99,6 +99,11 @@ Write an IMRAD-style paper with these sections:
 - Describe the search space actually used (design variables, bounds, any simplex constraints).
 - Describe the BO engine and relevant configuration (surrogate model, acquisition function, batch size).
 - State how observations were obtained based on the available artifacts.
+- If `research_state.json.evaluator_assessment` is present, state the evaluator evidence class plainly in Methods.
+- If `research_state.json.calibration_summary` is present, state the calibration scope plainly in Methods:
+  - how many reference points were used
+  - whether multiple facets/sites were covered
+  - what metric or uncertainty band the calibration supports
 - Describe oracle provenance only from what the artifacts explicitly say. If `report.json` exposes oracle metadata but not training timing, describe it as backend-reported or artifact-reported oracle metadata rather than claiming it was fitted post hoc.
 - If run-local helper scripts or dependency installs materially affected the setup, state that briefly and describe only what was actually supported by the artifacts.
 - **If proxy-backed evaluation:** report the proxy oracle CV RMSE and note that outcomes reflect surrogate predictions, not direct measurements.
@@ -106,6 +111,7 @@ Write an IMRAD-style paper with these sections:
 
 ### Results
 - Report the best value found and the corresponding candidate (composition, conditions, etc.).
+- If multiple top candidates fall within the evaluator uncertainty band, present them as a shortlist of essentially indistinguishable screening candidates rather than a single settled winner.
 - Mention convergence behavior — did the search plateau, was it still improving at the end?
 - Use `report.json` as the source of truth for best-value summary statistics.
 - For human-facing numbering, prefer `report.json["best_observation_number"]` over the zero-based internal `best_iteration` field.
@@ -120,6 +126,8 @@ Write an IMRAD-style paper with these sections:
 - Compare against the literature baselines from `literature_findings.baselines` if available.
 - State important caveats: oracle error when applicable, dataset coverage when applicable, and any gap between simulated/externally observed evidence and real experiments.
 - If optional supporting artifacts in `run_artifacts.extra_paths` materially informed the workflow or the caveats, Claude may cite them, but they are not required inputs.
+- If `research_state.json.evaluator_assessment` is present, match the strength of the claims to `claim_posture`.
+- If the modeled structures are metastable simplifications or convenience phases, say that directly and do not frame the ranking as benchmark-quality truth.
 
 **If literature review was skipped:**
 - keep the Discussion grounded in the BO trajectory, candidate composition, oracle uncertainty, and simulation limitations
@@ -134,7 +142,12 @@ Write an IMRAD-style paper with these sections:
 
 - Clearly label proxy-oracle results as simulated throughout — in the abstract, methods, and results.
 - Do not present simulated BO outcomes as real laboratory measurements.
+- If `evaluator_assessment.evidence_class` is `physics_inspired_heuristic`, explicitly label the evaluator as a heuristic or simplified model and keep novelty/performance claims cautious.
+- If `evaluator_assessment.evidence_class` is `physics_inspired_heuristic` and the top-candidate margin is inside the stated uncertainty band, do not use "surpasses benchmark" language. Use shortlist or DFT-validation-candidate language instead.
+- If `evaluator_assessment.evidence_class` is `retrospective_lookup`, explicitly label the evaluator as retrospective/tabulated and do not frame the best candidate as a newly discovered material outside that tabulated space.
+- If `evaluator_assessment.evidence_class` is `validated`, stronger claims are acceptable, but still keep normal uncertainty and scope caveats.
 - If evidence is weak (high oracle RMSE, few iterations, narrow dataset), say so directly.
+- For live structural MLIP screening runs, a safe framing is "screening-level hypothesis" or "DFT-validation candidate"; an unsafe framing is a strong claim of validated superiority over benchmark materials.
 - Keep references lightweight in v1; plain links or compact citations are enough.
 - Keep the writing tied to the actual artifacts rather than generic BO boilerplate.
 - Do not assume any rigid supporting artifact set beyond `research_state.json`, `research_plan.md`, `paper.md`, and the BO artifacts actually provided.

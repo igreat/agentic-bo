@@ -68,6 +68,17 @@ Use this `research_state.json` shape in v1:
     "report_path": null,
     "convergence_plot_path": null
   },
+  "evaluator_assessment": {
+    "evidence_class": "validated | physics_inspired_heuristic | retrospective_lookup | user_provided",
+    "claim_posture": "strong | moderate | cautious",
+    "why": ""
+  },
+  "calibration_summary": {
+    "points_tested": [],
+    "fit_scope": "",
+    "metrics": {},
+    "artifact_path": null
+  },
   "paper_path": null,
   "phases": {
     "problem_framing": "pending | in_progress | completed",
@@ -149,6 +160,8 @@ Rules:
   - target measurement to optimize
   - likely physical or chemical constraints
 - Present that draft as a recommendation for the user to confirm or edit before BO init.
+- Ensure the final `experiment_spec` matches the actual BO setup that will be executed; do not leave stale draft categories or placeholder values in `research_state.json`.
+- If the feasible set is not a clean Cartesian product, prefer an explicit valid candidate catalog or another constrained representation that only emits evaluable candidates.
 
 Delegate the BO-layer setup to `bo-execution-workflow`. That skill owns:
 - dataset validation when a dataset is present
@@ -215,6 +228,7 @@ Summarize:
 - brief chemical or materials reasoning for why the best condition may work
 - whether the evidence comes from recorded observations or a proxy/evaluator backend, if that is clear from the BO artifacts
 - important caveats such as oracle error or sparse evidence
+- whether the top candidate is actually distinguishable from nearby candidates given the stated uncertainty
 
 Write this into the Interpretation section of `research_plan.md`.
 
@@ -231,6 +245,10 @@ If literature was skipped or the BO artifacts indicate proxy-backed evaluation:
 - describe patterns visible in the BO trajectory, best candidate, oracle quality, and convergence
 - do not introduce external literature or mechanism claims
 - any hypothesis must be explicitly labeled as tentative and artifact-derived
+
+If `research_state.json.evaluator_assessment` says the evaluator is `physics_inspired_heuristic` or if the calibration uncertainty is comparable to the top-candidate gap:
+- present the result as a shortlist of validation candidates rather than a single settled winner
+- do not claim a material surpasses an established benchmark unless the margin clearly exceeds the stated uncertainty and the structural assumptions are physically plausible
 
 ### 6. Paper Writing
 
@@ -254,6 +272,7 @@ After the paper is written, perform a final consistency pass before declaring th
 - ensure any detailed trajectory claims match `report.json["trajectory"]` when that field is present
 - ensure human-facing iteration numbering in `research_plan.md` and `paper.md` uses `best_observation_number` when available rather than the zero-based `best_iteration`
 - ensure oracle provenance language stays artifact-backed; do not let the paper imply a post-hoc fit unless an artifact explicitly says that
+- ensure `research_state.json.experiment_spec` matches the final executed BO spec rather than an earlier draft
 - if any artifact is stale or contradictory, fix it before marking the run complete
 
 ## Resuming

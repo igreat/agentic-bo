@@ -128,7 +128,13 @@ def test_run_python_evaluator_records_observations_and_resolves_pending(
             [
                 "def evaluate(composition):",
                 "    x = float(composition['x'])",
-                "    return 1.0 - abs(x - 0.3)",
+                "    y = 1.0 - abs(x - 0.3)",
+                "    return {",
+                "        'y': y,",
+                "        'score_raw': y - 0.1,",
+                "        'score_calibrated': y,",
+                "        'failure_reason': None,",
+                "    }",
             ]
         )
         + "\n",
@@ -171,6 +177,9 @@ def test_run_python_evaluator_records_observations_and_resolves_pending(
     assert report["oracle"]["source"] == "python_evaluator_module"
     assert report["oracle"]["selected_model"] == "python-callback"
     assert {row["source"] for row in observations} == {"python-evaluator"}
+    assert all("score_raw" in row for row in observations)
+    assert all("score_calibrated" in row for row in observations)
+    assert all("failure_reason" in row for row in observations)
 
 
 def test_report_trajectory_summary_matches_observations(

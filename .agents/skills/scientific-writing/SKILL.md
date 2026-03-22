@@ -98,12 +98,15 @@ Write an IMRAD-style paper with these sections:
 - Describe the search space actually used (design variables, bounds, any simplex constraints).
 - Describe the BO engine and relevant configuration (surrogate model, acquisition function, batch size).
 - State how observations were obtained based on the available artifacts.
+- If `research_state.json.evaluator_assessment` is present, state the evaluator evidence class plainly in Methods.
+- If `research_state.json.calibration_summary` is present, state the calibration scope and uncertainty support plainly in Methods.
 - Describe oracle provenance only from what the artifacts explicitly say. If `report.json` exposes oracle metadata but not training timing, describe it as backend-reported or artifact-reported oracle metadata rather than claiming it was fitted post hoc.
 - **If proxy-backed evaluation:** report the proxy oracle CV RMSE and note that outcomes reflect surrogate predictions, not direct measurements.
 - Reference the convergence plot at `bo_runs/<run_id>/convergence.pdf` if it exists.
 
 ### Results
 - Report the best value found and the corresponding candidate (composition, conditions, etc.).
+- If multiple top candidates fall within the evaluator uncertainty band, present them as a shortlist rather than a single settled winner.
 - Mention convergence behavior — did the search plateau, was it still improving at the end?
 - Use `report.json` as the source of truth for best-value summary statistics.
 - For human-facing numbering, prefer `report.json["best_observation_number"]` over the zero-based internal `best_iteration` field.
@@ -131,6 +134,8 @@ Write an IMRAD-style paper with these sections:
 
 - Clearly label proxy-oracle results as simulated throughout — in the abstract, methods, and results.
 - Do not present simulated BO outcomes as real laboratory measurements.
+- If `evaluator_assessment.evidence_class` is `physics_inspired_heuristic`, explicitly label the evaluator as a heuristic or simplified model and keep novelty/performance claims cautious.
+- If the top-candidate margin is inside the stated uncertainty band, do not use "surpasses benchmark" language. Use shortlist or validation-candidate language instead.
 - If evidence is weak (high oracle RMSE, few iterations, narrow dataset), say so directly.
 - Keep references lightweight in v1; plain links or compact citations are enough.
 - Keep the writing tied to the actual artifacts rather than generic BO boilerplate.

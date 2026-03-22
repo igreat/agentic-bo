@@ -80,6 +80,7 @@ def _normalize_python_evaluator_result(
     target_column: str,
     default_engine: str,
 ) -> dict[str, Any]:
+    extras: dict[str, Any] = {}
     if isinstance(result, dict):
         if "y" in result:
             y_value = result["y"]
@@ -89,15 +90,22 @@ def _normalize_python_evaluator_result(
             raise ValueError(
                 "Python evaluator dict output must include 'y' or the target column."
             )
+        extras = {
+            str(key): value
+            for key, value in result.items()
+            if key not in {"y", target_column}
+        }
     else:
         y_value = result
 
-    return {
+    payload = {
         "x": suggestion["x"],
         "y": float(y_value),
         "engine": suggestion.get("engine", default_engine),
         "suggestion_id": suggestion.get("suggestion_id"),
     }
+    payload.update(extras)
+    return payload
 
 
 def _attach_python_evaluator_summary(
