@@ -20,6 +20,16 @@ PUBLIC_ROOT_DIRS = (
     ".claude",
 )
 
+RESEARCH_LAYER_SKILL_DIRS = (
+    ".agents/skills/research-agent",
+    ".agents/skills/literature-review",
+    ".agents/skills/scientific-writing",
+    ".claude/skills/research-agent",
+    ".claude/skills/literature-review",
+    ".claude/skills/scientific-writing",
+    ".claude/skills/evaluator-design",
+)
+
 COPYTREE_IGNORE = shutil.ignore_patterns(
     "__pycache__",
     ".DS_Store",
@@ -70,6 +80,18 @@ def write_json(path: Path, payload: dict) -> None:
     path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
 
 
+def apply_skill_profile(output_dir: Path, *, skill_profile: str) -> None:
+    if skill_profile == "full":
+        return
+    if skill_profile != "bo_only":
+        raise ValueError(f"Unknown skill profile: {skill_profile}")
+
+    for rel_path in RESEARCH_LAYER_SKILL_DIRS:
+        target = output_dir / rel_path
+        if target.exists():
+            shutil.rmtree(target)
+
+
 def validate_output_dir(output_dir: Path, *, root: Path, overwrite: bool) -> Path:
     resolved_output = output_dir.resolve()
     resolved_root = root.resolve()
@@ -100,6 +122,7 @@ def build_workspace(
     *,
     output_dir: Path,
     task_ids: list[str],
+    skill_profile: str = "full",
     overwrite: bool = False,
 ) -> Path:
     root = repo_root()
@@ -124,6 +147,8 @@ def build_workspace(
 
     for rel_path in PUBLIC_ROOT_DIRS:
         copy_tree(root / rel_path, output_dir / rel_path, COPYTREE_IGNORE)
+
+    apply_skill_profile(output_dir, skill_profile=skill_profile)
 
     write_json(
         output_dir / ".claude" / "settings.local.json",
@@ -174,6 +199,16 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Replace the output directory if it already exists.",
     )
+    parser.add_argument(
+        "--skill-profile",
+        choices=["full", "bo_only"],
+        default="full",
+        help=(
+            "Skill surface to copy into the public workspace. "
+            "'full' keeps the full research workflow; 'bo_only' strips the "
+            "top-level research-layer skills while keeping BO-level skills."
+        ),
+    )
     return parser
 
 
@@ -182,6 +217,7 @@ def main(argv: list[str] | None = None) -> int:
     workspace = build_workspace(
         output_dir=args.output_dir,
         task_ids=list(args.tasks),
+        skill_profile=str(args.skill_profile),
         overwrite=bool(args.overwrite),
     )
     print(workspace)

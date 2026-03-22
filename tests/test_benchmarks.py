@@ -56,6 +56,30 @@ def test_build_workspace_copies_public_oer_bundle(
         assert not (output_dir / "evaluation_backends").exists()
 
 
+def test_build_workspace_bo_only_skill_profile_strips_research_layer_skills(
+    tmp_path: Path,
+) -> None:
+    output_dir = tmp_path / "benchmark_workspace_bo_only"
+
+    build_workspace(
+        output_dir=output_dir,
+        task_ids=["oer"],
+        skill_profile="bo_only",
+        overwrite=False,
+    )
+
+    assert (output_dir / ".agents" / "skills" / "bo-init-run" / "SKILL.md").exists()
+    assert (output_dir / ".claude" / "skills" / "bo-init-run" / "SKILL.md").exists()
+
+    assert not (output_dir / ".agents" / "skills" / "research-agent").exists()
+    assert not (output_dir / ".agents" / "skills" / "literature-review").exists()
+    assert not (output_dir / ".agents" / "skills" / "scientific-writing").exists()
+    assert not (output_dir / ".claude" / "skills" / "research-agent").exists()
+    assert not (output_dir / ".claude" / "skills" / "literature-review").exists()
+    assert not (output_dir / ".claude" / "skills" / "scientific-writing").exists()
+    assert not (output_dir / ".claude" / "skills" / "evaluator-design").exists()
+
+
 def test_run_evaluator_with_prebuilt_backend_records_observations(
     tmp_path: Path,
 ) -> None:
