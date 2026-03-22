@@ -19,15 +19,16 @@ from ..utils import read_jsonl, utc_now_iso
 @contextmanager
 def _module_parent_on_sys_path(module_path: Path):
     parent = str(module_path.parent)
-    added_path = False
+    inserted_index: int | None = None
     if parent not in sys.path:
         sys.path.insert(0, parent)
-        added_path = True
+        inserted_index = 0
     try:
         yield
     finally:
-        if added_path and parent in sys.path:
-            sys.path.remove(parent)
+        if inserted_index is not None and len(sys.path) > inserted_index:
+            if sys.path[inserted_index] == parent:
+                sys.path.pop(inserted_index)
 
 
 def _validate_python_evaluator_preconditions(
