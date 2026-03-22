@@ -18,6 +18,10 @@ conditions described in [`../scoring.md`](../scoring.md).
 - `her_live_structural_strong.md`: use after explicitly invoking
   `/research-agent`
 
+For the HER core pair, use fresh clean repo workspaces from the same branch or
+commit and keep the ordinary project skill trees present in both workspaces.
+The only intended intervention difference is the explicit skill invocation.
+
 The OER benchmark requires only `oer_skilled.md` and `oer_naive.md`.
 
 The HER case-study core evidence package requires:

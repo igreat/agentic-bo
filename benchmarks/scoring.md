@@ -47,18 +47,26 @@ Use these only as support evidence. They are not the headline claim.
 ### Skilled baseline
 
 - explicit `/research-agent` invocation is allowed
-- benchmark workspace uses `skill_profile=full`
+- for packaged benchmark runs such as `oer`, the workspace uses
+  `skill_profile=full`
+- for open-world runs such as `her_live_structural`, use a fresh clean repo
+  workspace from the same branch/code state as the paired naive run
 - project skills and workflow artifacts are part of the tested system
 
 ### Naive baseline
 
 - no explicit skill invocation
 - no custom project slash commands
-- benchmark workspace uses `skill_profile=bo_only`
-- same task bundle, same budget, and same evaluator constraints as the skilled baseline
+- for packaged benchmark runs such as `oer`, the workspace uses
+  `skill_profile=bo_only`
+- for open-world runs such as `her_live_structural`, use a fresh clean repo
+  workspace from the same branch/code state as the paired skilled run
+- same task bundle or repo state, same budget, and same evaluator constraints as
+  the skilled baseline
 
 The naive baseline may still use Claude Code's native capabilities and the
-engine-level BO documentation surface. The point is to remove the explicit
+engine-level BO documentation surface. For open-world runs, the project skill
+files may still be present on disk; the point is to remove the explicit
 research-layer orchestration, not to cripple the model or hide the BO engine.
 
 ### Lightly nudged baseline
@@ -99,6 +107,9 @@ research-layer orchestration, not to cripple the model or hide the BO engine.
 - evaluation mode: open-world local Python evaluator
 - web search: allowed if the prompt permits it
 - budget: keep fixed across skilled and naive runs for a given comparison pair
+- workspace state: fresh clean repo workspaces for both naive and skilled runs
+- conversation state: both runs should start from a fresh empty chat
+- operator intervention: none for the core four runs
 
 Do not claim that HER is a hidden-optimum benchmark. It is a case study with a
 different scoring model.

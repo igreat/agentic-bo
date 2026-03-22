@@ -2,6 +2,9 @@
 
 This directory holds the benchmark setup for the final report.
 
+The exact required report runs are locked in
+[`core_runs.md`](core_runs.md).
+
 Right now, only one task is fully packaged:
 
 - `oer`: the flagship OER composition benchmark
@@ -168,6 +171,10 @@ Use these as:
 The report core requires the naive and strong HER runs. The light prompt is an
 optional nudging-ablation support run.
 
+For the HER core pair, use two fresh clean repo workspaces from the same branch
+or commit. Keep the normal project skill trees present in both workspaces. The
+only intended intervention difference is whether `/research-agent` is invoked.
+
 If you want to study mid-conversation nudging, treat it as a separate
 interactive rescue trace rather than a normal baseline:
 
@@ -251,5 +258,8 @@ directory. Treat HER as a separate open-world case study:
 - different scoring model
 - no hidden-optimum claim
 
-See `benchmarks/scoring.md` for the benchmark metrics, case-study rubric, and
-full evidence package used in the report.
+See:
+
+- [`scoring.md`](scoring.md) for the benchmark metrics and case-study rubric
+- [`core_runs.md`](core_runs.md) for the exact 4-run core evidence package
+- [`prompts/`](prompts/) for the fixed prompt files used by those runs
