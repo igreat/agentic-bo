@@ -18,12 +18,18 @@ def _validate_python_evaluator_preconditions(
     engine: BOEngine,
     run_id: str,
     batch_size: int,
+    num_iterations: int,
 ) -> dict[str, Any]:
     state = engine._load_state(run_id)
     if state["status"] not in {"initialized", "running"}:
         raise ValueError(
             f"Run '{run_id}' is not ready for suggestions. Current status: {state['status']}"
         )
+
+    if int(num_iterations) < 0:
+        raise ValueError("num_iterations must be >= 0.")
+    if int(batch_size) < 1:
+        raise ValueError("batch_size must be >= 1.")
 
     engine_name = str(state.get("default_engine", "hebo"))
     if engine_name == "bo_lcb" and int(batch_size) != 1:
@@ -139,7 +145,12 @@ def run_python_module_evaluator(
     batch_size: int = 1,
     verbose: bool = False,
 ) -> dict[str, Any]:
-    state = _validate_python_evaluator_preconditions(engine, run_id, batch_size)
+    state = _validate_python_evaluator_preconditions(
+        engine,
+        run_id,
+        batch_size,
+        num_iterations,
+    )
     module_path = Path(module_path).resolve()
     evaluator = _load_python_evaluator(module_path, function_name)
     _attach_python_evaluator_summary(
@@ -181,14 +192,18 @@ def run_python_module_evaluator(
             verbose=verbose,
         )
 
-    observer = PythonEvaluatorObserver(callback)
-    report = engine.run_optimization(
-        run_id,
-        observer=observer,
-        num_iterations=int(num_iterations),
-        batch_size=int(batch_size),
-        verbose=verbose,
-    )
+    if int(num_iterations) > 0:
+        observer = PythonEvaluatorObserver(callback)
+        report = engine.run_optimization(
+            run_id,
+            observer=observer,
+            num_iterations=int(num_iterations),
+            batch_size=int(batch_size),
+            verbose=verbose,
+        )
+    else:
+        report = engine.report(run_id, verbose=verbose)
+
     recorded = len(read_jsonl(paths.observations)) - recorded_before
     return {
         "run_id": run_id,

@@ -784,7 +784,17 @@ class BOEngine:
         existing_suggestions = read_jsonl(self._paths(run_id).suggestions)
         next_iteration = len(existing)
         rows = []
-        reserved_obs_keys = {"x", "y", "engine", "suggestion_id", target_col}
+        reserved_obs_keys = {
+            "event_time",
+            "iteration",
+            "source",
+            "x",
+            "y",
+            "y_internal",
+            "engine",
+            "suggestion_id",
+            target_col,
+        }
 
         for idx, obs in enumerate(observations):
             x = dict(obs.get("x", {}))

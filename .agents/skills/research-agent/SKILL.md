@@ -215,7 +215,7 @@ If Phase 3 produced a local evaluator module, automate Phase 4 with:
 ```bash
 uv run python -m bo_workflow.cli run-python-evaluator \
   --run-id <BO_RUN_ID> \
-  --module-path research_runs/<research_id>/evaluator.py \
+  --module-path research_runs/<research_id>/scripts/evaluator.py \
   --iterations <BUDGET> \
   --batch-size <N>
 ```

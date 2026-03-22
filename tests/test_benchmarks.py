@@ -238,6 +238,101 @@ def test_normalize_python_evaluator_result_accepts_target_column_key() -> None:
     }
 
 
+def test_observe_preserves_engine_metadata_when_extras_collide(tmp_path: Path) -> None:
+    runs_root = tmp_path / "bo_runs"
+    engine = BOEngine(runs_root=runs_root)
+    state = engine.init_run(
+        target_column="target",
+        objective="min",
+        search_space_spec={
+            "design_parameters": [
+                {"name": "x", "type": "num", "lb": 0.0, "ub": 1.0}
+            ],
+            "fixed_features": {},
+        },
+        seed=42,
+        num_initial_random_samples=2,
+    )
+    run_id = state["run_id"]
+
+    engine.observe(
+        run_id,
+        [
+            {
+                "x": {"x": 0.2},
+                "y": 0.5,
+                "event_time": "spoofed",
+                "iteration": 999,
+                "source": "spoofed",
+                "y_internal": 123.0,
+                "score_raw": 0.45,
+            }
+        ],
+        source="benchmark-evaluator",
+    )
+
+    observation = read_jsonl(RunPaths(run_dir=runs_root / run_id).observations)[0]
+    assert observation["source"] == "benchmark-evaluator"
+    assert observation["iteration"] == 0
+    assert observation["y_internal"] == 0.5
+    assert observation["event_time"] != "spoofed"
+    assert observation["score_raw"] == 0.45
+
+
+def test_run_python_evaluator_zero_iterations_only_resolves_pending(
+    tmp_path: Path,
+) -> None:
+    module_path = tmp_path / "blackbox_her.py"
+    module_path.write_text(
+        "\n".join(
+            [
+                "def evaluate(composition):",
+                "    x = float(composition['x'])",
+                "    return {'y': 1.0 - abs(x - 0.3)}",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    runs_root = tmp_path / "bo_runs"
+    engine = BOEngine(runs_root=runs_root)
+    state = engine.init_run(
+        target_column="exchange_current_density",
+        objective="max",
+        search_space_spec={
+            "design_parameters": [
+                {"name": "x", "type": "num", "lb": 0.0, "ub": 1.0}
+            ],
+            "fixed_features": {},
+        },
+        seed=42,
+        num_initial_random_samples=2,
+    )
+    run_id = state["run_id"]
+
+    suggestion = engine.suggest(run_id, batch_size=1)["suggestions"][0]
+
+    payload = run_python_module_evaluator(
+        engine,
+        run_id=run_id,
+        module_path=module_path,
+        num_iterations=0,
+        batch_size=1,
+    )
+
+    paths = RunPaths(run_dir=runs_root / run_id)
+    report = json.loads(paths.report.read_text())
+    final_state = json.loads(paths.state.read_text())
+    observations = read_jsonl(paths.observations)
+
+    assert payload["resolved_pending"] == 1
+    assert payload["recorded"] == 1
+    assert final_state["status"] == "running"
+    assert report["num_observations"] == 1
+    assert observations[0]["suggestion_id"] == suggestion["suggestion_id"]
+
+
 def test_report_trajectory_summary_matches_observations(
     tmp_path: Path,
 ) -> None:
