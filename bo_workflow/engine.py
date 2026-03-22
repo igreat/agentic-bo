@@ -784,6 +784,17 @@ class BOEngine:
         existing_suggestions = read_jsonl(self._paths(run_id).suggestions)
         next_iteration = len(existing)
         rows = []
+        reserved_obs_keys = {
+            "event_time",
+            "iteration",
+            "source",
+            "x",
+            "y",
+            "y_internal",
+            "engine",
+            "suggestion_id",
+            target_col,
+        }
 
         for idx, obs in enumerate(observations):
             x = dict(obs.get("x", {}))
@@ -805,6 +816,11 @@ class BOEngine:
             y_float = float(y_value)
 
             y_internal = _to_internal_objective(y_float, state["objective"])
+            extras = {
+                str(key): to_python_scalar(value)
+                for key, value in obs.items()
+                if key not in reserved_obs_keys
+            }
 
             payload = {
                 "event_time": utc_now_iso(),
@@ -816,6 +832,7 @@ class BOEngine:
                 "y": y_float,
                 "y_internal": y_internal,
             }
+            payload.update(extras)
             append_jsonl(self._paths(run_id).observations, payload)
             rows.append(payload)
 

@@ -29,6 +29,7 @@ Return findings in this structure so they can be written into `research_state.js
   "baselines": [],
   "key_variables": [],
   "known_constraints": [],
+  "source_urls": [],
   "summary": ""
 }
 ```
@@ -40,6 +41,7 @@ Also write a short narrative summary into the **Literature Context** section of 
 - `baselines`: best or representative prior values for the target property, with source attribution
 - `key_variables`: variables that the literature repeatedly treats as important
 - `known_constraints`: physical, chemical, or experimental constraints that should inform BO setup
+- `source_urls`: links or source identifiers for the papers, docs, or repositories actually used
 - `summary`: 1–3 short paragraphs linking the literature to the experiment design
 
 ## Local Packet Mode

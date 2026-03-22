@@ -36,7 +36,7 @@ bo_workflow/
   plotting.py     # convergence plot generation
   utils.py        # RunPaths, JSON I/O, shared types
   evaluation/
-    cli.py        # CLI subcommands: build-oracle, run-proxy, run-evaluator
+    cli.py        # CLI subcommands: build-oracle, run-proxy, run-evaluator, run-python-evaluator
     oracle.py     # standalone proxy backend — train from run config, persist under evaluation_backends/
     proxy.py      # ProxyObserver — self-contained, captures backend_dir at init
     __main__.py   # optional evaluation-only module entrypoint
@@ -89,7 +89,7 @@ research_runs/
 
 - **Engine has zero oracle awareness.** It only knows the `Observer` ABC and calls `observer.evaluate(suggestions)`. No oracle imports in `engine.py`.
 - **Oracle is standalone.** `evaluation/oracle.py` trains directly from labeled dataset inputs and persists oracle assets under `evaluation_backends/<backend_id>/`.
-- **Observers are self-contained.** `evaluation/proxy.py` defines `ProxyObserver(backend_dir)`, which captures all context at construction. `evaluate(suggestions)` takes no engine or run_id.
+- **Observers are self-contained.** `evaluation/proxy.py` defines `ProxyObserver(backend_dir)`, which captures all context at construction. `observers/callback.py` provides `CallbackObserver` for locally discovered Python evaluators. `evaluate(suggestions)` takes no engine or run_id.
 - **CLI is the wiring layer.** `build-oracle` trains a backend from a run and writes it under `evaluation_backends/`. `run-proxy` constructs `evaluation.proxy.ProxyObserver(backend_dir)` and passes it to `engine.run_optimization()`.
 - **Each module owns its CLI surface.** `engine_cli.py` and `evaluation/cli.py` each define `register_commands()` + `handle()`. `cli.py` composes them.
 - **Converters are standalone.** Each converter has its own `__main__`-style CLI (`python -m bo_workflow.converters.reaction_drfp`). They transform data before/after the BO loop but do not depend on the engine or oracle.
@@ -112,6 +112,7 @@ Use `research-agent` when the user wants an end-to-end study workflow:
 - initializes a run
 - continues through `suggest` / `observe` / `report`
 - does not need to know whether observations come from a user, a real experiment loop, or an external benchmark evaluator
+- it may also run BO against a local Python evaluator module with `run-python-evaluator` when that evaluator already exists as part of the workflow
 
 Use the BO skills directly when the user wants only the optimization subsystem:
 - `bo-execution-workflow` for a resolved BO-layer setup/execution handoff
@@ -193,6 +194,7 @@ All commands: `uv run python -m bo_workflow.cli <command> [flags]`
 | `observe` | `--run-id --data` (req) | Record real/simulated results |
 | `run-proxy` | `--run-id --iterations` (req), `--backend-id --batch-size` (opt) | Full proxy BO loop |
 | `run-evaluator` | `--run-id --backend-id --iterations` (req), `--batch-size` (opt) | Operator-owned hidden evaluation loop over `suggest` / `observe` |
+| `run-python-evaluator` | `--run-id --module-path --iterations` (req), `--function --batch-size` (opt) | Run BO against a local Python evaluator module discovered or written during the workflow |
 | `status` | `--run-id` (req) | Quick run summary |
 | `report` | `--run-id` (req) | Full report + convergence plot |
 

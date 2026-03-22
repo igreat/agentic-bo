@@ -16,6 +16,7 @@ from ..utils import (
     utc_now_iso,
 )
 from .oracle import build_proxy_oracle, predict_original_scale, read_backend_meta
+from .python_module import run_python_module_evaluator
 from .proxy import ProxyObserver
 
 
@@ -93,6 +94,27 @@ def register_commands(sub: argparse._SubParsersAction) -> None:
     run_cmd.add_argument("--iterations", type=int, required=True)
     run_cmd.add_argument("--batch-size", type=int, default=1)
     run_cmd.add_argument("--verbose", action="store_true")
+
+    python_cmd = sub.add_parser(
+        "run-python-evaluator",
+        help="Run suggest/observe loop against a local Python evaluator module",
+    )
+    python_cmd.add_argument("--run-id", type=str, required=True)
+    python_cmd.add_argument(
+        "--module-path",
+        type=Path,
+        required=True,
+        help="Path to a Python module exposing an evaluator function.",
+    )
+    python_cmd.add_argument(
+        "--function",
+        type=str,
+        default="evaluate",
+        help="Name of the evaluator function inside the module.",
+    )
+    python_cmd.add_argument("--iterations", type=int, required=True)
+    python_cmd.add_argument("--batch-size", type=int, default=1)
+    python_cmd.add_argument("--verbose", action="store_true")
 
 
 def _resolve_backend_dir(
@@ -417,6 +439,19 @@ def handle(args: argparse.Namespace, engine: BOEngine) -> int | None:
             engine,
             run_id=args.run_id,
             backend_dir=backend_dir,
+            num_iterations=args.iterations,
+            batch_size=args.batch_size,
+            verbose=args.verbose,
+        )
+        _json_print(payload)
+        return 0
+
+    if args.command == "run-python-evaluator":
+        payload = run_python_module_evaluator(
+            engine,
+            run_id=args.run_id,
+            module_path=args.module_path,
+            function_name=args.function,
             num_iterations=args.iterations,
             batch_size=args.batch_size,
             verbose=args.verbose,

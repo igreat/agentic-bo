@@ -3,6 +3,7 @@
 import json
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 import pytest
 
@@ -10,7 +11,9 @@ import benchmarks.build_workspace as build_workspace_module
 from benchmarks.build_workspace import build_workspace
 from bo_workflow.engine import BOEngine
 from bo_workflow.evaluation.cli import run_hidden_oracle_evaluator
+from bo_workflow.evaluation.cli import run_python_module_evaluator
 from bo_workflow.evaluation.oracle import build_proxy_oracle
+from bo_workflow.evaluation.python_module import _normalize_python_evaluator_result
 from bo_workflow.utils import RunPaths, read_jsonl
 
 
@@ -116,6 +119,315 @@ def test_run_evaluator_with_prebuilt_backend_records_observations(
     observations = read_jsonl(paths.observations)
     assert len(observations) == 2
     assert {row["source"] for row in observations} == {"benchmark-evaluator"}
+
+
+def test_run_python_evaluator_records_observations_and_resolves_pending(
+    tmp_path: Path,
+) -> None:
+    module_path = tmp_path / "blackbox_her.py"
+    module_path.write_text(
+        "\n".join(
+            [
+                "def evaluate(composition):",
+                "    x = float(composition['x'])",
+                "    y = 1.0 - abs(x - 0.3)",
+                "    return {",
+                "        'y': y,",
+                "        'score_raw': y - 0.1,",
+                "        'score_calibrated': y,",
+                "        'failure_reason': None,",
+                "        'x': {'hacked': True},",
+                "        'engine': 'not-the-engine',",
+                "        'suggestion_id': 'fake-id',",
+                "    }",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    runs_root = tmp_path / "bo_runs"
+    engine = BOEngine(runs_root=runs_root)
+    state = engine.init_run(
+        target_column="exchange_current_density",
+        objective="max",
+        search_space_spec={
+            "design_parameters": [
+                {"name": "x", "type": "num", "lb": 0.0, "ub": 1.0}
+            ],
+            "fixed_features": {},
+        },
+        seed=42,
+        num_initial_random_samples=2,
+    )
+    run_id = state["run_id"]
+
+    engine.suggest(run_id, batch_size=1)
+
+    payload = run_python_module_evaluator(
+        engine,
+        run_id=run_id,
+        module_path=module_path,
+        num_iterations=2,
+        batch_size=1,
+    )
+
+    paths = RunPaths(run_dir=runs_root / run_id)
+    report = json.loads(paths.report.read_text())
+    observations = read_jsonl(paths.observations)
+
+    assert payload["resolved_pending"] == 1
+    assert payload["recorded"] == 3
+    assert report["num_observations"] == 3
+    assert report["oracle"]["source"] == "python_evaluator_module"
+    assert report["oracle"]["selected_model"] == "python-callback"
+    assert {row["source"] for row in observations} == {"python-evaluator"}
+    assert {row["engine"] for row in observations} == {"hebo"}
+    assert all("hacked" not in row["x"] for row in observations)
+    assert all(row["suggestion_id"] != "fake-id" for row in observations)
+    assert all("score_raw" in row for row in observations)
+    assert all("score_calibrated" in row for row in observations)
+    assert all("failure_reason" in row for row in observations)
+
+
+def test_normalize_python_evaluator_result_accepts_scalar_output() -> None:
+    suggestion = {
+        "x": {"x": 0.3},
+        "engine": "hebo",
+        "suggestion_id": "abc123",
+    }
+
+    payload = _normalize_python_evaluator_result(
+        result=0.42,
+        suggestion=suggestion,
+        target_column="exchange_current_density",
+        default_engine="hebo",
+    )
+
+    assert payload == {
+        "x": {"x": 0.3},
+        "y": 0.42,
+        "engine": "hebo",
+        "suggestion_id": "abc123",
+    }
+
+
+def test_normalize_python_evaluator_result_accepts_target_column_key() -> None:
+    suggestion = {
+        "x": {"x": 0.3},
+        "engine": "botorch",
+        "suggestion_id": "abc123",
+    }
+
+    payload = _normalize_python_evaluator_result(
+        result={
+            "exchange_current_density": 0.42,
+            "score_raw": 0.39,
+            "engine": "clobber-me",
+        },
+        suggestion=suggestion,
+        target_column="exchange_current_density",
+        default_engine="hebo",
+    )
+
+    assert payload == {
+        "x": {"x": 0.3},
+        "y": 0.42,
+        "engine": "botorch",
+        "suggestion_id": "abc123",
+        "score_raw": 0.39,
+    }
+
+
+def test_observe_preserves_engine_metadata_when_extras_collide(tmp_path: Path) -> None:
+    runs_root = tmp_path / "bo_runs"
+    engine = BOEngine(runs_root=runs_root)
+    state = engine.init_run(
+        target_column="target",
+        objective="min",
+        search_space_spec={
+            "design_parameters": [
+                {"name": "x", "type": "num", "lb": 0.0, "ub": 1.0}
+            ],
+            "fixed_features": {},
+        },
+        seed=42,
+        num_initial_random_samples=2,
+    )
+    run_id = state["run_id"]
+
+    engine.observe(
+        run_id,
+        [
+            {
+                "x": {"x": 0.2},
+                "y": 0.5,
+                "event_time": "spoofed",
+                "iteration": 999,
+                "source": "spoofed",
+                "y_internal": 123.0,
+                "score_raw": 0.45,
+            }
+        ],
+        source="benchmark-evaluator",
+    )
+
+    observation = read_jsonl(RunPaths(run_dir=runs_root / run_id).observations)[0]
+    assert observation["source"] == "benchmark-evaluator"
+    assert observation["iteration"] == 0
+    assert observation["y_internal"] == 0.5
+    assert observation["event_time"] != "spoofed"
+    assert observation["score_raw"] == 0.45
+
+
+def test_observe_recursively_normalizes_nested_extras(tmp_path: Path) -> None:
+    runs_root = tmp_path / "bo_runs"
+    engine = BOEngine(runs_root=runs_root)
+    state = engine.init_run(
+        target_column="target",
+        objective="min",
+        search_space_spec={
+            "design_parameters": [
+                {"name": "x", "type": "num", "lb": 0.0, "ub": 1.0}
+            ],
+            "fixed_features": {},
+        },
+        seed=42,
+        num_initial_random_samples=2,
+    )
+    run_id = state["run_id"]
+
+    engine.observe(
+        run_id,
+        [
+            {
+                "x": {"x": 0.2},
+                "y": 0.5,
+                "diagnostics": {
+                    "score_raw": np.float64(0.45),
+                    "components": np.array([1.0, 2.0]),
+                    "failures": [np.int64(0), np.int64(1)],
+                },
+            }
+        ],
+        source="benchmark-evaluator",
+    )
+
+    observation = read_jsonl(RunPaths(run_dir=runs_root / run_id).observations)[0]
+    assert observation["diagnostics"] == {
+        "score_raw": 0.45,
+        "components": [1.0, 2.0],
+        "failures": [0, 1],
+    }
+
+
+def test_run_python_evaluator_zero_iterations_only_resolves_pending(
+    tmp_path: Path,
+) -> None:
+    module_path = tmp_path / "blackbox_her.py"
+    module_path.write_text(
+        "\n".join(
+            [
+                "def evaluate(composition):",
+                "    x = float(composition['x'])",
+                "    return {'y': 1.0 - abs(x - 0.3)}",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    runs_root = tmp_path / "bo_runs"
+    engine = BOEngine(runs_root=runs_root)
+    state = engine.init_run(
+        target_column="exchange_current_density",
+        objective="max",
+        search_space_spec={
+            "design_parameters": [
+                {"name": "x", "type": "num", "lb": 0.0, "ub": 1.0}
+            ],
+            "fixed_features": {},
+        },
+        seed=42,
+        num_initial_random_samples=2,
+    )
+    run_id = state["run_id"]
+
+    suggestion = engine.suggest(run_id, batch_size=1)["suggestions"][0]
+
+    payload = run_python_module_evaluator(
+        engine,
+        run_id=run_id,
+        module_path=module_path,
+        num_iterations=0,
+        batch_size=1,
+    )
+
+    paths = RunPaths(run_dir=runs_root / run_id)
+    report = json.loads(paths.report.read_text())
+    final_state = json.loads(paths.state.read_text())
+    observations = read_jsonl(paths.observations)
+
+    assert payload["resolved_pending"] == 1
+    assert payload["recorded"] == 1
+    assert final_state["status"] == "running"
+    assert report["num_observations"] == 1
+    assert observations[0]["suggestion_id"] == suggestion["suggestion_id"]
+
+
+def test_run_python_evaluator_supports_sibling_helper_imports(
+    tmp_path: Path,
+) -> None:
+    helper_path = tmp_path / "helper.py"
+    helper_path.write_text(
+        "\n".join(
+            [
+                "def objective(x):",
+                "    return 1.0 - abs(x - 0.3)",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    module_path = tmp_path / "blackbox_her.py"
+    module_path.write_text(
+        "\n".join(
+            [
+                "from helper import objective",
+                "",
+                "def evaluate(composition):",
+                "    x = float(composition['x'])",
+                "    return {'y': objective(x)}",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    runs_root = tmp_path / "bo_runs"
+    engine = BOEngine(runs_root=runs_root)
+    state = engine.init_run(
+        target_column="exchange_current_density",
+        objective="max",
+        search_space_spec={
+            "design_parameters": [
+                {"name": "x", "type": "num", "lb": 0.0, "ub": 1.0}
+            ],
+            "fixed_features": {},
+        },
+        seed=42,
+        num_initial_random_samples=2,
+    )
+
+    payload = run_python_module_evaluator(
+        engine,
+        run_id=state["run_id"],
+        module_path=module_path,
+        num_iterations=1,
+        batch_size=1,
+    )
+
+    assert payload["recorded"] == 1
 
 
 def test_report_trajectory_summary_matches_observations(

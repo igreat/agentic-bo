@@ -36,7 +36,7 @@ bo_workflow/
   plotting.py     # convergence plot generation
   utils.py        # RunPaths, JSON I/O, shared types
   evaluation/
-    cli.py        # CLI subcommands: build-oracle, run-proxy, run-evaluator
+    cli.py        # CLI subcommands: build-oracle, run-proxy, run-evaluator, run-python-evaluator
     oracle.py     # standalone proxy backend — train from run config, persist under evaluation_backends/
     proxy.py      # ProxyObserver — self-contained, captures backend_dir at init
     __main__.py   # optional evaluation-only module entrypoint
@@ -75,9 +75,10 @@ data/
     scientific-writing/     # IMRAD-style drafting from workflow artifacts
 .claude/
   skills/
-    research-agent/         # mirrored Claude skill tree
-    literature-review/      # mirrored Claude literature helper
-    scientific-writing/     # mirrored Claude writing helper
+    research-agent/         # primary Claude workflow skill tree
+    evaluator-design/       # expensive/fragile evaluator setup before BO
+    literature-review/      # primary Claude literature helper
+    scientific-writing/     # primary Claude writing helper
 research_runs/
   <research_id>/
     research_state.json     # machine-readable research workflow state
@@ -95,13 +96,16 @@ research_runs/
 - **Converters are standalone.** Each converter has its own `__main__`-style CLI (`python -m bo_workflow.converters.reaction_drfp`). They transform data before/after the BO loop but do not depend on the engine or oracle.
 - **Constraints are search-space properties.** `constraints/` is the enforcement layer — each `Constraint` subclass receives raw suggestions from the optimizer and projects them into the feasible region via `apply()`. Constraints are stored in `state.json["constraints"]` and enforced at every `suggest` call. The agent is responsible for inferring constraints from the user's problem description (e.g. "proportions sum to 100%") and passing them via `--simplex-groups`; the engine never auto-detects them.
 
-Skills in `.agents/skills/` and `.claude/skills/` are kept in sync. The BO engine is the source of truth for optimization behavior; skills are the agent-facing orchestration layer on top of it. `research-agent` is the top-level skill, while the BO skills are lower-level execution helpers.
+The BO engine is the source of truth for optimization behavior; skills are the agent-facing orchestration layer on top of it. `research-agent` is the top-level skill, while the BO skills are lower-level execution helpers.
+
+For the current live-structural workflow push, `CLAUDE.md` and `.claude/skills/` are the primary target. The `.agents/` skill tree may temporarily lag while the Claude workflow is being refined.
 
 ## Top-Level Workflows
 
 Use `research-agent` when the user wants an end-to-end study workflow:
 - problem framing
 - optional literature review
+- evaluator/search-space design when needed
 - experiment setup
 - BO execution
 - interpretation
@@ -112,6 +116,8 @@ Use `research-agent` when the user wants an end-to-end study workflow:
 - initializes a run
 - continues through `suggest` / `observe` / `report`
 - does not need to know whether observations come from a user, a real experiment loop, or an external benchmark evaluator
+- when a local evaluator already exists as part of the workflow, it may run BO against that evaluator with `run-python-evaluator`
+- in clarification-first mode, it should explicitly ask what the intended evaluator or observation source is before deciding to design a new evaluator
 
 Use the BO skills directly when the user wants only the optimization subsystem:
 - `bo-execution-workflow` for a resolved BO-layer setup/execution handoff
@@ -119,9 +125,21 @@ Use the BO skills directly when the user wants only the optimization subsystem:
 - build-oracle / run-proxy for low-level proxy demos or BO-only benchmarking
 - reporting
 
+Deferred interaction note:
+- the intended default product behavior is clarification-first, not fully loose autonomy
+- by default, the agent should eventually begin with a short planning/alignment step and ask a few high-value questions before committing to a search space, evaluator family, or budget
+- only skip that clarification step when the user explicitly asks for a fully open-world or no-questions run
+- keep today's fully loose autonomy runs as an explicit test mode, not the long-term default
+- the stronger benchmark story is still worth pursuing in explicit autonomy mode: one-shot, end-to-end execution with documented assumptions and no questions unless truly blocked
+
 ## Script-first policy
 
 - Before writing ad-hoc one-off scripts, check `bo_workflow/scripts/` and prefer existing scripts when they already cover the task.
+- If existing tooling is not a good fit, Claude may write run-local helper scripts under `research_runs/<research_id>/scripts/`.
+- The default location for a run-local evaluator is `research_runs/<research_id>/scripts/evaluator.py`.
+- For one-off run-local needs, Claude may install minimal extra dependencies with `uv pip install ...`.
+- Do not edit project dependency files for one-off run-local needs.
+- Record dependency installs and important helper artifacts in the research run artifacts.
 - For explicit optimizer benchmarking/comparison requests, use:
 
 ```bash
@@ -141,6 +159,52 @@ uv run python -m bo_workflow.scripts.egfr_ic50_global_experiment \
 
 - **Long-running scripts** (EGFR experiments, compare scripts with >1 repeat) can take 10–30+ minutes. Always run them with `run_in_background=true` in the Bash tool — do not use a fixed timeout, there is no safe upper bound.
 - Only create a new script if no existing command/script fits the request. If creating one, keep it reusable and place it under `bo_workflow/scripts/`.
+
+## First-Principles Evaluators
+
+When the user explicitly asks for a real DFT-style or first-principles evaluator:
+
+- Do not satisfy the request with a literature lookup table, pre-tabulated values, or other surrogate unless the user explicitly allows that fallback.
+- Treat search-space stability as part of the scientific setup, not as an afterthought.
+- Start with a narrow calibration subset of representative candidates before committing to the final BO search space.
+- Prefer stable metals, facets, and adsorption sites over broader but fragile families for the first working pass.
+- Distinguish candidate-local failures from systematic evaluator failures:
+  - candidate-local failures may be logged and penalized
+  - repeated systematic failures should trigger search-space shrinkage or evaluator revision before BO continues
+- If the task already points to a specific `research_runs/<research_id>/` directory, stay focused on the directly relevant run artifacts and workflow files instead of broadly exploring unrelated repo areas first.
+
+For any expensive or fragile evaluator family, not just DFT:
+
+- route through the Claude `evaluator-design` skill before BO setup when the evaluator still needs to be stabilized
+- do not route through `evaluator-design` when the user is the evaluator, the user already has an evaluator/backend/module, or another external observer will provide the values
+- use a 3–5 point calibration subset by default
+- treat the calibration phase as a stability-and-pruning pass, not an attempt to map the space
+- if repeated failures share the same setup cause, revise the evaluator family or search space before BO continues
+- make an explicit evaluator decision:
+  - local executable evaluator
+  - retrospective lookup evaluator
+  - hybrid
+- use literature, databases, and published values for orientation, calibration, and validation, but do not default to a tabulated external oracle as the final black box when a local executable evaluator is feasible
+
+For live structural MLIP-backed benchmark runs:
+
+- The safe flagship story is: the agent autonomously assembled and ran a live structural screening workflow that produced DFT-validation candidates.
+- The unsafe story is: the agent conclusively proved a new catalyst beats the benchmark from an MLIP screening run alone.
+- Default benchmark mode is `native_structure_screen`: use each material's thermodynamically stable bulk structure and valid facets/sites derived from that structure.
+- Use `fcc_only_screen` only as an explicit simplification when the user wants a narrower but cleaner first pass.
+- Do not expose a factorized `metal × facet × site` search space if many combinations are invalid for the evaluator. Prefer:
+  - a valid candidate catalog encoded as a single categorical `candidate_id`, or
+  - another constrained representation that only emits evaluable candidates
+- If an empirical calibration correction is used to map MLIP outputs toward literature or DFT values:
+  - validate it on a reference set broad enough for the feasible space rather than a tiny single-facet/single-site anchor
+  - scale the calibration budget to the problem size:
+    - small finite spaces: roughly `4–6` references
+    - medium spaces: roughly `6–8` references
+    - larger or more heterogeneous spaces: roughly `8–10` references
+  - keep calibration to a modest fraction of a small catalog rather than spending a large share of the search budget up front
+  - persist a machine-readable calibration summary in the research artifacts
+  - treat top candidates within the uncertainty band as a shortlist rather than a single settled winner
+- If the run uses metastable or convenience crystal structures, present it as demo-quality screening evidence, not canonical benchmark truth.
 
 ## Artifact Roots
 
@@ -171,6 +235,11 @@ Each evaluation backend produces files under `evaluation_backends/<backend_id>/`
 | `oracle.pkl` | `build-oracle` |
 | `oracle_meta.json` | `build-oracle` |
 
+Deferred design note:
+- after the first working open-world Claude runs, consider normalizing all evaluator entrypoints behind `evaluation_backends/<backend_id>/`
+- the intended direction is a backend-kind model (for example `proxy_oracle` and `python_module`) so `run-evaluator --backend-id ...` becomes the common interface
+- do not prioritize this over the first end-to-end live-structural success case
+
 ## Research Run Artifacts
 
 Each top-level research workflow produces files under `research_runs/<research_id>/`:
@@ -193,6 +262,7 @@ All commands: `uv run python -m bo_workflow.cli <command> [flags]`
 | `observe` | `--run-id --data` (req) | Record real/simulated results |
 | `run-proxy` | `--run-id --iterations` (req), `--backend-id --batch-size` (opt) | Full proxy BO loop |
 | `run-evaluator` | `--run-id --backend-id --iterations` (req), `--batch-size` (opt) | Operator-owned hidden evaluation loop over `suggest` / `observe` |
+| `run-python-evaluator` | `--run-id --module-path --iterations` (req), `--function --batch-size` (opt) | Run BO against a local Python evaluator module |
 | `status` | `--run-id` (req) | Quick run summary |
 | `report` | `--run-id` (req) | Full report + convergence plot |
 
@@ -211,7 +281,7 @@ Converter commands (separate entrypoints):
 | `column_transform` | `profile` | `--input` (req), `--cols` (opt) | Analyse columns and recommend transforms |
 | `column_transform` | `transform` | `--input --cols --transform --output` (req), `--keep-original` (opt) | Apply a named transform; renames column with prefix (e.g. `log10_ic50_nM`) |
 
-Engine options: `hebo` (default), `bo_lcb`, `random`, `botorch`. Note: `bo_lcb` currently supports batch-size 1 only. `botorch` supports mixed numeric + categorical features via BoTorch's native mixed GP model, but `hebo` remains the default for strongly categorical problems.
+Engine options: `hebo` (default), `bo_lcb`, `random`, `botorch`. Note: `bo_lcb` currently supports batch-size 1 only. `botorch` supports mixed numeric + categorical features via BoTorch's native mixed GP model and is often the better choice for small-to-medium, mostly categorical, expensive-evaluation spaces. `hebo` remains the general default for broader mixed tabular BO problems.
 
 Constraints are domain knowledge, not something the engine can reliably infer from a dataset alone. When the problem description includes composition variables that must sum to a fixed total, pass them explicitly during `init` with `--simplex-groups 'col1,col2,...:total'`.
 
@@ -289,3 +359,5 @@ The `observe` command accepts `--data` as:
 - Inline JSON: `'{"x": {"feat1": 1.0}, "y": 5.2}'` or a JSON list of such objects
 - Path to `.json` file: list of `{"x": {...}, "y": ...}` objects
 - Path to `.csv` file: must have a `y` column; all other columns become `x`
+
+When observations come from a local Python evaluator, extra diagnostic keys beyond `y` are allowed and should be preserved in `observations.jsonl` when available. Typical examples include raw vs calibrated scores or failure metadata.
