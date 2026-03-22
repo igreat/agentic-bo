@@ -5,6 +5,7 @@ backend-id flow via a persisted `backend_kind="python_module"` backend shape so
 `run-evaluator --backend-id ...` becomes the normalized evaluator entrypoint.
 """
 
+from contextlib import contextmanager
 import importlib.util
 from pathlib import Path
 import sys
@@ -13,6 +14,21 @@ from typing import Any
 from ..engine import BOEngine
 from ..observers.callback import CallbackObserver
 from ..utils import read_jsonl, utc_now_iso
+
+
+@contextmanager
+def _module_parent_on_sys_path(module_path: Path):
+    parent = str(module_path.parent)
+    inserted_index: int | None = None
+    if parent not in sys.path:
+        sys.path.insert(0, parent)
+        inserted_index = 0
+    try:
+        yield
+    finally:
+        if inserted_index is not None and len(sys.path) > inserted_index:
+            if sys.path[inserted_index] == parent:
+                sys.path.pop(inserted_index)
 
 
 def _validate_python_evaluator_preconditions(
@@ -70,16 +86,8 @@ def _load_python_evaluator(module_path: str | Path, function_name: str) -> Any:
         raise ImportError(f"Could not load Python evaluator module: {module_path}")
 
     module = importlib.util.module_from_spec(spec)
-    added_path = False
-    parent = str(module_path.parent)
-    if parent not in sys.path:
-        sys.path.insert(0, parent)
-        added_path = True
-    try:
+    with _module_parent_on_sys_path(module_path):
         spec.loader.exec_module(module)
-    finally:
-        if added_path and sys.path and sys.path[0] == parent:
-            sys.path.pop(0)
 
     fn = getattr(module, function_name, None)
     if fn is None or not callable(fn):
@@ -176,16 +184,17 @@ def run_python_module_evaluator(
 
     def callback(suggestions: list[dict[str, Any]]) -> list[dict[str, Any]]:
         observations = []
-        for suggestion in suggestions:
-            result = evaluator(dict(suggestion["x"]))
-            observations.append(
-                _normalize_python_evaluator_result(
-                    result=result,
-                    suggestion=suggestion,
-                    target_column=target_column,
-                    default_engine=default_engine,
+        with _module_parent_on_sys_path(module_path):
+            for suggestion in suggestions:
+                result = evaluator(dict(suggestion["x"]))
+                observations.append(
+                    _normalize_python_evaluator_result(
+                        result=result,
+                        suggestion=suggestion,
+                        target_column=target_column,
+                        default_engine=default_engine,
+                    )
                 )
-            )
         return observations
 
     class PythonEvaluatorObserver(CallbackObserver):
