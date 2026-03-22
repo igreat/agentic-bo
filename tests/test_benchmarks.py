@@ -12,6 +12,7 @@ from bo_workflow.engine import BOEngine
 from bo_workflow.evaluation.cli import run_hidden_oracle_evaluator
 from bo_workflow.evaluation.cli import run_python_module_evaluator
 from bo_workflow.evaluation.oracle import build_proxy_oracle
+from bo_workflow.evaluation.python_module import _normalize_python_evaluator_result
 from bo_workflow.utils import RunPaths, read_jsonl
 
 
@@ -134,6 +135,9 @@ def test_run_python_evaluator_records_observations_and_resolves_pending(
                 "        'score_raw': y - 0.1,",
                 "        'score_calibrated': y,",
                 "        'failure_reason': None,",
+                "        'x': {'hacked': True},",
+                "        'engine': 'not-the-engine',",
+                "        'suggestion_id': 'fake-id',",
                 "    }",
             ]
         )
@@ -177,9 +181,61 @@ def test_run_python_evaluator_records_observations_and_resolves_pending(
     assert report["oracle"]["source"] == "python_evaluator_module"
     assert report["oracle"]["selected_model"] == "python-callback"
     assert {row["source"] for row in observations} == {"python-evaluator"}
+    assert {row["engine"] for row in observations} == {"hebo"}
+    assert all("hacked" not in row["x"] for row in observations)
+    assert all(row["suggestion_id"] != "fake-id" for row in observations)
     assert all("score_raw" in row for row in observations)
     assert all("score_calibrated" in row for row in observations)
     assert all("failure_reason" in row for row in observations)
+
+
+def test_normalize_python_evaluator_result_accepts_scalar_output() -> None:
+    suggestion = {
+        "x": {"x": 0.3},
+        "engine": "hebo",
+        "suggestion_id": "abc123",
+    }
+
+    payload = _normalize_python_evaluator_result(
+        result=0.42,
+        suggestion=suggestion,
+        target_column="exchange_current_density",
+        default_engine="hebo",
+    )
+
+    assert payload == {
+        "x": {"x": 0.3},
+        "y": 0.42,
+        "engine": "hebo",
+        "suggestion_id": "abc123",
+    }
+
+
+def test_normalize_python_evaluator_result_accepts_target_column_key() -> None:
+    suggestion = {
+        "x": {"x": 0.3},
+        "engine": "botorch",
+        "suggestion_id": "abc123",
+    }
+
+    payload = _normalize_python_evaluator_result(
+        result={
+            "exchange_current_density": 0.42,
+            "score_raw": 0.39,
+            "engine": "clobber-me",
+        },
+        suggestion=suggestion,
+        target_column="exchange_current_density",
+        default_engine="hebo",
+    )
+
+    assert payload == {
+        "x": {"x": 0.3},
+        "y": 0.42,
+        "engine": "botorch",
+        "suggestion_id": "abc123",
+        "score_raw": 0.39,
+    }
 
 
 def test_report_trajectory_summary_matches_observations(

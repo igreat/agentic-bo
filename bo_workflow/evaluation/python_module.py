@@ -93,7 +93,7 @@ def _normalize_python_evaluator_result(
         extras = {
             str(key): value
             for key, value in result.items()
-            if key not in {"y", target_column}
+            if key not in {"y", target_column, "x", "engine", "suggestion_id"}
         }
     else:
         y_value = result
@@ -150,6 +150,8 @@ def run_python_module_evaluator(
     )
     target_column = str(state["target_column"])
     default_engine = str(state.get("default_engine", "hebo"))
+    paths = engine._paths(run_id)
+    recorded_before = len(read_jsonl(paths.observations))
 
     def callback(suggestions: list[dict[str, Any]]) -> list[dict[str, Any]]:
         observations = []
@@ -170,7 +172,6 @@ def run_python_module_evaluator(
         def source(self) -> str:
             return "python-evaluator"
 
-    recorded = 0
     pending = _pending_suggestions(engine, run_id)
     if pending:
         engine.observe(
@@ -179,7 +180,6 @@ def run_python_module_evaluator(
             source="python-evaluator",
             verbose=verbose,
         )
-        recorded += len(pending)
 
     observer = PythonEvaluatorObserver(callback)
     report = engine.run_optimization(
@@ -189,7 +189,7 @@ def run_python_module_evaluator(
         batch_size=int(batch_size),
         verbose=verbose,
     )
-    recorded += int(num_iterations) * int(batch_size)
+    recorded = len(read_jsonl(paths.observations)) - recorded_before
     return {
         "run_id": run_id,
         "module_path": str(module_path),
@@ -201,6 +201,6 @@ def run_python_module_evaluator(
         "best_value": report.get("best_value"),
         "best_iteration": report.get("best_iteration"),
         "best_observation_number": report.get("best_observation_number"),
-        "report_path": str(engine._paths(run_id).report),
-        "convergence_plot_path": str(engine._paths(run_id).convergence_plot),
+        "report_path": str(paths.report),
+        "convergence_plot_path": str(paths.convergence_plot),
     }
