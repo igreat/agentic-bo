@@ -2,10 +2,9 @@
 
 This directory holds the benchmark setup for the final report.
 
-The exact required report runs are locked in
-[`core_runs.md`](core_runs.md).
+The exact required report runs are locked in [`core_runs.md`](core_runs.md).
 
-Right now, only one task is fully packaged:
+Currently, one task is fully packaged:
 
 - `oer`: the flagship OER composition benchmark
 
@@ -21,8 +20,6 @@ The benchmark model is intentionally simple:
   - fresh `bo_runs/` and `research_runs/`
 
 ## OER quick start
-
-This is the main thing you should follow if you just want to run the benchmark.
 
 ### 1. In the root repo, install dependencies
 
@@ -55,8 +52,8 @@ Build one workspace per baseline condition:
 
 In the examples below, replace:
 
-- `<SKILLED_WORKSPACE>` with any clean output directory you want to use for the skilled run
-- `<NAIVE_WORKSPACE>` with any clean output directory you want to use for the naive run
+- `<SKILLED_WORKSPACE>` with a clean output directory for the skilled run
+- `<NAIVE_WORKSPACE>` with a clean output directory for the naive run
 
 ```bash
 uv run python benchmarks/build_workspace.py \
@@ -72,9 +69,7 @@ uv run python benchmarks/build_workspace.py \
   --overwrite
 ```
 
-This also writes a benchmark-specific `.claude/settings.local.json` inside the
-built workspace so Claude Code can run shell commands and write artifacts
-without approval prompts while keeping Claude-native web/search disabled.
+This also writes a benchmark-specific `.claude/settings.local.json` inside the built workspace so Claude Code can run shell commands and write artifacts without approval prompts while keeping Claude-native web/search disabled.
 
 ### 4. Switch into the built workspace and install dependencies there too
 
@@ -86,10 +81,9 @@ uv pip install --no-deps "hebo @ git+https://github.com/huawei-noah/HEBO.git#sub
 
 Repeat the same install inside `<NAIVE_WORKSPACE>`.
 
-You need to install in each built workspace because they are separate working
-directories with their own environments.
+You need to install in each built workspace because they are separate working directories with their own environments.
 
-### 5. Manual smoke run (skip to [6. Full agent run](/benchmarks/README.md#6-full-agent-run) if you want to jump straight to the agentic run)
+### 5. Manual smoke run
 
 Initialize a BO run from the public task bundle:
 
@@ -127,8 +121,7 @@ For the report, this should be executed in two variants:
 - **skilled baseline**: `full` skill-profile workspace + explicit `/research-agent`
 - **naive baseline**: `bo_only` skill-profile workspace + plain Claude Code, no explicit skill invocation
 
-The task bundle, budget, and evaluator must stay fixed between the two variants.
-The only intended difference is the research-layer orchestration surface.
+The task bundle, budget, and evaluator must stay fixed between the two variants. The only intended difference is the research-layer orchestration surface.
 
 Run the agent from inside the corresponding built workspace:
 
@@ -147,12 +140,9 @@ Use the fixed prompt files under [`prompts/`](prompts/):
 - [`oer_skilled.md`](prompts/oer_skilled.md)
 - [`oer_naive.md`](prompts/oer_naive.md)
 
-For the skilled baseline, invoke `/research-agent` first and then paste
-[`oer_skilled.md`](prompts/oer_skilled.md).
+For the skilled baseline, invoke `/research-agent` first and then paste [`oer_skilled.md`](prompts/oer_skilled.md).
 
-For the naive baseline, paste
-[`oer_naive.md`](prompts/oer_naive.md)
-with no explicit skill invocation.
+For the naive baseline, paste [`oer_naive.md`](prompts/oer_naive.md) with no explicit skill invocation.
 
 ### 7. HER case-study prompts
 
@@ -168,29 +158,20 @@ Use these as:
 - **lightly nudged**: paste `her_live_structural_light.md`
 - **strong**: invoke `/research-agent`, then paste `her_live_structural_strong.md`
 
-The report core requires the naive and strong HER runs. The light prompt is an
-optional nudging-ablation support run.
+The report core requires the naive and strong HER runs. The light prompt is an optional nudging-ablation support run.
 
-For the HER core pair, use two fresh clean repo workspaces from the same branch
-or commit. Keep the normal project skill trees present in both workspaces. The
-only intended intervention difference is whether `/research-agent` is invoked.
-Start each HER run from a fresh empty chat and let it continue uninterrupted
-until the agent explicitly declares completion, unless it is clearly stalled or
-looping.
+For the HER core pair, use two fresh clean repo workspaces from the same branch or commit. Keep the normal project skill trees present in both workspaces. The only intended intervention difference is whether `/research-agent` is invoked. Start each HER run from a fresh empty chat and let it continue uninterrupted until the agent explicitly declares completion, unless it is clearly stalled or looping.
 
-If you want to study mid-conversation nudging, treat it as a separate
-interactive rescue trace rather than a normal baseline:
+Mid-conversation nudging should be treated as a separate interactive rescue trace rather than a normal baseline:
 
 - start from the naive or light HER prompt
-- log the exact follow-up message(s) you send
-- record why you intervened and when
-- do not fold the rescued run into the main skilled-vs-naive benchmark table as
-  if it were a clean baseline condition
+- log the exact follow-up message(s) sent by the operator
+- record why and when the intervention occurred
+- do not fold the rescued run into the main skilled-vs-naive benchmark table as if it were a clean baseline condition
 
 ## What `build_workspace.py` does
 
-`benchmarks/build_workspace.py` copies a stripped set of files into the public
-workspace:
+`benchmarks/build_workspace.py` copies a stripped set of files into the public workspace:
 
 - root files:
   - `AGENTS.md`
@@ -208,11 +189,9 @@ workspace:
   - `permissions.allow: [Bash]`
   - `permissions.deny: [WebSearch, WebFetch]`
 - selected benchmark task bundles from `benchmarks/tasks/`
-- any prebuilt backend named by `evaluation.backend_id` in the task manifest,
-  if it already exists under root `evaluation_backends/`
+- any prebuilt backend named by `evaluation.backend_id` in the task manifest, if it already exists under root `evaluation_backends/`
 
-With `--skill-profile bo_only`, the copied workspace keeps BO/converter skills
-but strips the top-level research-layer skills:
+With `--skill-profile bo_only`, the copied workspace keeps BO/converter skills but strips the top-level research-layer skills:
 
 - `.agents/skills/research-agent`
 - `.agents/skills/literature-review`
@@ -237,8 +216,7 @@ Each public task bundle may include:
 - optional `seed_observations.csv`
 - optional `literature/`
 
-The manifest may also declare the intended workflow entrypoint, e.g.
-`workflow.entrypoint = research-agent`.
+The manifest may also declare the intended workflow entrypoint, e.g. `workflow.entrypoint = research-agent`.
 
 For `oer`, the task bundle lives at:
 
@@ -254,8 +232,7 @@ For `oer`, the task bundle lives at:
 
 ## Relationship to HER
 
-The HER live-structural work is not the packaged public benchmark in this
-directory. Treat HER as a separate open-world case study:
+The HER live-structural work is not the packaged public benchmark in this directory. Treat HER as a separate open-world case study:
 
 - same skilled-vs-naive comparison idea
 - different scoring model

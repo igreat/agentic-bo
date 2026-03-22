@@ -2,8 +2,7 @@
 
 This file locks the exact **4-run core evidence package** for the report.
 
-These are the runs that should happen before any optional support ablations such
-as `HER light` or interactive rescue traces.
+These runs precede any optional support ablations such as `HER light` or interactive rescue traces.
 
 ## Core runs
 
@@ -26,6 +25,7 @@ Keep these fixed across the naive and skilled runs:
 - same no-web rule
 - same public benchmark workspace build process
 - same model family and Claude Code version when practical
+- same effort level
 - same clean starting chat
 - no mid-run operator intervention
 
@@ -37,22 +37,17 @@ Keep these fixed across the naive and skilled runs:
 
 - same branch / code state
 - same model family
+- same effort level
 - same initial prompt family
 - same live-structural evaluator requirement
 - same access to local code and web research
 - same clean starting chat
 - no mid-run operator intervention
 - same operator stop policy:
-  - let the run continue uninterrupted until the agent explicitly declares the
-    workflow complete, or
-  - stop it only if it is clearly stalled or looping without forward progress,
-    and record that as incomplete in the scorecard
+  - let the run continue uninterrupted until the agent explicitly declares the workflow complete, or
+  - stop it only if it is clearly stalled or looping without forward progress, and record that as incomplete in the scorecard
 
-Use **separate fresh workspaces** for the HER naive and HER skilled runs so
-package installs and artifacts do not contaminate the comparison. Unlike OER,
-the HER naive workspace should still contain the ordinary project skill trees on
-disk; the intervention is the absence of explicit `/research-agent`, not a
-stripped repo.
+Use **separate fresh workspaces** for the HER naive and HER skilled runs so package installs and artifacts do not contaminate the comparison. Unlike OER, the HER naive workspace should still contain the ordinary project skill trees on disk; the intervention is the absence of explicit `/research-agent`, not a stripped repo.
 
 ## Workspace setup
 
@@ -124,23 +119,20 @@ Apply the same cleanliness rules as the HER naive workspace.
 3. **HER naive**
 4. **HER skilled**
 
-This order keeps the clean benchmark pair together and then moves to the
-open-world case study.
+This order keeps the clean benchmark pair together and then moves to the open-world case study.
 
-If you want to de-risk the benchmark setup before collecting report evidence,
-run one **unscored manual OER smoke run** first. Do not count that smoke run as
-one of the four core evidence runs.
+An **unscored manual OER smoke run** may be used to validate the benchmark path before collecting report evidence. Do not count that smoke run as one of the four core evidence runs.
 
 ## Logging and scoring
 
 For each of the four core runs:
 
-- fill one copy of [`run_scorecard_template.md`](run_scorecard_template.md)
+- for OER, fill one copy of [`oer_scorecard_template.md`](oer_scorecard_template.md)
+- for HER, fill one copy of [`her_scorecard_template.md`](her_scorecard_template.md)
 - record the exact prompt file used
+- record the effort level used for the session
 - record whether `/research-agent` was invoked
 - record whether manual repair was needed
-- for OER, score against the benchmark metrics in [`scoring.md`](scoring.md)
-- for HER, score against the HER case-study rubric in [`scoring.md`](scoring.md)
+- score against the task-appropriate rubric in [`scoring.md`](scoring.md)
 
-Do not include optional `HER light` or interactive rescue traces in the main
-four-run comparison table.
+Do not include optional `HER light` or interactive rescue traces in the main four-run comparison table.

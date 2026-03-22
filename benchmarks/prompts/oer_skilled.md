@@ -9,18 +9,12 @@ Use only the public task materials in this workspace:
 
 Do not use web search.
 
-Do not access or assume any labeled source dataset outside this public
-workspace.
+Do not access or assume any labeled source dataset outside this public workspace.
 
-Use the prebuilt evaluator specified by the task bundle. Do not build your own
-oracle or replace the evaluator path.
+Use the prebuilt evaluator specified by the task bundle. Do not build your own oracle or replace the evaluator path.
 
-Respect the fixed task budget and the simplex constraint over all six molar
-fractions.
+Respect the fixed task budget and the simplex constraint over all six molar fractions.
 
-Execute the full workflow end to end. Produce the BO artifacts under `bo_runs/`
-and the research artifacts under `research_runs/`, then draft the final report
-or paper.
+Execute the full workflow end to end. Produce the BO artifacts under `bo_runs/` and the research artifacts under `research_runs/`, then draft the final report or paper.
 
-Treat this as a scored benchmark run and do not pause between phases unless
-blocked.
+Treat this as a scored benchmark run and do not pause between phases unless blocked.

@@ -16,8 +16,7 @@ This package is intentionally split:
 - `oer` is the formal scored benchmark
 - `her_live_structural` is the autonomy/scientific case study
 
-If time remains after these four runs are complete, a third case may be added as
-support evidence. It is not required for the report core.
+If time remains after these four runs are complete, a third case may be added as support evidence. It is not required for the report core.
 
 An optional support ablation may also include:
 
@@ -26,10 +25,10 @@ An optional support ablation may also include:
 
 ## Main comparison
 
-Primary headline comparison:
+Primary comparison:
 
 - full `research-agent` workflow
-- naive Claude Code with the same model family, workspace, task materials, and budget
+- naive Claude Code with the same model family, effort level, workspace, task materials, and budget
 
 This isolates the value of the orchestration/skill layer, not just the model.
 
@@ -40,34 +39,26 @@ Support evidence may still include:
 - BO engine quality (`hebo` / `botorch` / `random`) inside the packaged benchmark
 - optimizer-only comparisons such as raw BO versus random search
 
-Use these only as support evidence. They are not the headline claim.
+Use these only as support evidence. They are not the primary claim.
 
 ## Baseline definitions
 
 ### Skilled baseline
 
 - explicit `/research-agent` invocation is allowed
-- for packaged benchmark runs such as `oer`, the workspace uses
-  `skill_profile=full`
-- for open-world runs such as `her_live_structural`, use a fresh clean repo
-  workspace from the same branch/code state as the paired naive run
+- for packaged benchmark runs such as `oer`, the workspace uses `skill_profile=full`
+- for open-world runs such as `her_live_structural`, use a fresh clean repo workspace from the same branch/code state as the paired naive run
 - project skills and workflow artifacts are part of the tested system
 
 ### Naive baseline
 
 - no explicit skill invocation
 - no custom project slash commands
-- for packaged benchmark runs such as `oer`, the workspace uses
-  `skill_profile=bo_only`
-- for open-world runs such as `her_live_structural`, use a fresh clean repo
-  workspace from the same branch/code state as the paired skilled run
-- same task bundle or repo state, same budget, and same evaluator constraints as
-  the skilled baseline
+- for packaged benchmark runs such as `oer`, the workspace uses `skill_profile=bo_only`
+- for open-world runs such as `her_live_structural`, use a fresh clean repo workspace from the same branch/code state as the paired skilled run
+- same task bundle or repo state, same budget, and same evaluator constraints as the skilled baseline
 
-The naive baseline may still use Claude Code's native capabilities and the
-engine-level BO documentation surface. For open-world runs, the project skill
-files may still be present on disk; the point is to remove the explicit
-research-layer orchestration, not to cripple the model or hide the BO engine.
+The naive baseline may still use Claude Code's native capabilities and the engine-level BO documentation surface. For open-world runs, the project skill files may still be present on disk. The intent is to remove explicit research-layer orchestration without hiding the BO engine or artificially weakening the model.
 
 ### Lightly nudged baseline
 
@@ -96,6 +87,7 @@ research-layer orchestration, not to cripple the model or hide the BO engine.
 - simplex constraint over all six molar fractions
 - iterations: `100`
 - batch size: `1`
+- effort level: keep fixed across compared runs
 - initial random suggestions: `10`
 - evaluation mode: prebuilt hidden backend
 - web search: disabled
@@ -107,25 +99,21 @@ research-layer orchestration, not to cripple the model or hide the BO engine.
 - evaluation mode: open-world local Python evaluator
 - web search: allowed if the prompt permits it
 - budget: keep fixed across skilled and naive runs for a given comparison pair
+- effort level: keep fixed across skilled and naive runs for a given comparison pair
 - workspace state: fresh clean repo workspaces for both naive and skilled runs
 - conversation state: both runs should start from a fresh empty chat
 - operator intervention: none for the core four runs
-- stop policy: let the run continue until the agent explicitly declares the
-  workflow complete; if it is stopped early for clear stalling or looping,
-  score it as incomplete and record the reason
+- stop policy: let the run continue until the agent explicitly declares the workflow complete; if it is stopped early for clear stalling or looping, score it as incomplete and record the reason
 
-Do not claim that HER is a hidden-optimum benchmark. It is a case study with a
-different scoring model.
+Do not claim that HER is a hidden-optimum benchmark. It is a case study with a different scoring model.
 
-If interactive rescue is studied on HER, keep the trigger policy simple and
-disclose it. Example acceptable triggers:
+If interactive rescue is studied on HER, keep the trigger policy simple and disclose it. Example acceptable triggers:
 
 - no valid evaluator path chosen after a fixed amount of time
 - repeated drift into lookup-oracle behavior after the prompt forbids it
 - no BO run or research artifact created after a fixed amount of time
 
-Do not compare an interactively rescued HER run directly against the clean
-skilled-vs-naive headline result as if they were the same condition.
+Do not compare an interactively rescued HER run directly against the clean skilled-vs-naive primary result as if they were the same condition.
 
 ## OER benchmark metrics
 
@@ -191,13 +179,11 @@ Use a `0/1/2` rubric with two-person consensus when possible.
 - `1`: serviceable but thin or inconsistent
 - `2`: clear, readable, and useful as a concise report draft
 
-Present this rubric honestly as structured qualitative review, not as a hard
-scientific metric.
+Present this rubric honestly as structured qualitative review, not as a hard scientific metric.
 
 ## HER case-study rubric
 
-Do not score HER primarily by hidden-optimum metrics. Instead, score it using
-the checklist above plus the following case-study axes:
+Do not score HER primarily by hidden-optimum metrics. Instead, score it using the checklist above plus the following case-study axes:
 
 ### Evaluator legitimacy
 
@@ -223,20 +209,20 @@ Use the HER rubric to place each run into one of three outcome categories:
 - `demo-quality success`
 - `benchmark-quality success`
 
-The current expected bar for HER is that a good run may count as
-`demo-quality success` without automatically qualifying as `benchmark-quality success`.
+The current expected bar for HER is that a good run may count as `demo-quality success` without automatically qualifying as `benchmark-quality success`.
 
 ## Benchmark integrity notes
 
 The report should state:
 
 - scored OER runs used a stripped public workspace
+- compared runs used the same model family and effort level
 - web search was disabled during scored OER runs
 - labeled source datasets stayed outside the public workspace
 - prebuilt evaluator assets were fixed before scoring
 - task prompts, budgets, and backend ids were fixed before scoring
 - HER runs were evaluated as open-world case studies, not hidden-optimum benchmark runs
-- any lightly nudged support runs were analyzed as ablations, not as the main headline comparison
+- any lightly nudged support runs were analyzed as ablations, not as the primary comparison
 - any interactive rescue traces were reported as operator interventions, not as clean benchmark baselines
 
 Also state the limitations:
