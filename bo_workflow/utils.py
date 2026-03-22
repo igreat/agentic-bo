@@ -142,6 +142,12 @@ def read_jsonl(path: Path) -> list[dict[str, Any]]:
 
 
 def to_python_scalar(value: Any) -> Any:
+    if isinstance(value, dict):
+        return {str(key): to_python_scalar(inner) for key, inner in value.items()}
+    if isinstance(value, (list, tuple, set)):
+        return [to_python_scalar(item) for item in value]
+    if isinstance(value, np.ndarray):
+        return [to_python_scalar(item) for item in value.tolist()]
     if isinstance(value, np.generic):
         return value.item()
     return value

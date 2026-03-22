@@ -7,6 +7,7 @@ backend-id flow via a persisted `backend_kind="python_module"` backend shape so
 
 import importlib.util
 from pathlib import Path
+import sys
 from typing import Any
 
 from ..engine import BOEngine
@@ -69,7 +70,16 @@ def _load_python_evaluator(module_path: str | Path, function_name: str) -> Any:
         raise ImportError(f"Could not load Python evaluator module: {module_path}")
 
     module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
+    added_path = False
+    parent = str(module_path.parent)
+    if parent not in sys.path:
+        sys.path.insert(0, parent)
+        added_path = True
+    try:
+        spec.loader.exec_module(module)
+    finally:
+        if added_path and sys.path and sys.path[0] == parent:
+            sys.path.pop(0)
 
     fn = getattr(module, function_name, None)
     if fn is None or not callable(fn):

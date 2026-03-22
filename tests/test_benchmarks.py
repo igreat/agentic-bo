@@ -3,6 +3,7 @@
 import json
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 import pytest
 
@@ -279,6 +280,47 @@ def test_observe_preserves_engine_metadata_when_extras_collide(tmp_path: Path) -
     assert observation["score_raw"] == 0.45
 
 
+def test_observe_recursively_normalizes_nested_extras(tmp_path: Path) -> None:
+    runs_root = tmp_path / "bo_runs"
+    engine = BOEngine(runs_root=runs_root)
+    state = engine.init_run(
+        target_column="target",
+        objective="min",
+        search_space_spec={
+            "design_parameters": [
+                {"name": "x", "type": "num", "lb": 0.0, "ub": 1.0}
+            ],
+            "fixed_features": {},
+        },
+        seed=42,
+        num_initial_random_samples=2,
+    )
+    run_id = state["run_id"]
+
+    engine.observe(
+        run_id,
+        [
+            {
+                "x": {"x": 0.2},
+                "y": 0.5,
+                "diagnostics": {
+                    "score_raw": np.float64(0.45),
+                    "components": np.array([1.0, 2.0]),
+                    "failures": [np.int64(0), np.int64(1)],
+                },
+            }
+        ],
+        source="benchmark-evaluator",
+    )
+
+    observation = read_jsonl(RunPaths(run_dir=runs_root / run_id).observations)[0]
+    assert observation["diagnostics"] == {
+        "score_raw": 0.45,
+        "components": [1.0, 2.0],
+        "failures": [0, 1],
+    }
+
+
 def test_run_python_evaluator_zero_iterations_only_resolves_pending(
     tmp_path: Path,
 ) -> None:
@@ -331,6 +373,61 @@ def test_run_python_evaluator_zero_iterations_only_resolves_pending(
     assert final_state["status"] == "running"
     assert report["num_observations"] == 1
     assert observations[0]["suggestion_id"] == suggestion["suggestion_id"]
+
+
+def test_run_python_evaluator_supports_sibling_helper_imports(
+    tmp_path: Path,
+) -> None:
+    helper_path = tmp_path / "helper.py"
+    helper_path.write_text(
+        "\n".join(
+            [
+                "def objective(x):",
+                "    return 1.0 - abs(x - 0.3)",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    module_path = tmp_path / "blackbox_her.py"
+    module_path.write_text(
+        "\n".join(
+            [
+                "from helper import objective",
+                "",
+                "def evaluate(composition):",
+                "    x = float(composition['x'])",
+                "    return {'y': objective(x)}",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    runs_root = tmp_path / "bo_runs"
+    engine = BOEngine(runs_root=runs_root)
+    state = engine.init_run(
+        target_column="exchange_current_density",
+        objective="max",
+        search_space_spec={
+            "design_parameters": [
+                {"name": "x", "type": "num", "lb": 0.0, "ub": 1.0}
+            ],
+            "fixed_features": {},
+        },
+        seed=42,
+        num_initial_random_samples=2,
+    )
+
+    payload = run_python_module_evaluator(
+        engine,
+        run_id=state["run_id"],
+        module_path=module_path,
+        num_iterations=1,
+        batch_size=1,
+    )
+
+    assert payload["recorded"] == 1
 
 
 def test_report_trajectory_summary_matches_observations(
