@@ -1,6 +1,3 @@
-This prompt is intended for a Claude Code session where `/research-agent` has
-already been invoked.
-
 You are working with the closed-world benchmark task bundle at `tasks/oer/`.
 
 Use only the public task materials in this workspace:
