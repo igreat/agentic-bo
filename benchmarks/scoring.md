@@ -7,9 +7,9 @@ This document locks the evidence package for the final report.
 The required evidence package is four runs:
 
 - `oer` skilled baseline: explicit `/research-agent`
-- `oer` naive baseline: plain Claude Code, no explicit skill invocation
+- `oer` naive baseline: plain Claude Code, no explicit research-layer skill invocation
 - `her_live_structural` skilled baseline: explicit `/research-agent`
-- `her_live_structural` naive baseline: plain Claude Code, no explicit skill invocation
+- `her_live_structural` naive baseline: plain Claude Code, no explicit research-layer skill invocation
 
 This package is intentionally split:
 
@@ -20,7 +20,7 @@ If time remains after these four runs are complete, a third case may be added as
 
 An optional support ablation may also include:
 
-- `her_live_structural` lightly nudged baseline: soft workflow cue in the initial prompt, but no explicit skill invocation
+- `her_live_structural` lightly nudged baseline: soft workflow cue in the initial prompt, but no explicit research-layer skill invocation
 - `her_live_structural` interactive rescue trace: one or more manual mid-conversation nudges, logged explicitly as operator intervention
 
 ## Main comparison
@@ -52,20 +52,20 @@ Use these only as support evidence. They are not the primary claim.
 
 ### Naive baseline
 
-- no explicit skill invocation
-- no custom project slash commands
+- no explicit research-layer skill invocation
+- no research-layer slash commands such as `/research-agent`, `/literature-review`, or `/scientific-writing`
 - for packaged benchmark runs such as `oer`, the workspace uses `skill_profile=bo_only`
 - for open-world runs such as `her_live_structural`, use a fresh clean repo workspace from the same branch/code state as the paired skilled run
 - same task bundle or repo state, same budget, and same evaluator constraints as the skilled baseline
 
-The naive baseline may still use Claude Code's native capabilities and the engine-level BO documentation surface. For open-world runs, the project skill files may still be present on disk. The intent is to remove explicit research-layer orchestration without hiding the BO engine or artificially weakening the model.
+The naive baseline may still use Claude Code's native capabilities, any BO engine helpers intentionally left available in the workspace, and the engine-level BO documentation surface. For open-world runs, ordinary project files and skill trees may still be present on disk unless the run protocol says otherwise. The intent is to remove explicit research-layer orchestration without hiding the BO engine or artificially weakening the model.
 
 ### Lightly nudged baseline
 
-- no explicit skill invocation
-- no custom project slash commands
+- no explicit research-layer skill invocation
+- obeys the same no-research-layer-slash-command rule as the naive baseline
 - uses the same workspace type as the corresponding naive baseline
-- initial prompt may reference the intended workflow or artifact structure
+- initial prompt may reference the intended workflow or artifact structure, but must not tell the model to call `/research-agent` or other research-layer slash commands
 - primarily used as an ablation on open-world case studies such as HER
 
 ### Interactive rescue trace
@@ -94,11 +94,12 @@ The naive baseline may still use Claude Code's native capabilities and the engin
 
 ### `her_live_structural`
 
-- objective: minimize `abs_delta_g_h`
+- objective: no predefined single scalar target; the run must choose and document a scientifically defensible optimization target, often `abs_delta_g_h`
 - evaluator: live local structural evaluator
 - evaluation mode: open-world local Python evaluator
 - web search: allowed if the prompt permits it
-- budget: keep fixed across skilled and naive runs for a given comparison pair
+- budget: no fixed iteration or query count is imposed by the prompt pack
+- comparison policy: for a given naive-vs-skilled pair, either let both runs continue until they explicitly declare completion under the same stop policy, or apply the same external wall-clock cap and record it explicitly
 - effort level: keep fixed across skilled and naive runs for a given comparison pair
 - workspace state: fresh clean repo workspaces for both naive and skilled runs
 - conversation state: both runs should start from a fresh empty chat

@@ -119,7 +119,7 @@ Artifacts will be written under `bo_runs/<RUN_ID>/`.
 For the report, this should be executed in two variants:
 
 - **skilled baseline**: `full` skill-profile workspace + explicit `/research-agent`
-- **naive baseline**: `bo_only` skill-profile workspace + plain Claude Code, no explicit skill invocation
+- **naive baseline**: `bo_only` skill-profile workspace + plain Claude Code, no explicit research-layer skill invocation
 
 The task bundle, budget, and evaluator must stay fixed between the two variants. The only intended difference is the research-layer orchestration surface.
 
@@ -142,7 +142,7 @@ Use the fixed prompt files under [`prompts/`](prompts/):
 
 For the skilled baseline, invoke `/research-agent` first and then paste [`oer_skilled.md`](prompts/oer_skilled.md).
 
-For the naive baseline, paste [`oer_naive.md`](prompts/oer_naive.md) with no explicit skill invocation.
+For the naive baseline, paste [`oer_naive.md`](prompts/oer_naive.md) with no explicit research-layer skill invocation.
 
 ### 7. HER case-study prompts
 
@@ -160,7 +160,7 @@ Use these as:
 
 The report core requires the naive and strong HER runs. The light prompt is an optional nudging-ablation support run.
 
-For the HER core pair, use two fresh clean repo workspaces from the same branch or commit. Keep the normal project skill trees present in both workspaces. The only intended intervention difference is whether `/research-agent` is invoked. Start each HER run from a fresh empty chat and let it continue uninterrupted until the agent explicitly declares completion, unless it is clearly stalled or looping.
+For the HER core pair, use two fresh clean repo workspaces from the same branch or commit. Keep the normal project skill trees present in both workspaces. The only intended intervention difference is whether a research-layer slash command is invoked. The naive and light conditions should not call `/research-agent` or other research-layer slash commands. Start each HER run from a fresh empty chat and let it continue uninterrupted until the agent explicitly declares completion, unless it is clearly stalled or looping. If you apply an external wall-clock cap, use the same cap for both runs and record it in the scorecard.
 
 Mid-conversation nudging should be treated as a separate interactive rescue trace rather than a normal baseline:
 

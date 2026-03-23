@@ -2,7 +2,7 @@ I want you to investigate hydrogen evolution reaction (HER) catalyst optimizatio
 
 This is a one-shot, no-questions, open-world run. You may use web research and local code. Do not pause for clarifying questions unless you are truly blocked.
 
-Use the research workflow in this workspace, and keep the standard workflow phases explicit in the run artifacts.
+Use the research workflow in this workspace, and keep the standard workflow phases explicit in the run artifacts. Do not invoke `/research-agent` or other project-defined research-layer slash commands.
 
 There is no predefined search space, evaluator, dataset, or budget. Figure out a scientifically defensible computational path and act on it end to end.
 

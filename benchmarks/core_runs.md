@@ -10,7 +10,7 @@ These runs precede any optional support ablations such as `HER light` or interac
 | --- | --- | --- | --- | --- | --- | --- |
 | 1 | `oer` | naive | public benchmark workspace built with `--skill-profile bo_only` | `benchmarks/prompts/oer_naive.md` | none | plain Claude Code under fixed benchmark conditions |
 | 2 | `oer` | skilled | public benchmark workspace built with `--skill-profile full` | `benchmarks/prompts/oer_skilled.md` | explicit `/research-agent` before pasting prompt | effect of the research-layer orchestration in a closed-world benchmark |
-| 3 | `her_live_structural` | naive | fresh clean repo workspace from the same branch/code state as run 4; keep the normal project skill trees present | `benchmarks/prompts/her_live_structural_naive.md` | none | open-world baseline without explicit orchestration |
+| 3 | `her_live_structural` | naive | fresh clean repo workspace from the same branch/code state as run 4; keep the normal project skill trees present | `benchmarks/prompts/her_live_structural_naive.md` | no explicit research-layer slash command invocation | open-world baseline without explicit orchestration |
 | 4 | `her_live_structural` | skilled | fresh clean repo workspace from the same branch/code state as run 3; keep the normal project skill trees present | `benchmarks/prompts/her_live_structural_strong.md` | explicit `/research-agent` before pasting prompt | effect of the research workflow in the main open-world case study |
 
 ## Required fixed conditions
@@ -41,13 +41,14 @@ Keep these fixed across the naive and skilled runs:
 - same initial prompt family
 - same live-structural evaluator requirement
 - same access to local code and web research
+- no fixed iteration/query budget in the prompt; either let both runs self-terminate under the same stop policy or apply the same external wall-clock cap and record it
 - same clean starting chat
 - no mid-run operator intervention
 - same operator stop policy:
   - let the run continue uninterrupted until the agent explicitly declares the workflow complete, or
   - stop it only if it is clearly stalled or looping without forward progress, and record that as incomplete in the scorecard
 
-Use **separate fresh workspaces** for the HER naive and HER skilled runs so package installs and artifacts do not contaminate the comparison. Unlike OER, the HER naive workspace should still contain the ordinary project skill trees on disk; the intervention is the absence of explicit `/research-agent`, not a stripped repo.
+Use **separate fresh workspaces** for the HER naive and HER skilled runs so package installs and artifacts do not contaminate the comparison. Unlike OER, the HER naive workspace should still contain the ordinary project skill trees on disk; the intervention is the absence of explicit research-layer slash-command invocation, not a stripped repo.
 
 ## Workspace setup
 

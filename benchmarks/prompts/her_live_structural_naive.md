@@ -2,6 +2,8 @@ I want you to investigate hydrogen evolution reaction (HER) catalyst optimizatio
 
 This is a one-shot, no-questions, open-world run. You may use web research and local code. Do not pause for clarifying questions unless you are truly blocked.
 
+Do not invoke `/research-agent` or other project-defined research-layer slash commands during this run.
+
 There is no predefined search space, evaluator, dataset, or budget. Figure out a scientifically defensible computational path and act on it end to end.
 
 For this run, the final evaluator must be a live executable structural simulator. Build actual candidate structures, place the relevant adsorbate(s), and evaluate them with a live local calculator.
