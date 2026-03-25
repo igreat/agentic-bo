@@ -33,7 +33,6 @@ bo_workflow/
   engine.py       # BOEngine class — suggest/observe loop, no oracle knowledge
   engine_cli.py   # CLI subcommands: init, suggest, observe, status, report
   cli.py          # top-level entrypoint — composes subparsers from each module
-  plotting.py     # convergence plot generation
   utils.py        # RunPaths, JSON I/O, shared types
   evaluation/
     cli.py        # CLI subcommands: build-oracle, run-proxy, run-evaluator, run-python-evaluator
@@ -160,7 +159,6 @@ Each BO run produces files under `bo_runs/<run_id>/`:
 | `intent.json` | `init` (when `--intent-json` is provided) |
 | `suggestions.jsonl` | `suggest` / `run-proxy` |
 | `observations.jsonl` | `observe` / `run-proxy` |
-| `convergence.pdf` | `report` / `run-proxy` |
 | `report.json` | `report` / `run-proxy` |
 
 ## Evaluation Backend Artifacts
@@ -196,7 +194,7 @@ All commands: `uv run python -m bo_workflow.cli <command> [flags]`
 | `run-evaluator` | `--run-id --backend-id --iterations` (req), `--batch-size` (opt) | Operator-owned hidden evaluation loop over `suggest` / `observe` |
 | `run-python-evaluator` | `--run-id --module-path --iterations` (req), `--function --batch-size` (opt) | Run BO against a local Python evaluator module discovered or written during the workflow |
 | `status` | `--run-id` (req) | Quick run summary |
-| `report` | `--run-id` (req) | Full report + convergence plot |
+| `report` | `--run-id` (req) | Full report JSON |
 
 Converter commands (separate entrypoints):
 
@@ -234,7 +232,7 @@ uv run python -m bo_workflow.cli run-proxy \
   --run-id <RUN_ID> --backend-id her-demo --iterations 20
 ```
 
-Expected artifacts in `bo_runs/<RUN_ID>/`: `state.json`, `input_spec.json`, `suggestions.jsonl`, `observations.jsonl`, `convergence.pdf`, `report.json`.
+Expected artifacts in `bo_runs/<RUN_ID>/`: `state.json`, `input_spec.json`, `suggestions.jsonl`, `observations.jsonl`, `report.json`.
 
 Expected backend artifacts in `evaluation_backends/<RUN_ID>/`: `oracle.pkl`, `oracle_meta.json`.
 

@@ -186,16 +186,16 @@ For any expensive or fragile evaluator family, not just DFT:
   - hybrid
 - use literature, databases, and published values for orientation, calibration, and validation, but do not default to a tabulated external oracle as the final black box when a local executable evaluator is feasible
 
-For live structural MLIP-backed benchmark runs:
+For live structural screening benchmark runs:
 
 - The safe flagship story is: the agent autonomously assembled and ran a live structural screening workflow that produced DFT-validation candidates.
-- The unsafe story is: the agent conclusively proved a new catalyst beats the benchmark from an MLIP screening run alone.
-- Default benchmark mode is `native_structure_screen`: use each material's thermodynamically stable bulk structure and valid facets/sites derived from that structure.
-- Use `fcc_only_screen` only as an explicit simplification when the user wants a narrower but cleaner first pass.
+- The unsafe story is: the agent conclusively proved a new catalyst beats the benchmark from an approximate screening run alone.
+- For structural screening benchmarks, require an explicit candidate-family and representation choice rather than silently defaulting to one benchmark mode.
+- Do not hard-code a particular crystal-family simplification unless the task materials explicitly require it.
 - Do not expose a factorized `metal × facet × site` search space if many combinations are invalid for the evaluator. Prefer:
   - a valid candidate catalog encoded as a single categorical `candidate_id`, or
   - another constrained representation that only emits evaluable candidates
-- If an empirical calibration correction is used to map MLIP outputs toward literature or DFT values:
+- If an empirical calibration correction is used to map approximate structural-screen outputs toward literature or DFT values:
   - validate it on a reference set broad enough for the feasible space rather than a tiny single-facet/single-site anchor
   - scale the calibration budget to the problem size:
     - small finite spaces: roughly `4–6` references

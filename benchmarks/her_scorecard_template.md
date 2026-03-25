@@ -21,6 +21,15 @@ Use one copy of this template per `her_live_structural` case-study run.
 - completed: `yes` / `no`
 - manual repair required: `yes` / `no`
 
+## Grounding artifact paths
+
+- primary paper artifact:
+- compiled PDF path (optional):
+- `report.json` path:
+- `state.json` path:
+- `research_state.json` path (optional):
+- calibration / support artifact paths (optional):
+
 ## Intervention log
 
 Leave blank for clean baseline runs.
@@ -48,7 +57,17 @@ Leave blank for clean baseline runs.
 - evaluator path matched the task rules: `pass` / `fail`
 - run completed without manual repair: `pass` / `fail`
 
-## Qualitative rubric (`0/1/2`)
+## Judge outputs
+
+- deterministic check reviewer or script:
+- single-run judge model:
+- single-run judge output path:
+- pairwise judge model (optional):
+- pairwise judge output path (optional):
+- paper claims match `report.json`: `pass` / `fail` / `partial`
+- paper setup matches `state.json`: `pass` / `fail` / `partial`
+
+## Qualitative rubric (`0/1/2`, copied from judge output)
 
 - problem framing:
 - workflow fidelity:
@@ -56,7 +75,7 @@ Leave blank for clean baseline runs.
 - caveat honesty:
 - paper usefulness:
 
-## HER case-study rubric (`0/1/2`)
+## HER case-study rubric (`0/1/2`, copied from judge output)
 
 - evaluator legitimacy:
 - search-space validity:

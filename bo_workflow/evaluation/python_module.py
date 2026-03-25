@@ -236,5 +236,5 @@ def run_python_module_evaluator(
         "best_iteration": report.get("best_iteration"),
         "best_observation_number": report.get("best_observation_number"),
         "report_path": str(paths.report),
-        "convergence_plot_path": str(paths.convergence_plot),
+        "convergence_plot_path": None,
     }

@@ -21,7 +21,6 @@ import numpy as np
 import pandas as pd
 from tqdm import tqdm
 
-from .plotting import plot_optimization_convergence
 from .utils import (
     Objective,
     OptimizerName,
@@ -933,7 +932,7 @@ class BOEngine:
         return payload
 
     def report(self, run_id: str, *, verbose: bool = False) -> dict[str, Any]:
-        """Generate report JSON and convergence plot for a run."""
+        """Generate report JSON for a run."""
         state = self._load_state(run_id)
         observations = read_jsonl(self._paths(run_id).observations)
         if not observations:
@@ -944,30 +943,6 @@ class BOEngine:
             }
             write_json(self._paths(run_id).report, report)
             return report
-
-        grouped: dict[str, list[float]] = {}
-        for row in observations:
-            engine = str(row.get("engine", state.get("default_engine", "hebo")))
-            grouped.setdefault(engine, []).append(float(row["y"]))
-
-        methods_data: dict[str, np.ndarray] = {}
-        for engine, values in grouped.items():
-            label = {
-                "hebo": "HEBO",
-                "bo_lcb": "BO (LCB)",
-                "random": "Random Search",
-                "botorch": "BoTorch (qLogNEI)",
-            }.get(engine, engine)
-            methods_data[label] = np.asarray(values, dtype=float)
-
-        plot_optimization_convergence(
-            methods_data,
-            title=f"Run {run_id}",
-            ylabel=state["target_column"],
-            objective=state["objective"],
-            fig_path=str(self._paths(run_id).convergence_plot),
-            show=False,
-        )
 
         status = self.status(run_id)
         report = {
@@ -986,7 +961,6 @@ class BOEngine:
             "observation_sources": status.get("observation_sources", []),
             "trajectory": self._trajectory_summary(state, observations),
             "artifacts": {
-                "plot": str(self._paths(run_id).convergence_plot),
                 "state": str(self._paths(run_id).state),
                 "observations": str(self._paths(run_id).observations),
             },

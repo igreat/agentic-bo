@@ -146,9 +146,38 @@ For `her_live_structural`, replace the evaluator item with:
 
 - live local structural evaluator was used without silent fallback to lookup, retrospective dataset, or hand-written heuristic oracle
 
+## Two-layer judging model
+
+Use two different judging layers and keep them separate:
+
+1. **Deterministic artifact checks**
+   - workflow correctness checklist
+   - OER numeric metrics
+   - artifact existence and path checks
+   - factual verification that paper claims match `report.json` and `state.json`
+2. **LLM-primary qualitative review**
+   - problem framing
+   - workflow fidelity as reflected in artifacts
+   - interpretation quality
+   - caveat honesty
+   - paper usefulness
+   - HER-specific evaluator legitimacy, search-space validity, and scientific setup quality
+
+The qualitative layer should be judged primarily by an LLM using grounded artifact review, not by free-form human impressions. Human adjudication remains optional for disputed cases or final tie-breaks.
+
+For the primary paper comparison, use:
+
+- the final paper artifact (`paper.tex` or `paper.md`) as the main judged output
+- `report.json` and `state.json` as required grounding artifacts
+- `research_state.json` and calibration artifacts as optional supporting context when present
+
+Do **not** use the raw full conversation transcript as the primary judging input. It is too noisy, too long, and too sensitive to irrelevant interaction details. If workflow trace evidence is needed, prefer `research_plan.md` or `research_state.json` over the raw chat/tool transcript.
+
+For the core naive-vs-skilled comparisons, prefer **pairwise LLM judging** over isolated scoring when the goal is to decide which output is stronger. Single-run judging is still useful for archival records and sanity checks, but pairwise comparison is the primary qualitative comparison mode.
+
 ## Qualitative review rubric
 
-Use a `0/1/2` rubric with two-person consensus when possible.
+Use a grounded `0/1/2` rubric with LLM-primary scoring and optional human adjudication when needed.
 
 ### Problem framing
 
@@ -180,7 +209,7 @@ Use a `0/1/2` rubric with two-person consensus when possible.
 - `1`: serviceable but thin or inconsistent
 - `2`: clear, readable, and useful as a concise report draft
 
-Present this rubric honestly as structured qualitative review, not as a hard scientific metric.
+Present this rubric honestly as structured qualitative review, not as a hard scientific metric. Every LLM score should be anchored to the supplied artifacts with a brief justification and a direct evidence quote.
 
 ## HER case-study rubric
 
@@ -230,5 +259,5 @@ Also state the limitations:
 
 - OER hidden evaluation is retrospective
 - HER case-study quality depends on evaluator legitimacy and setup quality
-- qualitative scoring is manual
+- qualitative scoring is LLM-judged with optional human adjudication
 - only a small number of end-to-end tasks are benchmarked

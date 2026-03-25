@@ -15,6 +15,14 @@ These prompt files are the fixed run prompts for the benchmark and case-study co
 
 For the HER core pair, use fresh clean repo workspaces from the same branch or commit and keep the ordinary project skill trees present in both workspaces. The only intended intervention difference is the explicit research-layer skill invocation.
 
+All HER prompt variants require the same minimum review artifacts under `research_runs/<research_id>/`:
+
+- `paper.tex`
+- `research_plan.md`
+- `research_state.json`
+
+This keeps artifact-quality comparisons fair across the naive, light, and strong conditions.
+
 The OER benchmark requires only `oer_skilled.md` and `oer_naive.md`.
 
 The HER case-study core evidence package requires:

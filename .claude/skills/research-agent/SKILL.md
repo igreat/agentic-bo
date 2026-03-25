@@ -30,7 +30,7 @@ Generate `research_id` as a short slug from the system and date, e.g. `oer_calte
 
 - `research_state.json`: machine-readable phase state
 - `research_plan.md`: human-readable lab notebook
-- `paper.md`: final draft written in Phase 6
+- `paper.md` or `paper.tex`: final draft written in Phase 6, depending on the requested output format
 
 These are the only required core artifacts. Any additional supporting files should be optional and discoverable through `research_state.json.run_artifacts`. When helper code is needed, the default run-local location is `research_runs/<research_id>/scripts/`.
 
@@ -92,8 +92,7 @@ Use this `research_state.json` shape in v1:
     "num_observations": null,
     "oracle_model": null,
     "oracle_rmse": null,
-    "report_path": null,
-    "convergence_plot_path": null
+    "report_path": null
   },
   "paper_path": null,
   "phases": {
@@ -210,9 +209,9 @@ Rules:
   - likely physical or chemical constraints
 - Present that draft as a recommendation for the user to confirm or edit before BO init in default collaborative mode.
 - In explicit autonomy mode, commit to the draft experiment spec yourself, record the key assumptions, and continue unless a real blocker remains.
-- For live structural benchmark runs, make an explicit structure-screen mode choice and record it in `research_plan.md`:
-  - `native_structure_screen` (default): use each material's thermodynamically stable bulk structure and valid facets/sites derived from that structure
-  - `fcc_only_screen`: restrict to genuinely fcc-stable materials and valid fcc facets/sites when a narrower but cleaner first pass is needed
+- For structural screening problems, make an explicit candidate-family and representation choice and record it in `research_plan.md`.
+- Do not default to a particular structural family, crystal prototype, or benchmark mode unless the user or benchmark materials explicitly require one.
+- Prefer the smallest physically justified feasible set you can defend from the task materials and literature.
 - Prefer existing repo tooling when it genuinely fits, but do not force a poor fit.
 - If helper code is needed, create `research_runs/<research_id>/scripts/` and put ad hoc converters, preprocessors, evaluator modules, plotting scripts, scraping helpers, and other one-off utilities there.
 - If a local evaluator is produced, use `research_runs/<research_id>/scripts/evaluator.py` by default.
@@ -286,7 +285,6 @@ Always finish with `bo-report-run` and write:
 - `oracle_model` when the BO artifacts report one
 - `oracle_rmse` when the BO artifacts report one
 - `report_path`
-- `convergence_plot_path`
 
 Do not re-run Phase 3 setup during Phase 4. In particular:
 - do not call `build-oracle`
@@ -345,24 +343,26 @@ Delegate drafting to `scientific-writing`. Pass all of the following so the skil
 - `research_runs/<research_id>/research_state.json`
 - `research_runs/<research_id>/research_plan.md`
 - `bo_runs/<bo_run_id>/report.json`
-- `bo_runs/<bo_run_id>/convergence.pdf` (reference path; skill will mention it in Methods)
+- `bo_runs/<bo_run_id>/state.json`
+- `bo_runs/<bo_run_id>/observations.jsonl`
+- existing run-local figure assets such as `bo_runs/<bo_run_id>/convergence.pdf` if present
 - any literature sources from Phase 2
 
 Output:
-- `research_runs/<research_id>/paper.md`
+- `research_runs/<research_id>/paper.tex` when the prompt explicitly asks for LaTeX; otherwise `research_runs/<research_id>/paper.md`
 - `research_state.json.paper_path`
 
 After the paper is written, perform a final consistency pass before declaring the workflow complete:
-- reread `research_state.json`, `research_plan.md`, `bo_runs/<bo_run_id>/report.json`, and `research_runs/<research_id>/paper.md`
+- reread `research_state.json`, `research_plan.md`, `bo_runs/<bo_run_id>/report.json`, and the final paper file referenced by `research_state.json.paper_path`
 - ensure all phase states are correct
 - ensure `research_state.json.paper_path` points to the final paper
 - update the **Paper Draft Link** section in `research_plan.md` to the real paper path; do not leave placeholder text like "to be written in Phase 6"
-- ensure key numeric claims in `research_plan.md` and `paper.md` match `report.json`
+- ensure key numeric claims in `research_plan.md` and the final paper match `report.json`
 - ensure any detailed trajectory claims match `report.json["trajectory"]` when that field is present
-- ensure human-facing iteration numbering in `research_plan.md` and `paper.md` uses `best_observation_number` when available rather than the zero-based `best_iteration`
+- ensure human-facing iteration numbering in `research_plan.md` and the final paper uses `best_observation_number` when available rather than the zero-based `best_iteration`
 - ensure oracle provenance language stays artifact-backed; do not let the paper imply a post-hoc fit unless an artifact explicitly says that
 - ensure `research_state.json.experiment_spec` matches the final executed BO spec rather than an earlier draft
-- ensure `research_plan.md` and `paper.md` reflect `evaluator_assessment.claim_posture` and any stated calibration uncertainty
+- ensure `research_plan.md` and the final paper reflect `evaluator_assessment.claim_posture` and any stated calibration uncertainty
 - if optional supporting files, helper scripts, or dependency installs materially affected the run, ensure they are reflected in `run_artifacts` and described in `research_plan.md`
 - if any artifact is stale or contradictory, fix it before marking the run complete
 
@@ -383,4 +383,4 @@ On resume:
 - Do not call `build-oracle` or `run-proxy` as part of `research-agent`.
 - A fully unresolved search space is out of scope for execution; resolve `experiment_spec` first.
 - In benchmark runs with a local literature packet, do not browse beyond the packet.
-- Do not present a demo-quality live structural MLIP run as canonical benchmark truth when the calibration scope is narrow, the top candidates are within uncertainty, or the structures are metastable simplifications.
+- Do not present a demo-quality live structural screening run as canonical benchmark truth when the calibration scope is narrow, the top candidates are within uncertainty, or the structures are metastable simplifications.

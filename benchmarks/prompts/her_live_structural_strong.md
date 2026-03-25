@@ -1,4 +1,4 @@
-This prompt is intended for a Claude Code session where `/research-agent` has already been invoked.
+This prompt is intended for an agent session where the `research-agent` skill is available and should be used for the run.
 
 I want you to investigate hydrogen evolution reaction (HER) catalyst optimization in this workspace.
 
@@ -11,3 +11,19 @@ For this run, the final evaluator must be a live executable structural simulator
 Use literature and databases only for orientation, calibration, and validation, not as the final black-box evaluator. If a live structural evaluator proves infeasible in this workspace, stop and explain why rather than silently switching to a heuristic or lookup-based oracle.
 
 Keep the standard research workflow phases explicit in the run artifacts.
+
+Before you conclude, persist a concise research artifact package for review. At minimum:
+
+- write a short LaTeX report draft under `research_runs/<research_id>/paper.tex`
+- write a brief running plan / notebook under `research_runs/<research_id>/research_plan.md`
+- write machine-readable workflow state under `research_runs/<research_id>/research_state.json`
+
+If you generate figures, place them under `research_runs/<research_id>/figures/` and embed them in the LaTeX draft. If feasible without derailing the run, also compile `research_runs/<research_id>/paper.pdf`, but the required artifact is the `.tex` source.
+
+The report should summarize:
+
+- the chosen evaluator and why it is scientifically defensible
+- the search space and objective actually used
+- any calibration, uncertainty treatment, or major caveats
+- the main results or shortlist
+- recommended next steps

@@ -86,7 +86,7 @@ uv run python -m bo_workflow.cli --help
 | `run-proxy` | Run an end-to-end simulated BO loop against a backend |
 | `run-evaluator` | Run a hidden evaluation loop with an operator-owned backend |
 | `status` | Show best-so-far and run metadata |
-| `report` | Generate JSON report and convergence plot |
+| `report` | Generate JSON report |
 
 Converter commands use separate module entrypoints:
 
@@ -137,7 +137,7 @@ Each round suggests molecules in descriptor space, maps them to the nearest real
 
 Each run writes to `bo_runs/<RUN_ID>/`:
 
-`state.json`, `input_spec.json`, `suggestions.jsonl`, `observations.jsonl`, `convergence.pdf`, `report.json`
+`state.json`, `input_spec.json`, `suggestions.jsonl`, `observations.jsonl`, `report.json`
 
 Each evaluation backend writes to `evaluation_backends/<BACKEND_ID>/`:
 

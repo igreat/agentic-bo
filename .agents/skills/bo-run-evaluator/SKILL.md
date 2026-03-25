@@ -37,6 +37,6 @@ uv run python -m bo_workflow.cli run-evaluator \
 - number of recorded observations
 - best value / best iteration
 - report path
-- convergence plot path
+- optional legacy figure path only if one already exists
 
 The resulting observations are recorded back into `bo_runs/<run_id>/observations.jsonl` with source `benchmark-evaluator`.

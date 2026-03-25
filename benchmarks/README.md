@@ -162,6 +162,14 @@ The report core requires the naive and strong HER runs. The light prompt is an o
 
 For the HER core pair, use two fresh clean repo workspaces from the same branch or commit. Keep the normal project skill trees present in both workspaces. The only intended intervention difference is whether a research-layer slash command is invoked. The naive and light conditions should not call `/research-agent` or other research-layer slash commands. Start each HER run from a fresh empty chat and let it continue uninterrupted until the agent explicitly declares completion, unless it is clearly stalled or looping. If you apply an external wall-clock cap, use the same cap for both runs and record it in the scorecard.
 
+For fairness, all HER prompt variants now require the same minimum persisted review artifacts under `research_runs/<research_id>/`:
+
+- `paper.tex`
+- `research_plan.md`
+- `research_state.json`
+
+The prompt may still produce richer artifacts in the strong condition, but the baseline should not be marked down for missing a report artifact that it was never explicitly asked to create.
+
 Mid-conversation nudging should be treated as a separate interactive rescue trace rather than a normal baseline:
 
 - start from the naive or light HER prompt
@@ -241,5 +249,6 @@ The HER live-structural work is not the packaged public benchmark in this direct
 See:
 
 - [`scoring.md`](scoring.md) for the benchmark metrics and case-study rubric
+- [`llm_judging.md`](llm_judging.md) for the LLM-primary qualitative judging spec
 - [`core_runs.md`](core_runs.md) for the exact 4-run core evidence package
 - [`prompts/`](prompts/) for the fixed prompt files used by those runs
