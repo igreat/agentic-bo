@@ -158,6 +158,21 @@ Each top-level research workflow writes to `research_runs/<RESEARCH_ID>/`:
 - For hidden benchmark runs, prefer `run-evaluator` over `run-proxy`.
 - `data/HER_virtual_data.csv` is included as an example dataset only. In real usage, users should provide problem-specific context (target meaning, constraints, objective direction, and valid operating domain).
 
+## Submission note
+
+This repository may be submitted together with its staged result artifacts under
+`results/`. The `data/` directory is intentionally retained in that submission
+package even though not every dataset is a primary paper result. These datasets
+are kept because:
+
+- example commands in the README depend on them
+- benchmark and control-task workflows depend on them
+- local tests and validation scripts may expect them to be present
+
+If a minimal redistribution is needed later, `data/` can be pruned selectively,
+but the full submission package keeps it intact for reproducibility and to avoid
+breaking test/demo workflows.
+
 ## Layout
 
 ```text

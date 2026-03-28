@@ -160,6 +160,22 @@ Use these as:
 
 The report core requires the naive and strong HER runs. The light prompt is an optional nudging-ablation support run.
 
+### 8. HEA open-world support prompts
+
+An optional third open-world support case can use:
+
+- [`hea_live_structural_naive.md`](prompts/hea_live_structural_naive.md)
+- [`hea_live_structural_strong.md`](prompts/hea_live_structural_strong.md)
+
+Use these as:
+
+- **naive**: paste `hea_live_structural_naive.md`
+- **strong**: invoke `/research-agent`, then paste `hea_live_structural_strong.md`
+
+Unlike HER, this HEA support case deliberately leaves the family, objective, search space, and live evaluator unresolved at prompt time. The agent is expected to narrow the problem itself, justify the resulting HEA study design from literature, and avoid using the tutorial proxy dataset or any tabulated HEA score as the final evaluator.
+
+As with HER, run the naive and strong HEA pair from fresh clean repo workspaces on the same branch or commit, starting from empty chats and allowing no operator nudges during the core run.
+
 For the HER core pair, use two fresh clean repo workspaces from the same branch or commit. Keep the normal project skill trees present in both workspaces. The only intended intervention difference is whether a research-layer slash command is invoked. The naive and light conditions should not call `/research-agent` or other research-layer slash commands. Start each HER run from a fresh empty chat and let it continue uninterrupted until the agent explicitly declares completion, unless it is clearly stalled or looping. If you apply an external wall-clock cap, use the same cap for both runs and record it in the scorecard.
 
 For fairness, all HER prompt variants now require the same minimum persisted review artifacts under `research_runs/<research_id>/`:

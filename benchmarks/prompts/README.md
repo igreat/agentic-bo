@@ -32,4 +32,17 @@ The HER case-study core evidence package requires:
 
 `her_live_structural_light.md` is an optional nudging-ablation support run.
 
+## HEA open-world support case
+
+- `hea_live_structural_naive.md`: no orchestration hint and no research-layer slash-command invocation
+- `hea_live_structural_strong.md`: use after explicitly invoking `/research-agent`
+
+The HEA support case is intentionally broader than HER: the run must choose and justify the HEA family, property, search space, and live evaluator for itself. Both prompt variants require the same minimum review artifacts under `research_runs/<research_id>/`:
+
+- `paper.tex`
+- `research_plan.md`
+- `research_state.json`
+
+Use fresh clean repo workspaces from the same branch or commit for the naive and strong runs. The intended intervention difference remains the explicit research-layer skill invocation, not a different code state or different evaluator permissions.
+
 Manual mid-conversation nudges are not represented as fixed prompt files. When used, treat them as interactive rescue traces and log the follow-up messages separately in the HER scorecard.
