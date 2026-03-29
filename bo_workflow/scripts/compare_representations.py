@@ -1,7 +1,7 @@
 """Compare feature representations: DRFP-only vs descriptors-only vs combined.
 
 Encodes the same dataset three ways, runs BO with a proxy oracle for each,
-and produces a single convergence plot + JSON summary.
+and produces a script-local comparison plot plus a JSON summary.
 """
 
 import argparse
@@ -11,6 +11,7 @@ import sys
 from datetime import UTC, datetime
 from pathlib import Path
 
+import matplotlib.pyplot as plt
 import numpy as np
 
 from bo_workflow.converters.reaction_drfp import encode_reactions
@@ -19,7 +20,6 @@ from bo_workflow.converters.combined import encode_combined
 from bo_workflow.engine import BOEngine
 from bo_workflow.evaluation.proxy import ProxyObserver
 from bo_workflow.evaluation.oracle import build_proxy_oracle
-from bo_workflow.plotting import plot_optimization_convergence
 
 
 REP_LABELS = {
@@ -43,6 +43,45 @@ def _read_observation_values(path: Path) -> list[float]:
 def _stack_traces(traces: list[list[float]]) -> np.ndarray:
     min_len = min(len(t) for t in traces)
     return np.array([t[:min_len] for t in traces], dtype=float)
+
+
+def _cumulative_best(values: np.ndarray, objective: str) -> np.ndarray:
+    if objective == "min":
+        return np.minimum.accumulate(values, axis=1)
+    return np.maximum.accumulate(values, axis=1)
+
+
+def _plot_convergence(
+    methods_data: dict[str, np.ndarray],
+    *,
+    title: str,
+    ylabel: str,
+    objective: str,
+    fig_path: Path,
+) -> None:
+    fig, ax = plt.subplots(figsize=(9, 5.5))
+    colors = plt.rcParams["axes.prop_cycle"].by_key().get("color", [])
+    if not colors:
+        colors = ["#2E86AB", "#A23B72", "#F18F01", "#454645"]
+
+    for idx, (label, series) in enumerate(methods_data.items()):
+        best_so_far = _cumulative_best(series, objective)
+        mean = np.mean(best_so_far, axis=0)
+        stderr = np.std(best_so_far, axis=0) / np.sqrt(best_so_far.shape[0])
+        iters = np.arange(best_so_far.shape[1], dtype=int)
+        color = colors[idx % len(colors)]
+        ax.plot(iters, mean, lw=2.2, color=color, label=label)
+        ax.fill_between(iters, mean - stderr, mean + stderr, color=color, alpha=0.18)
+
+    ax.set_title(title, fontsize=14, fontweight="bold")
+    ax.set_xlabel("Iteration", fontsize=12)
+    ax.set_ylabel(ylabel, fontsize=12)
+    ax.grid(True, alpha=0.3, linestyle="--")
+    ax.legend(frameon=True)
+    fig.tight_layout()
+    fig_path.parent.mkdir(parents=True, exist_ok=True)
+    fig.savefig(fig_path, dpi=300, bbox_inches="tight")
+    plt.close(fig)
 
 
 def _encode_dataset(
@@ -209,13 +248,12 @@ def main(argv: list[str] | None = None) -> int:
         methods_data[label] = _stack_traces(traces)
 
     # Plot
-    plot_optimization_convergence(
+    _plot_convergence(
         methods_data,
         title="Representation Comparison",
         ylabel=f"{args.target} (best-so-far)",
         objective=args.objective,
-        fig_path=str(args.plot_out),
-        show=False,
+        fig_path=args.plot_out,
     )
 
     # Summary

@@ -46,7 +46,7 @@ class RunPaths:
 
     @property
     def convergence_plot(self) -> Path:
-        return self.run_dir / "convergence.pdf"
+        return self.run_dir / "convergence.png"
 
 
 @dataclass(frozen=True)

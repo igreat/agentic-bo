@@ -10,13 +10,13 @@ import json
 from pathlib import Path
 import sys
 
+import matplotlib.pyplot as plt
 import numpy as np
 from tqdm import tqdm
 
 from bo_workflow.engine import BOEngine
 from bo_workflow.evaluation.proxy import ProxyObserver
 from bo_workflow.evaluation.oracle import build_proxy_oracle
-from bo_workflow.plotting import plot_optimization_convergence
 
 ENGINE_CHOICES = ("hebo", "bo_lcb", "random", "botorch")
 ENGINE_LABELS = {
@@ -72,6 +72,45 @@ def _engine_summary(final_bests: list[float], objective: str) -> dict[str, float
         "best_final_best": best_value,
         "worst_final_best": worst_value,
     }
+
+
+def _cumulative_best(values: np.ndarray, objective: str) -> np.ndarray:
+    if objective == "min":
+        return np.minimum.accumulate(values, axis=1)
+    return np.maximum.accumulate(values, axis=1)
+
+
+def _plot_convergence(
+    methods_data: dict[str, np.ndarray],
+    *,
+    title: str,
+    ylabel: str,
+    objective: str,
+    fig_path: Path,
+) -> None:
+    fig, ax = plt.subplots(figsize=(9, 5.5))
+    colors = plt.rcParams["axes.prop_cycle"].by_key().get("color", [])
+    if not colors:
+        colors = ["#2E86AB", "#A23B72", "#F18F01", "#454645"]
+
+    for idx, (label, series) in enumerate(methods_data.items()):
+        best_so_far = _cumulative_best(series, objective)
+        mean = np.mean(best_so_far, axis=0)
+        stderr = np.std(best_so_far, axis=0) / np.sqrt(best_so_far.shape[0])
+        iters = np.arange(best_so_far.shape[1], dtype=int)
+        color = colors[idx % len(colors)]
+        ax.plot(iters, mean, lw=2.2, color=color, label=label)
+        ax.fill_between(iters, mean - stderr, mean + stderr, color=color, alpha=0.18)
+
+    ax.set_title(title, fontsize=14, fontweight="bold")
+    ax.set_xlabel("Iteration", fontsize=12)
+    ax.set_ylabel(ylabel, fontsize=12)
+    ax.grid(True, alpha=0.3, linestyle="--")
+    ax.legend(frameon=True)
+    fig.tight_layout()
+    fig_path.parent.mkdir(parents=True, exist_ok=True)
+    fig.savefig(fig_path, dpi=300, bbox_inches="tight")
+    plt.close(fig)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -219,13 +258,12 @@ def main(argv: list[str] | None = None) -> int:
 
     run_progress.close()
 
-    plot_optimization_convergence(
+    _plot_convergence(
         methods_data,
         title="Optimizer Comparison",
         ylabel=f"{args.target} (best-so-far)",
         objective=args.objective,
-        fig_path=str(args.plot_out),
-        show=False,
+        fig_path=args.plot_out,
     )
 
     summary: dict[str, object] = {

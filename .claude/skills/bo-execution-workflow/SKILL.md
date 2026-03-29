@@ -31,7 +31,6 @@ When invoked by `research-agent`, the canonical init path is explicit search-spa
 | `intent.json` | `init` (when `--intent-json` is provided) |
 | `suggestions.jsonl` | `suggest` |
 | `observations.jsonl` | `observe` |
-| `convergence.pdf` | `report` |
 | `report.json` | `report` |
 
 When this skill is invoked by `research-agent`, it supports two handoff points:
@@ -232,7 +231,7 @@ Always include in your final summary:
 
 1. **Best result found** — the value and which experiment produced it
 2. **Best conditions** — the exact feature values to replicate it
-3. **Convergence trajectory** — how the best value improved over iterations (from `convergence.pdf`)
+3. **Convergence trajectory** — how the best value improved over iterations (from `report.json["trajectory"]` or from ad hoc figures generated from `observations.jsonl`)
 4. **Oracle quality** — only if the run artifacts explicitly report oracle metadata
 5. **Simulation label** — only if the run artifacts explicitly indicate proxy-backed evaluation
 
