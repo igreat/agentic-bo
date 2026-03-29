@@ -55,6 +55,13 @@ def register_commands(sub: argparse._SubParsersAction) -> None:
             "reduced backend still covers every constrained column."
         ),
     )
+    oracle_cmd.add_argument("--top-k-pct", type=float, default=3.0)
+    oracle_cmd.add_argument(
+        "--model-candidates",
+        nargs="+",
+        default=None,
+        help="Models to evaluate (default: all four). Choices: random_forest extra_trees gradient_boosting gaussian_process",
+    )
     oracle_cmd.add_argument("--verbose", action="store_true")
 
     run_proxy_cmd = sub.add_parser(
@@ -393,6 +400,8 @@ def handle(args: argparse.Namespace, engine: BOEngine) -> int | None:
             default_engine=str(getattr(args, "engine", "hebo")),
             cv_folds=args.cv_folds,
             max_features=args.max_features,
+            top_k_pct=args.top_k_pct,
+            **({"model_candidates": tuple(args.model_candidates)} if args.model_candidates else {}),
             verbose=args.verbose,
         )
         _json_print(payload)
