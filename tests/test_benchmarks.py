@@ -928,6 +928,58 @@ def test_stage_run_uses_workspace_source_commit_and_refuses_merge_without_overwr
         )
 
 
+def test_setup_workspaces_rejects_unsafe_overwrite_targets(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    fake_root = tmp_path / "repo"
+    fake_root.mkdir(parents=True)
+    unsafe_output = fake_root.parent
+
+    monkeypatch.setattr(open_world_reruns_module, "repo_root", lambda: fake_root)
+
+    with pytest.raises(ValueError, match="Refusing to overwrite unsafe output directory"):
+        open_world_reruns_module.setup_workspaces(unsafe_output, overwrite=True)
+
+
+def test_stage_run_rejects_extra_paths_outside_workspace(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    bundle_root = tmp_path / "results"
+    workspace = tmp_path / "workspace"
+    bo_dir = workspace / "bo_runs" / "run-1"
+    research_dir = workspace / "research_runs" / "research-1"
+    bo_dir.mkdir(parents=True)
+    research_dir.mkdir(parents=True)
+    (bo_dir / "state.json").write_text("{}", encoding="utf-8")
+    (bo_dir / "report.json").write_text("{}", encoding="utf-8")
+    (research_dir / "research_plan.md").write_text("plan\n", encoding="utf-8")
+    outside_file = tmp_path / "outside.txt"
+    outside_file.write_text("nope\n", encoding="utf-8")
+
+    monkeypatch.setattr(open_world_reruns_module, "bundle_root", lambda: bundle_root)
+
+    with pytest.raises(ValueError, match="Extra path must stay inside"):
+        open_world_reruns_module.stage_run(
+            task="her",
+            repetition="rerun_a",
+            baseline="naive",
+            workspace=workspace,
+            bo_run_id="run-1",
+            research_id="research-1",
+            prompt_file="prompt.md",
+            model_runtime="codex",
+            effort_level="high",
+            completion_status="completed",
+            stop_reason="finished",
+            overwrite=False,
+            start_timestamp=None,
+            end_timestamp=None,
+            extra_paths=["../outside.txt"],
+        )
+
+
 def test_stage_judging_refuses_merge_without_overwrite(
     tmp_path: Path,
     monkeypatch,
@@ -961,6 +1013,29 @@ def test_stage_judging_refuses_merge_without_overwrite(
             repetition="rerun_a",
             source_dir=source_dir,
             include_files=[],
+            overwrite=False,
+        )
+
+
+def test_stage_judging_rejects_include_files_outside_source_dir(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    bundle_root = tmp_path / "results"
+    source_dir = tmp_path / "judges"
+    source_dir.mkdir(parents=True)
+    (source_dir / "pairwise_judge_01.json").write_text("{}", encoding="utf-8")
+    outside_file = tmp_path / "outside.json"
+    outside_file.write_text("{}", encoding="utf-8")
+
+    monkeypatch.setattr(open_world_reruns_module, "bundle_root", lambda: bundle_root)
+
+    with pytest.raises(ValueError, match="Judge include file must stay inside"):
+        open_world_reruns_module.stage_judging(
+            task="her",
+            repetition="rerun_a",
+            source_dir=source_dir,
+            include_files=["../outside.json"],
             overwrite=False,
         )
 

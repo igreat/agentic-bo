@@ -138,9 +138,46 @@ def default_workspace_root() -> Path:
     return Path(tempfile.gettempdir()) / "agentic-bo-workspaces"
 
 
+def _validate_workspace_output_root(
+    output_root: Path, *, root: Path, overwrite: bool
+) -> Path:
+    resolved_output = output_root.resolve()
+    resolved_root = root.resolve()
+
+    if overwrite and resolved_root.is_relative_to(resolved_output):
+        raise ValueError(
+            f"Refusing to overwrite unsafe output directory: {resolved_output}"
+        )
+
+    if resolved_output.is_relative_to(resolved_root) and resolved_output != resolved_root:
+        raise ValueError(
+            f"Refusing to build workspace output directory inside repo: {resolved_output}"
+        )
+
+    if overwrite and resolved_output == resolved_output.parent:
+        raise ValueError(f"Refusing to overwrite filesystem root: {resolved_output}")
+
+    return resolved_output
+
+
+def _resolve_descendant_path(base_dir: Path, rel_path: str, *, label: str) -> Path:
+    resolved_base = base_dir.resolve()
+    candidate = Path(rel_path)
+    resolved_candidate = (
+        candidate.resolve() if candidate.is_absolute() else (resolved_base / candidate).resolve()
+    )
+    if not resolved_candidate.is_relative_to(resolved_base):
+        raise ValueError(
+            f"{label} must stay inside {resolved_base}: {rel_path}"
+        )
+    return resolved_candidate
+
+
 def setup_workspaces(output_root: Path, *, overwrite: bool) -> Path:
     root = repo_root()
-    output_root = output_root.resolve()
+    output_root = _validate_workspace_output_root(
+        output_root, root=root, overwrite=overwrite
+    )
     if output_root.exists():
         if not overwrite:
             raise FileExistsError(
@@ -349,11 +386,14 @@ def stage_run(
 
     extras_root = dest / "extras"
     for rel_path in extra_paths:
-        src = workspace / rel_path
+        src = _resolve_descendant_path(
+            workspace, rel_path, label="Extra path"
+        )
+        relative_src = src.relative_to(workspace)
         if src.is_dir():
-            copy_tree(src, extras_root / rel_path)
+            copy_tree(src, extras_root / relative_src)
         elif src.exists():
-            copy_file(src, extras_root / rel_path)
+            copy_file(src, extras_root / relative_src)
         else:
             raise FileNotFoundError(f"Extra path not found: {src}")
 
@@ -404,7 +444,12 @@ def stage_judging(
     dest.mkdir(parents=True, exist_ok=False)
 
     if include_files:
-        candidates = [source_dir / rel_path for rel_path in include_files]
+        candidates = [
+            _resolve_descendant_path(
+                source_dir, rel_path, label="Judge include file"
+            )
+            for rel_path in include_files
+        ]
     else:
         candidates = []
         for path in sorted(source_dir.iterdir()):
