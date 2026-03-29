@@ -1,8 +1,8 @@
 # Core Run Matrix
 
-This file locks the exact **4-run core evidence package** for the report.
+This file locks the exact **4-run primary evidence package** for the report.
 
-These runs precede any optional support ablations such as `HER light` or interactive rescue traces.
+These runs precede any supplementary support evidence such as `HER light`, interactive rescue traces, or HEA paired reruns.
 
 ## Core runs
 

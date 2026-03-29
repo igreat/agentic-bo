@@ -7,6 +7,7 @@ import json
 import re
 import shutil
 import subprocess
+import tempfile
 from pathlib import Path
 
 ROOT_COPY_FILES = (
@@ -134,7 +135,7 @@ def resolve_commit(workspace: Path) -> str | None:
 
 
 def default_workspace_root() -> Path:
-    return Path("/private/tmp/agentic-bo-workspaces")
+    return Path(tempfile.gettempdir()) / "agentic-bo-workspaces"
 
 
 def setup_workspaces(output_root: Path, *, overwrite: bool) -> Path:
@@ -248,6 +249,13 @@ def _load_jsonish(path: Path) -> dict | None:
     return None
 
 
+def _workspace_metadata(workspace: Path) -> dict:
+    metadata_path = workspace / "rerun_workspace.json"
+    if not metadata_path.exists():
+        return {}
+    return json.loads(metadata_path.read_text(encoding="utf-8"))
+
+
 def _summarize_judging_dir(path: Path, *, task: str, repetition: str) -> None:
     judge_files: list[dict] = []
     for candidate in sorted(path.glob("pairwise_judge_*.json")):
@@ -275,11 +283,13 @@ def _summarize_judging_dir(path: Path, *, task: str, repetition: str) -> None:
     overall_winner = None
     overall_preference = "inconclusive"
     if winner_counts:
-        overall_winner = max(winner_counts, key=winner_counts.get)
-        max_votes = winner_counts[overall_winner]
+        candidate_winner = max(winner_counts, key=winner_counts.get)
+        max_votes = winner_counts[candidate_winner]
         if max_votes == len(judge_files):
+            overall_winner = candidate_winner
             overall_preference = "unanimous"
-        elif max_votes >= 2:
+        elif max_votes > len(judge_files) / 2:
+            overall_winner = candidate_winner
             overall_preference = "majority"
 
     payload = {
@@ -313,9 +323,13 @@ def stage_run(
 ) -> Path:
     workspace = workspace.resolve()
     dest = bundle_root() / task / repetition / baseline
-    if dest.exists() and overwrite:
+    if dest.exists():
+        if not overwrite:
+            raise FileExistsError(
+                f"Destination already exists: {dest}. Pass overwrite=True to replace it."
+            )
         shutil.rmtree(dest)
-    dest.mkdir(parents=True, exist_ok=True)
+    dest.mkdir(parents=True, exist_ok=False)
 
     bo_dir = workspace / "bo_runs" / bo_run_id
     research_dir = workspace / "research_runs" / research_id
@@ -347,13 +361,14 @@ def stage_run(
     state_payload = {}
     if state_path.exists():
         state_payload = json.loads(state_path.read_text(encoding="utf-8"))
+    workspace_metadata = _workspace_metadata(workspace)
 
     metadata = {
         "task": task,
         "repetition_id": repetition,
         "baseline": baseline,
         "prompt_file": prompt_file,
-        "commit_hash": resolve_commit(workspace),
+        "commit_hash": workspace_metadata.get("source_commit") or resolve_commit(workspace),
         "model_runtime": model_runtime,
         "effort_level": effort_level,
         "workspace_path": str(workspace),
@@ -380,9 +395,13 @@ def stage_judging(
     if not source_dir.exists():
         raise FileNotFoundError(f"Judge artifact directory not found: {source_dir}")
     dest = bundle_root() / "judging" / task / repetition
-    if dest.exists() and overwrite:
+    if dest.exists():
+        if not overwrite:
+            raise FileExistsError(
+                f"Destination already exists: {dest}. Pass overwrite=True to replace it."
+            )
         shutil.rmtree(dest)
-    dest.mkdir(parents=True, exist_ok=True)
+    dest.mkdir(parents=True, exist_ok=False)
 
     if include_files:
         candidates = [source_dir / rel_path for rel_path in include_files]

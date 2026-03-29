@@ -9,6 +9,7 @@ import pandas as pd
 import pytest
 
 import benchmarks.build_workspace as build_workspace_module
+import benchmarks.open_world_reruns as open_world_reruns_module
 from benchmarks.build_workspace import build_workspace
 from bo_workflow.engine import BOEngine
 from bo_workflow.evaluation.cli import run_hidden_oracle_evaluator
@@ -74,10 +75,18 @@ def test_build_workspace_bo_only_skill_profile_strips_research_layer_skills(
     assert not (output_dir / ".agents" / "skills" / "research-agent").exists()
     assert not (output_dir / ".agents" / "skills" / "literature-review").exists()
     assert not (output_dir / ".agents" / "skills" / "scientific-writing").exists()
+    assert not (output_dir / ".agents" / "skills" / "evaluator-design").exists()
     assert not (output_dir / ".claude" / "skills" / "research-agent").exists()
     assert not (output_dir / ".claude" / "skills" / "literature-review").exists()
     assert not (output_dir / ".claude" / "skills" / "scientific-writing").exists()
     assert not (output_dir / ".claude" / "skills" / "evaluator-design").exists()
+    template_root = build_workspace_module.bo_only_template_root()
+    assert (output_dir / "AGENTS.md").read_text(encoding="utf-8") == (
+        template_root / "AGENTS.md"
+    ).read_text(encoding="utf-8")
+    assert (output_dir / "CLAUDE.md").read_text(encoding="utf-8") == (
+        template_root / "CLAUDE.md"
+    ).read_text(encoding="utf-8")
 
 
 def test_run_evaluator_with_prebuilt_backend_records_observations(
@@ -853,3 +862,139 @@ def test_build_workspace_copies_prebuilt_backend_when_present(
     assert claude_settings["defaultMode"] == "acceptEdits"
     assert claude_settings["permissions"]["allow"] == ["Bash"]
     assert claude_settings["permissions"]["deny"] == ["WebSearch", "WebFetch"]
+
+
+def test_stage_run_uses_workspace_source_commit_and_refuses_merge_without_overwrite(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    bundle_root = tmp_path / "results"
+    workspace = tmp_path / "workspace"
+    bo_dir = workspace / "bo_runs" / "run-1"
+    research_dir = workspace / "research_runs" / "research-1"
+    bo_dir.mkdir(parents=True)
+    research_dir.mkdir(parents=True)
+    (bo_dir / "state.json").write_text(
+        json.dumps({"created_at": "start", "updated_at": "end"}),
+        encoding="utf-8",
+    )
+    (bo_dir / "report.json").write_text("{}", encoding="utf-8")
+    (research_dir / "research_plan.md").write_text("plan\n", encoding="utf-8")
+    (workspace / "rerun_workspace.json").write_text(
+        json.dumps({"source_commit": "abc123commit"}),
+        encoding="utf-8",
+    )
+
+    monkeypatch.setattr(open_world_reruns_module, "bundle_root", lambda: bundle_root)
+
+    dest = open_world_reruns_module.stage_run(
+        task="her",
+        repetition="rerun_a",
+        baseline="naive",
+        workspace=workspace,
+        bo_run_id="run-1",
+        research_id="research-1",
+        prompt_file="prompt.md",
+        model_runtime="codex",
+        effort_level="high",
+        completion_status="completed",
+        stop_reason="finished",
+        overwrite=False,
+        start_timestamp=None,
+        end_timestamp=None,
+        extra_paths=[],
+    )
+
+    metadata = json.loads((dest / "run_metadata.json").read_text(encoding="utf-8"))
+    assert metadata["commit_hash"] == "abc123commit"
+
+    with pytest.raises(FileExistsError, match="Destination already exists"):
+        open_world_reruns_module.stage_run(
+            task="her",
+            repetition="rerun_a",
+            baseline="naive",
+            workspace=workspace,
+            bo_run_id="run-1",
+            research_id="research-1",
+            prompt_file="prompt.md",
+            model_runtime="codex",
+            effort_level="high",
+            completion_status="completed",
+            stop_reason="finished",
+            overwrite=False,
+            start_timestamp=None,
+            end_timestamp=None,
+            extra_paths=[],
+        )
+
+
+def test_stage_judging_refuses_merge_without_overwrite(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    bundle_root = tmp_path / "results"
+    source_dir = tmp_path / "judges"
+    source_dir.mkdir(parents=True)
+    (source_dir / "pairwise_judge_01.json").write_text(
+        json.dumps(
+            {
+                "judge_model": "gpt-5.4",
+                "pairwise_comparison": {"winner": "run_b", "why": "better"},
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    monkeypatch.setattr(open_world_reruns_module, "bundle_root", lambda: bundle_root)
+
+    open_world_reruns_module.stage_judging(
+        task="her",
+        repetition="rerun_a",
+        source_dir=source_dir,
+        include_files=[],
+        overwrite=False,
+    )
+
+    with pytest.raises(FileExistsError, match="Destination already exists"):
+        open_world_reruns_module.stage_judging(
+            task="her",
+            repetition="rerun_a",
+            source_dir=source_dir,
+            include_files=[],
+            overwrite=False,
+        )
+
+
+def test_summarize_judging_dir_leaves_winner_empty_when_votes_are_inconclusive(
+    tmp_path: Path,
+) -> None:
+    judging_dir = tmp_path / "judging"
+    judging_dir.mkdir(parents=True)
+    (judging_dir / "pairwise_judge_01.json").write_text(
+        json.dumps(
+            {
+                "judge_model": "gpt-5.4",
+                "pairwise_comparison": {"winner": "run_a", "why": "a"},
+            }
+        ),
+        encoding="utf-8",
+    )
+    (judging_dir / "pairwise_judge_02.json").write_text(
+        json.dumps(
+            {
+                "judge_model": "claude-opus-4.6",
+                "pairwise_comparison": {"winner": "run_b", "why": "b"},
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    open_world_reruns_module._summarize_judging_dir(
+        judging_dir,
+        task="her",
+        repetition="rerun_a",
+    )
+
+    summary = json.loads((judging_dir / "judge_pair_summary.json").read_text(encoding="utf-8"))
+    assert summary["overall_preference"] == "inconclusive"
+    assert summary["overall_winner"] is None

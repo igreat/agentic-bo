@@ -24,6 +24,7 @@ RESEARCH_LAYER_SKILL_DIRS = (
     ".agents/skills/research-agent",
     ".agents/skills/literature-review",
     ".agents/skills/scientific-writing",
+    ".agents/skills/evaluator-design",
     ".claude/skills/research-agent",
     ".claude/skills/literature-review",
     ".claude/skills/scientific-writing",
@@ -50,6 +51,10 @@ PUBLIC_TASK_IGNORE = shutil.ignore_patterns(
 
 def repo_root() -> Path:
     return Path(__file__).resolve().parents[1]
+
+
+def bo_only_template_root() -> Path:
+    return repo_root() / "benchmarks" / "templates" / "open_world_reruns" / "bo_only"
 
 
 def copy_file(src: Path, dst: Path) -> None:
@@ -90,6 +95,10 @@ def apply_skill_profile(output_dir: Path, *, skill_profile: str) -> None:
         target = output_dir / rel_path
         if target.exists():
             shutil.rmtree(target)
+
+    templates = bo_only_template_root()
+    copy_file(templates / "AGENTS.md", output_dir / "AGENTS.md")
+    copy_file(templates / "CLAUDE.md", output_dir / "CLAUDE.md")
 
 
 def validate_output_dir(output_dir: Path, *, root: Path, overwrite: bool) -> Path:

@@ -44,6 +44,10 @@ class RunPaths:
     def report(self) -> Path:
         return self.run_dir / "report.json"
 
+    @property
+    def convergence_plot(self) -> Path:
+        return self.run_dir / "convergence.png"
+
 
 @dataclass(frozen=True)
 class EvaluationBackendPaths:

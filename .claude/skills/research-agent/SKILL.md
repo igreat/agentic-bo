@@ -124,7 +124,7 @@ Interaction modes:
 Rules:
 - In default collaborative mode, begin with a short alignment step and ask a few high-value clarifying questions before committing to a search space, evaluator family, or BO budget.
 - In explicit autonomy mode, do not pause for clarifying questions unless you are truly blocked. Make reasonable assumptions, record them in `research_plan.md`, and proceed.
-- Treat today's fully loose flagship autonomy runs as deliberate autonomy-mode tests, not the long-term default interaction pattern.
+- Treat fully open-world autonomy runs as an explicit benchmark mode, not the long-term default interaction pattern.
 - For explicit autonomy benchmark runs that require a live structural evaluator, default to a scientifically credible screening story over a flashy breakthrough story.
 
 ### 1. Problem Framing

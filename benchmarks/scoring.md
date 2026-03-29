@@ -1,10 +1,10 @@
 # Benchmark Scoring
 
-This document locks the evidence package for the final report.
+This document locks the primary evidence package for the final report and the scoring rules for supplementary support evidence.
 
 ## Core evidence package
 
-The required evidence package is four runs:
+The required primary evidence package is four runs:
 
 - `oer` skilled baseline: explicit `/research-agent`
 - `oer` naive baseline: plain Claude Code, no explicit research-layer skill invocation
@@ -16,12 +16,13 @@ This package is intentionally split:
 - `oer` is the formal scored benchmark
 - `her_live_structural` is the autonomy/scientific case study
 
-If time remains after these four runs are complete, a third case may be added as support evidence. It is not required for the report core.
+After these four runs are complete, additional open-world support evidence may be added. It is not required for the report core.
 
 An optional support ablation may also include:
 
 - `her_live_structural` lightly nudged baseline: soft workflow cue in the initial prompt, but no explicit research-layer skill invocation
 - `her_live_structural` interactive rescue trace: one or more manual mid-conversation nudges, logged explicitly as operator intervention
+- `hea_live_structural` paired reruns: supplementary open-world comparisons judged with the same artifact-grounded procedure
 
 ## Main comparison
 

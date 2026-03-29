@@ -375,7 +375,7 @@ def run_hidden_oracle_evaluator(
         "best_value": report.get("best_value"),
         "best_iteration": report.get("best_iteration"),
         "report_path": str(engine._paths(run_id).report),
-        "convergence_plot_path": None,
+        "convergence_plot_path": str(engine._paths(run_id).convergence_plot),
     }
 
 

@@ -13,6 +13,7 @@ from typing import Any
 
 from .constraints import load_constraints
 from .observers.base import Observer
+from .plotting import save_run_convergence_plot
 
 from hebo.design_space.design_space import DesignSpace
 from hebo.optimizers.bo import BO
@@ -963,9 +964,15 @@ class BOEngine:
             "artifacts": {
                 "state": str(self._paths(run_id).state),
                 "observations": str(self._paths(run_id).observations),
+                "convergence_plot": str(self._paths(run_id).convergence_plot),
             },
         }
         write_json(self._paths(run_id).report, report)
+        save_run_convergence_plot(
+            [float(row["y"]) for row in observations],
+            objective=state["objective"],
+            output_path=self._paths(run_id).convergence_plot,
+        )
         self._log(
             verbose,
             f"[report] run_id={run_id} observations={len(observations)} best={report.get('best_value')}",
