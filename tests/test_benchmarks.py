@@ -942,6 +942,57 @@ def test_setup_workspaces_rejects_unsafe_overwrite_targets(
         open_world_reruns_module.setup_workspaces(unsafe_output, overwrite=True)
 
 
+def test_create_workspace_rejects_run_dir_outside_output_root(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    fake_root = tmp_path / "repo"
+    fake_root.mkdir(parents=True)
+    output_root = tmp_path / "workspaces"
+
+    monkeypatch.setattr(open_world_reruns_module, "repo_root", lambda: fake_root)
+
+    with pytest.raises(ValueError, match="Workspace run_dir must stay inside"):
+        open_world_reruns_module._create_workspace(
+            output_root=output_root,
+            task="her",
+            repetition="run_99",
+            run_dir="../escaped",
+            baseline="naive",
+            overwrite=False,
+        )
+
+
+def test_setup_single_workspace_reuses_output_root_validation(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    fake_root = tmp_path / "repo"
+    fake_root.mkdir(parents=True)
+    unsafe_output = fake_root / "nested-output"
+
+    monkeypatch.setattr(open_world_reruns_module, "repo_root", lambda: fake_root)
+
+    with pytest.raises(
+        ValueError, match="Refusing to build workspace output directory inside repo"
+    ):
+        open_world_reruns_module.main(
+            [
+                "setup-single-workspace",
+                "--output-root",
+                str(unsafe_output),
+                "--task",
+                "her",
+                "--repetition",
+                "run_99",
+                "--run-dir",
+                "run_99",
+                "--baseline",
+                "naive",
+            ]
+        )
+
+
 def test_stage_run_rejects_extra_paths_outside_workspace(
     tmp_path: Path,
     monkeypatch,

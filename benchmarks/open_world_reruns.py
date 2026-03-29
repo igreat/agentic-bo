@@ -207,7 +207,16 @@ def _create_workspace(
     overwrite: bool = False,
 ) -> Path:
     root = repo_root()
-    workspace = output_root / task / run_dir / baseline
+    output_root = _validate_workspace_output_root(
+        output_root, root=root, overwrite=overwrite
+    )
+    task_root = output_root / task
+    run_root = _resolve_descendant_path(
+        task_root, run_dir, label="Workspace run_dir"
+    )
+    workspace = _resolve_descendant_path(
+        run_root, baseline, label="Workspace baseline"
+    )
     if workspace.exists():
         if not overwrite:
             raise FileExistsError(
